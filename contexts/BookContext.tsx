@@ -1,0 +1,492 @@
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import {
+  Chapter,
+  Highlight,
+  FontSize,
+  Theme,
+  ReadingStats,
+  DrawingMode,
+  Stroke,
+  GeneralNote,
+  DrawingColor,
+  ChatMessage,
+  BookContextType,
+  RagChunk,
+  SearchResult,
+  ViewMode,
+} from "../types";
+import { generateExplanation } from "../services/geminiService";
+import { processPdf, findRelevantContext } from "../services/pdfRagService";
+
+const MOCK_CHAPTERS: Chapter[] = [
+  {
+    id: "ch1",
+    title: "Chapter 1: The Dawn of AI",
+    content: `
+      <h2>1.1 Introduction to Artificial Intelligence</h2>
+      <p>Artificial Intelligence (AI) is intelligence demonstrated by machines, as opposed to the natural intelligence displayed by humans or animals. Leading AI textbooks define the field as the study of "intelligent agents": any system that perceives its environment and takes actions that maximize its chances of achieving its goals.</p>
+      <p>The history of AI began in antiquity, with myths, stories, and rumors of artificial beings endowed with intelligence or consciousness by master craftsmen. The seeds of modern AI were planted by philosophers who attempted to describe the process of human thinking as the mechanical manipulation of symbols.</p>
+      <h3>1.2 The Turing Test</h3>
+      <p>The Turing test, developed by Alan Turing in 1950, is a test of a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. Turing proposed that a human evaluator would judge natural language conversations between a human and a machine designed to generate human-like responses.</p>
+    `,
+  },
+  {
+    id: "ch2",
+    title: "Chapter 2: Machine Learning Basics",
+    content: `
+      <h2>2.1 What is Machine Learning?</h2>
+      <p>Machine Learning (ML) is a subset of artificial intelligence that focuses on building systems that learn, or improve performance, based on the data they consume. Artificial Intelligence is a broad term that refers to systems or machines that mimic human intelligence. Machine Learning is how they achieve that intelligence.</p>
+      <p>There are three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning. In supervised learning, the algorithm is trained on labeled data.</p>
+      <h3>2.2 Neural Networks</h3>
+      <p>Neural networks, also known as artificial neural networks (ANNs) or simulated neural networks (SNNs), are a subset of machine learning and are at the heart of deep learning algorithms. Their name and structure are inspired by the human brain, mimicking the way that biological neurons signal to one another.</p>
+    `,
+  },
+  {
+    id: "ch3",
+    title: "Chapter 3: Ethics in Technology",
+    content: `
+      <h2>3.1 The Importance of Ethics</h2>
+      <p>As technology becomes more integrated into our daily lives, the ethical implications of its use become increasingly important. Issues such as privacy, bias in algorithms, and the displacement of jobs are central discussions in the tech world today.</p>
+      <p>Algorithmic bias describes systematic and repeatable errors in a computer system that create unfair outcomes, such as privileging one arbitrary group of users over others.</p>
+    `,
+  },
+];
+
+const BookContext = createContext<BookContextType | undefined>(undefined);
+
+export const BookProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
+  const [chapters, setChapters] = useState<Chapter[]>(MOCK_CHAPTERS);
+  const [referenceDocument, setReferenceDocument] = useState<Chapter | null>(
+    null
+  );
+  const [ragChunks, setRagChunks] = useState<RagChunk[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+  const [fontSize, setFontSize] = useState<FontSize>("medium");
+  const [theme, setTheme] = useState<Theme>("light");
+  const [viewMode, setViewMode] = useState<ViewMode>("single");
+
+  const [showAnnotations, setShowAnnotations] = useState(true);
+  const [bookmarks, setBookmarks] = useState<string[]>([]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
+    null
+  );
+
+  const [drawingMode, setDrawingMode] = useState<DrawingMode>("idle");
+  const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
+  const [penWidth, setPenWidth] = useState<number>(3);
+  const [penOpacity, setPenOpacity] = useState<number>(1.0);
+  const [chapterStrokes, setChapterStrokes] = useState<
+    Record<string, Stroke[]>
+  >({});
+
+  const [generalNotes, setGeneralNotes] = useState<GeneralNote[]>([]);
+  const [isCaptureMode, setCaptureMode] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+
+  const [aiChatHistory, setAiChatHistory] = useState<ChatMessage[]>([]);
+  const [isToolsOpen, setToolsOpen] = useState(true);
+  const [activeToolTab, setActiveToolTab] = useState<
+    "ai" | "notes" | "notebook" | "reference" | "search"
+  >("ai");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [stats, setStats] = useState<ReadingStats>({
+    totalReadingTime: 0,
+    sessions: 1,
+    chapterVisits: {},
+    aiInteractionCount: 0,
+    highlightCount: 0,
+  });
+
+  const currentChapter = chapters[currentChapterIndex];
+
+  useEffect(() => {
+    if (window.innerWidth < 1024) {
+      setToolsOpen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        updateReadingTime();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    setStats((prev) => ({
+      ...prev,
+      chapterVisits: {
+        ...prev.chapterVisits,
+        [currentChapter.id]: (prev.chapterVisits[currentChapter.id] || 0) + 1,
+      },
+    }));
+  }, [currentChapter.id]);
+
+  const updateReadingTime = () => {
+    setStats((prev) => ({
+      ...prev,
+      totalReadingTime: prev.totalReadingTime + 5,
+    }));
+  };
+
+  const incrementAiCount = () => {
+    setStats((prev) => ({
+      ...prev,
+      aiInteractionCount: prev.aiInteractionCount + 1,
+    }));
+  };
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    if (theme === "light") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
+
+  const toggleAnnotations = () => setShowAnnotations((prev) => !prev);
+
+  const toggleBookmark = () => {
+    setBookmarks((prev) => {
+      if (prev.includes(currentChapter.id)) {
+        return prev.filter((id) => id !== currentChapter.id);
+      } else {
+        return [...prev, currentChapter.id];
+      }
+    });
+  };
+
+  const goToNextChapter = () => {
+    if (currentChapterIndex < chapters.length - 1) {
+      setCurrentChapterIndex((prev) => prev + 1);
+    }
+  };
+
+  const goToPrevChapter = () => {
+    if (currentChapterIndex > 0) {
+      setCurrentChapterIndex((prev) => prev - 1);
+    }
+  };
+
+  const goToChapter = (index: number) => {
+    if (index >= 0 && index < chapters.length) {
+      setCurrentChapterIndex(index);
+    }
+  };
+
+  const uploadBook = async (file: File) => {
+    setIsProcessing(true);
+    try {
+      const data = await processPdf(file);
+
+      if (data.chapters.length > 0) {
+        // 1) 메인 뷰어에 들어갈 챕터를 PDF에서 가져오기
+        setChapters(data.chapters);
+        setCurrentChapterIndex(0);
+
+        // 2) RAG(검색/AI)용 청크도 이 PDF 기준으로 세팅
+        setRagChunks(data.chunks);
+
+        // 3) 레퍼런스 패널은 안 쓰고 싶으면 null 처리
+        setReferenceDocument(null);
+
+        // 4) 툴 패널 열고 AI 탭 or 원하는 탭으로 이동
+        setToolsOpen(true);
+        setActiveToolTab("ai"); // 혹은 'notes' / 'search' 등으로 변경 가능
+
+        alert(`"${file.name}"을(를) 메인 책으로 로드했습니다.`);
+      } else {
+        alert("Processed PDF but found no readable content.");
+      }
+    } catch (error) {
+      console.error("PDF Load Failed", error);
+      alert("Failed to load PDF. Please ensure it is a valid PDF file.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const addHighlight = (
+    text: string,
+    note?: string,
+    targetChapterId?: string
+  ) => {
+    const chapterId = targetChapterId || currentChapter.id;
+    const newHighlight: Highlight = {
+      id: Date.now().toString(),
+      chapterId: chapterId,
+      text,
+      color: "yellow",
+      note,
+      createdAt: Date.now(),
+    };
+    setHighlights((prev) => [newHighlight, ...prev]);
+    setStats((prev) => ({ ...prev, highlightCount: prev.highlightCount + 1 }));
+  };
+
+  const updateHighlight = (id: string, note: string) => {
+    setHighlights((prev) =>
+      prev.map((hl) => (hl.id === id ? { ...hl, note } : hl))
+    );
+  };
+
+  const removeHighlight = (id: string) => {
+    setHighlights((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  const focusHighlight = (id: string) => {
+    setShowAnnotations(true);
+    setActiveHighlightId(id);
+    setTimeout(() => setActiveHighlightId(null), 2000);
+  };
+
+  const addStroke = (chapterId: string, stroke: Stroke) => {
+    setChapterStrokes((prev) => ({
+      ...prev,
+      [chapterId]: [...(prev[chapterId] || []), stroke],
+    }));
+  };
+
+  const removeStroke = (chapterId: string, strokeId: string) => {
+    setChapterStrokes((prev) => ({
+      ...prev,
+      [chapterId]: (prev[chapterId] || []).filter((s) => s.id !== strokeId),
+    }));
+  };
+
+  const hasStrokes = (chapterId: string) => {
+    return (chapterStrokes[chapterId] || []).length > 0;
+  };
+
+  const addGeneralNote = (title: string, content: string) => {
+    const newNote: GeneralNote = {
+      id: Date.now().toString(),
+      title: title || "Untitled Note",
+      content: content,
+      chapterId: currentChapter.id,
+      chapterTitle: currentChapter.title,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    setGeneralNotes((prev) => [newNote, ...prev]);
+  };
+
+  const updateGeneralNote = (id: string, title: string, content: string) => {
+    setGeneralNotes((prev) =>
+      prev.map((note) =>
+        note.id === id
+          ? { ...note, title, content, updatedAt: Date.now() }
+          : note
+      )
+    );
+  };
+
+  const removeGeneralNote = (id: string) => {
+    setGeneralNotes((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const exportNoteAsMarkdown = (note: GeneralNote) => {
+    let md = note.content.replace(/<[^>]+>/g, "");
+    const blob = new Blob([`# ${note.title}\n\n${md}`], {
+      type: "text/markdown",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${note.title.replace(/\s+/g, "_")}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importNotes = async (file: File) => {
+    const text = await file.text();
+    let title = file.name.replace(".md", "").replace(".json", "");
+    let content = text.replace(/\n/g, "<br>");
+    addGeneralNote(title, content);
+  };
+
+  const addChatMessage = (role: "user" | "model", text: string) => {
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role,
+      text,
+      timestamp: Date.now(),
+    };
+    setAiChatHistory((prev) => [...prev, newMessage]);
+  };
+
+  const triggerSmartExplain = async (text: string) => {
+    setToolsOpen(true);
+    setActiveToolTab("ai");
+    const userPrompt = `Explain: "${text}"`;
+    addChatMessage("user", userPrompt);
+    incrementAiCount();
+    let context = currentChapter.content.substring(0, 2000);
+    if (ragChunks.length > 0) {
+      const relevantText = findRelevantContext(text, ragChunks);
+      if (relevantText) context = relevantText;
+    }
+    const explanation = await generateExplanation(text, context);
+    addChatMessage("model", explanation);
+  };
+
+  const performSearch = (query: string): SearchResult[] => {
+    if (!query || query.length < 2) return [];
+
+    const results: SearchResult[] = [];
+    const lowerQuery = query.toLowerCase();
+
+    chapters.forEach((chapter) => {
+      const plainText = chapter.content.replace(/<[^>]+>/g, " ");
+      const index = plainText.toLowerCase().indexOf(lowerQuery);
+      if (index !== -1) {
+        const start = Math.max(0, index - 40);
+        const end = Math.min(plainText.length, index + 40 + query.length);
+        const snippet =
+          (start > 0 ? "..." : "") +
+          plainText.substring(start, end) +
+          (end < plainText.length ? "..." : "");
+
+        results.push({
+          id: `ch-${chapter.id}-${index}`,
+          type: "chapter",
+          title: chapter.title,
+          contentSnippet: snippet,
+          chapterId: chapter.id,
+          matchIndex: index,
+        });
+      }
+    });
+
+    highlights.forEach((hl) => {
+      if (
+        hl.text.toLowerCase().includes(lowerQuery) ||
+        (hl.note && hl.note.toLowerCase().includes(lowerQuery))
+      ) {
+        results.push({
+          id: `hl-${hl.id}`,
+          type: "highlight",
+          title: "Highlight",
+          contentSnippet: hl.note ? `${hl.text} - ${hl.note}` : hl.text,
+          chapterId: hl.chapterId,
+        });
+      }
+    });
+
+    generalNotes.forEach((note) => {
+      const plainContent = note.content.replace(/<[^>]+>/g, " ");
+      if (
+        note.title.toLowerCase().includes(lowerQuery) ||
+        plainContent.toLowerCase().includes(lowerQuery)
+      ) {
+        results.push({
+          id: `note-${note.id}`,
+          type: "note",
+          title: note.title,
+          contentSnippet: plainContent.substring(0, 80) + "...",
+          chapterId: note.chapterId,
+        });
+      }
+    });
+
+    return results;
+  };
+
+  const saveProgress = () => {
+    console.log("Saving progress...");
+    alert("Progress Saved! (Simulated)");
+  };
+
+  return (
+    <BookContext.Provider
+      value={{
+        chapters,
+        referenceDocument,
+        currentChapterIndex,
+        currentChapter,
+        goToNextChapter,
+        goToPrevChapter,
+        goToChapter,
+        uploadBook,
+        isProcessing,
+        fontSize,
+        setFontSize,
+        viewMode,
+        setViewMode,
+        theme,
+        toggleTheme,
+        showAnnotations,
+        toggleAnnotations,
+        bookmarks,
+        toggleBookmark,
+        highlights,
+        addHighlight,
+        updateHighlight,
+        removeHighlight,
+        activeHighlightId,
+        focusHighlight,
+        drawingMode,
+        setDrawingMode,
+        penColor,
+        setPenColor,
+        penWidth,
+        setPenWidth,
+        penOpacity,
+        setPenOpacity,
+        chapterStrokes,
+        addStroke,
+        removeStroke,
+        hasStrokes,
+        generalNotes,
+        addGeneralNote,
+        updateGeneralNote,
+        removeGeneralNote,
+        importNotes,
+        exportNoteAsMarkdown,
+        isCaptureMode,
+        setCaptureMode,
+        capturedImage,
+        setCapturedImage,
+        aiChatHistory,
+        addChatMessage,
+        triggerSmartExplain,
+        isToolsOpen,
+        setToolsOpen,
+        activeToolTab,
+        setActiveToolTab,
+        searchQuery,
+        setSearchQuery,
+        performSearch,
+        stats,
+        incrementAiCount,
+        updateReadingTime,
+        saveProgress,
+      }}
+    >
+      {children}
+    </BookContext.Provider>
+  );
+};
+
+export const useBook = () => {
+  const context = useContext(BookContext);
+  if (context === undefined) {
+    throw new Error("useBook must be used within a BookProvider");
+  }
+  return context;
+};

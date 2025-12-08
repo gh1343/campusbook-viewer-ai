@@ -1,0 +1,5 @@
+{
+  "name": "CampusBook Viewer AI",
+  "description": "An MVP EPUB viewer with AI-powered study assistance, annotation capabilities, and learning analytics using Gemini 2.5.",
+  "requestFramePermissions": []
+}
