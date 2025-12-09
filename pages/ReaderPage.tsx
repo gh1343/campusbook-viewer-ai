@@ -96,7 +96,7 @@ export const ReaderPage: React.FC = () => {
       {/* Main Split Layout Container */}
       <div
         ref={containerRef}
-        className="flex flex-1 pt-16 overflow-hidden relative"
+        className="flex flex-1 pt-16 overflow-auto relative"
       >
         {/* Left Panel Area */}
         <div
@@ -133,7 +133,7 @@ export const ReaderPage: React.FC = () => {
         <main className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950 relative z-0">
           <div className="max-w-3xl mx-auto min_h_[calc(100vh-12rem)]">
             {/* TODO: 나중에 조건부 렌더링으로 바꿀 수 있음 */}
-            <PdfViewer file="/pdf/test.pdf" />
+            <PdfViewer file="/pdf/test2.pdf" />
           </div>
 
           <div className="sticky bottom-0 z-30 w-full">
