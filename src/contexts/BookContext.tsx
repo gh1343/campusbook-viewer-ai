@@ -4,7 +4,7 @@ import React, {
   useState,
   useEffect,
   ReactNode,
-} from "react";
+} from 'react';
 import {
   Chapter,
   Highlight,
@@ -20,14 +20,14 @@ import {
   RagChunk,
   SearchResult,
   ViewMode,
-} from "../types";
-import { generateExplanation } from "../services/geminiService";
-import { processPdf, findRelevantContext } from "../services/pdfRagService";
+} from '../../types';
+import {generateExplanation} from '../services/geminiService';
+import {processPdf, findRelevantContext} from '../services/pdfRagService';
 
 const MOCK_CHAPTERS: Chapter[] = [
   {
-    id: "ch1",
-    title: "Chapter 1: The Dawn of AI",
+    id: 'ch1',
+    title: 'Chapter 1: The Dawn of AI',
     content: `
       <h2>1.1 Introduction to Artificial Intelligence</h2>
       <p>Artificial Intelligence (AI) is intelligence demonstrated by machines, as opposed to the natural intelligence displayed by humans or animals. Leading AI textbooks define the field as the study of "intelligent agents": any system that perceives its environment and takes actions that maximize its chances of achieving its goals.</p>
@@ -37,8 +37,8 @@ const MOCK_CHAPTERS: Chapter[] = [
     `,
   },
   {
-    id: "ch2",
-    title: "Chapter 2: Machine Learning Basics",
+    id: 'ch2',
+    title: 'Chapter 2: Machine Learning Basics',
     content: `
       <h2>2.1 What is Machine Learning?</h2>
       <p>Machine Learning (ML) is a subset of artificial intelligence that focuses on building systems that learn, or improve performance, based on the data they consume. Artificial Intelligence is a broad term that refers to systems or machines that mimic human intelligence. Machine Learning is how they achieve that intelligence.</p>
@@ -48,8 +48,8 @@ const MOCK_CHAPTERS: Chapter[] = [
     `,
   },
   {
-    id: "ch3",
-    title: "Chapter 3: Ethics in Technology",
+    id: 'ch3',
+    title: 'Chapter 3: Ethics in Technology',
     content: `
       <h2>3.1 The Importance of Ethics</h2>
       <p>As technology becomes more integrated into our daily lives, the ethical implications of its use become increasingly important. Issues such as privacy, bias in algorithms, and the displacement of jobs are central discussions in the tech world today.</p>
@@ -60,9 +60,7 @@ const MOCK_CHAPTERS: Chapter[] = [
 
 const BookContext = createContext<BookContextType | undefined>(undefined);
 
-export const BookProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
+export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const [chapters, setChapters] = useState<Chapter[]>(MOCK_CHAPTERS);
   const [referenceDocument, setReferenceDocument] = useState<Chapter | null>(
     null
@@ -71,9 +69,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
-  const [fontSize, setFontSize] = useState<FontSize>("medium");
-  const [theme, setTheme] = useState<Theme>("light");
-  const [viewMode, setViewMode] = useState<ViewMode>("single");
+  const [fontSize, setFontSize] = useState<FontSize>('medium');
+  const [theme, setTheme] = useState<Theme>('light');
+  const [viewMode, setViewMode] = useState<ViewMode>('single');
 
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [bookmarks, setBookmarks] = useState<string[]>([]);
@@ -82,8 +80,8 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     null
   );
 
-  const [drawingMode, setDrawingMode] = useState<DrawingMode>("idle");
-  const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
+  const [drawingMode, setDrawingMode] = useState<DrawingMode>('idle');
+  const [penColor, setPenColor] = useState<DrawingColor>('#ef4444');
   const [penWidth, setPenWidth] = useState<number>(3);
   const [penOpacity, setPenOpacity] = useState<number>(1.0);
   const [chapterStrokes, setChapterStrokes] = useState<
@@ -97,9 +95,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [aiChatHistory, setAiChatHistory] = useState<ChatMessage[]>([]);
   const [isToolsOpen, setToolsOpen] = useState(true);
   const [activeToolTab, setActiveToolTab] = useState<
-    "ai" | "notes" | "notebook" | "reference" | "search"
-  >("ai");
-  const [searchQuery, setSearchQuery] = useState("");
+    'ai' | 'notes' | 'notebook' | 'reference' | 'search'
+  >('ai');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [stats, setStats] = useState<ReadingStats>({
     totalReadingTime: 0,
@@ -119,7 +117,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === 'visible') {
         updateReadingTime();
       }
     }, 5000);
@@ -127,7 +125,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   useEffect(() => {
-    setStats((prev) => ({
+    setStats(prev => ({
       ...prev,
       chapterVisits: {
         ...prev.chapterVisits,
@@ -137,34 +135,34 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   }, [currentChapter.id]);
 
   const updateReadingTime = () => {
-    setStats((prev) => ({
+    setStats(prev => ({
       ...prev,
       totalReadingTime: prev.totalReadingTime + 5,
     }));
   };
 
   const incrementAiCount = () => {
-    setStats((prev) => ({
+    setStats(prev => ({
       ...prev,
       aiInteractionCount: prev.aiInteractionCount + 1,
     }));
   };
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-    if (theme === "light") {
-      document.documentElement.classList.add("dark");
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    if (theme === 'light') {
+      document.documentElement.classList.add('dark');
     } else {
-      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.remove('dark');
     }
   };
 
-  const toggleAnnotations = () => setShowAnnotations((prev) => !prev);
+  const toggleAnnotations = () => setShowAnnotations(prev => !prev);
 
   const toggleBookmark = () => {
-    setBookmarks((prev) => {
+    setBookmarks(prev => {
       if (prev.includes(currentChapter.id)) {
-        return prev.filter((id) => id !== currentChapter.id);
+        return prev.filter(id => id !== currentChapter.id);
       } else {
         return [...prev, currentChapter.id];
       }
@@ -173,13 +171,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const goToNextChapter = () => {
     if (currentChapterIndex < chapters.length - 1) {
-      setCurrentChapterIndex((prev) => prev + 1);
+      setCurrentChapterIndex(prev => prev + 1);
     }
   };
 
   const goToPrevChapter = () => {
     if (currentChapterIndex > 0) {
-      setCurrentChapterIndex((prev) => prev - 1);
+      setCurrentChapterIndex(prev => prev - 1);
     }
   };
 
@@ -207,15 +205,15 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
         // 4) 툴 패널 열고 AI 탭 or 원하는 탭으로 이동
         setToolsOpen(true);
-        setActiveToolTab("ai"); // 혹은 'notes' / 'search' 등으로 변경 가능
+        setActiveToolTab('ai'); // 혹은 'notes' / 'search' 등으로 변경 가능
 
         alert(`"${file.name}"을(를) 메인 책으로 로드했습니다.`);
       } else {
-        alert("Processed PDF but found no readable content.");
+        alert('Processed PDF but found no readable content.');
       }
     } catch (error) {
-      console.error("PDF Load Failed", error);
-      alert("Failed to load PDF. Please ensure it is a valid PDF file.");
+      console.error('PDF Load Failed', error);
+      alert('Failed to load PDF. Please ensure it is a valid PDF file.');
     } finally {
       setIsProcessing(false);
     }
@@ -231,22 +229,20 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       id: Date.now().toString(),
       chapterId: chapterId,
       text,
-      color: "yellow",
+      color: 'yellow',
       note,
       createdAt: Date.now(),
     };
-    setHighlights((prev) => [newHighlight, ...prev]);
-    setStats((prev) => ({ ...prev, highlightCount: prev.highlightCount + 1 }));
+    setHighlights(prev => [newHighlight, ...prev]);
+    setStats(prev => ({...prev, highlightCount: prev.highlightCount + 1}));
   };
 
   const updateHighlight = (id: string, note: string) => {
-    setHighlights((prev) =>
-      prev.map((hl) => (hl.id === id ? { ...hl, note } : hl))
-    );
+    setHighlights(prev => prev.map(hl => (hl.id === id ? {...hl, note} : hl)));
   };
 
   const removeHighlight = (id: string) => {
-    setHighlights((prev) => prev.filter((h) => h.id !== id));
+    setHighlights(prev => prev.filter(h => h.id !== id));
   };
 
   const focusHighlight = (id: string) => {
@@ -256,16 +252,16 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const addStroke = (chapterId: string, stroke: Stroke) => {
-    setChapterStrokes((prev) => ({
+    setChapterStrokes(prev => ({
       ...prev,
       [chapterId]: [...(prev[chapterId] || []), stroke],
     }));
   };
 
   const removeStroke = (chapterId: string, strokeId: string) => {
-    setChapterStrokes((prev) => ({
+    setChapterStrokes(prev => ({
       ...prev,
-      [chapterId]: (prev[chapterId] || []).filter((s) => s.id !== strokeId),
+      [chapterId]: (prev[chapterId] || []).filter(s => s.id !== strokeId),
     }));
   };
 
@@ -276,65 +272,63 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const addGeneralNote = (title: string, content: string) => {
     const newNote: GeneralNote = {
       id: Date.now().toString(),
-      title: title || "Untitled Note",
+      title: title || 'Untitled Note',
       content: content,
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    setGeneralNotes((prev) => [newNote, ...prev]);
+    setGeneralNotes(prev => [newNote, ...prev]);
   };
 
   const updateGeneralNote = (id: string, title: string, content: string) => {
-    setGeneralNotes((prev) =>
-      prev.map((note) =>
-        note.id === id
-          ? { ...note, title, content, updatedAt: Date.now() }
-          : note
+    setGeneralNotes(prev =>
+      prev.map(note =>
+        note.id === id ? {...note, title, content, updatedAt: Date.now()} : note
       )
     );
   };
 
   const removeGeneralNote = (id: string) => {
-    setGeneralNotes((prev) => prev.filter((n) => n.id !== id));
+    setGeneralNotes(prev => prev.filter(n => n.id !== id));
   };
 
   const exportNoteAsMarkdown = (note: GeneralNote) => {
-    let md = note.content.replace(/<[^>]+>/g, "");
+    let md = note.content.replace(/<[^>]+>/g, '');
     const blob = new Blob([`# ${note.title}\n\n${md}`], {
-      type: "text/markdown",
+      type: 'text/markdown',
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = document.createElement('a');
     a.href = url;
-    a.download = `${note.title.replace(/\s+/g, "_")}.md`;
+    a.download = `${note.title.replace(/\s+/g, '_')}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const importNotes = async (file: File) => {
     const text = await file.text();
-    let title = file.name.replace(".md", "").replace(".json", "");
-    let content = text.replace(/\n/g, "<br>");
+    let title = file.name.replace('.md', '').replace('.json', '');
+    let content = text.replace(/\n/g, '<br>');
     addGeneralNote(title, content);
   };
 
-  const addChatMessage = (role: "user" | "model", text: string) => {
+  const addChatMessage = (role: 'user' | 'model', text: string) => {
     const newMessage: ChatMessage = {
       id: Date.now().toString(),
       role,
       text,
       timestamp: Date.now(),
     };
-    setAiChatHistory((prev) => [...prev, newMessage]);
+    setAiChatHistory(prev => [...prev, newMessage]);
   };
 
   const triggerSmartExplain = async (text: string) => {
     setToolsOpen(true);
-    setActiveToolTab("ai");
+    setActiveToolTab('ai');
     const userPrompt = `Explain: "${text}"`;
-    addChatMessage("user", userPrompt);
+    addChatMessage('user', userPrompt);
     incrementAiCount();
     let context = currentChapter.content.substring(0, 2000);
     if (ragChunks.length > 0) {
@@ -342,7 +336,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       if (relevantText) context = relevantText;
     }
     const explanation = await generateExplanation(text, context);
-    addChatMessage("model", explanation);
+    addChatMessage('model', explanation);
   };
 
   const performSearch = (query: string): SearchResult[] => {
@@ -351,20 +345,20 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     const results: SearchResult[] = [];
     const lowerQuery = query.toLowerCase();
 
-    chapters.forEach((chapter) => {
-      const plainText = chapter.content.replace(/<[^>]+>/g, " ");
+    chapters.forEach(chapter => {
+      const plainText = chapter.content.replace(/<[^>]+>/g, ' ');
       const index = plainText.toLowerCase().indexOf(lowerQuery);
       if (index !== -1) {
         const start = Math.max(0, index - 40);
         const end = Math.min(plainText.length, index + 40 + query.length);
         const snippet =
-          (start > 0 ? "..." : "") +
+          (start > 0 ? '...' : '') +
           plainText.substring(start, end) +
-          (end < plainText.length ? "..." : "");
+          (end < plainText.length ? '...' : '');
 
         results.push({
           id: `ch-${chapter.id}-${index}`,
-          type: "chapter",
+          type: 'chapter',
           title: chapter.title,
           contentSnippet: snippet,
           chapterId: chapter.id,
@@ -373,32 +367,32 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       }
     });
 
-    highlights.forEach((hl) => {
+    highlights.forEach(hl => {
       if (
         hl.text.toLowerCase().includes(lowerQuery) ||
         (hl.note && hl.note.toLowerCase().includes(lowerQuery))
       ) {
         results.push({
           id: `hl-${hl.id}`,
-          type: "highlight",
-          title: "Highlight",
+          type: 'highlight',
+          title: 'Highlight',
           contentSnippet: hl.note ? `${hl.text} - ${hl.note}` : hl.text,
           chapterId: hl.chapterId,
         });
       }
     });
 
-    generalNotes.forEach((note) => {
-      const plainContent = note.content.replace(/<[^>]+>/g, " ");
+    generalNotes.forEach(note => {
+      const plainContent = note.content.replace(/<[^>]+>/g, ' ');
       if (
         note.title.toLowerCase().includes(lowerQuery) ||
         plainContent.toLowerCase().includes(lowerQuery)
       ) {
         results.push({
           id: `note-${note.id}`,
-          type: "note",
+          type: 'note',
           title: note.title,
-          contentSnippet: plainContent.substring(0, 80) + "...",
+          contentSnippet: plainContent.substring(0, 80) + '...',
           chapterId: note.chapterId,
         });
       }
@@ -408,8 +402,8 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const saveProgress = () => {
-    console.log("Saving progress...");
-    alert("Progress Saved! (Simulated)");
+    console.log('Saving progress...');
+    alert('Progress Saved! (Simulated)');
   };
 
   return (
@@ -486,7 +480,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 export const useBook = () => {
   const context = useContext(BookContext);
   if (context === undefined) {
-    throw new Error("useBook must be used within a BookProvider");
+    throw new Error('useBook must be used within a BookProvider');
   }
   return context;
 };
