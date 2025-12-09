@@ -1,28 +1,31 @@
 // src/components/viewer/PdfViewer.tsx
-import React, { useState } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
+import React, {useState} from 'react';
+import {Document, Page, pdfjs} from 'react-pdf';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 interface PdfViewerProps {
   file: string | File | ArrayBuffer; // 지금은 string 경로("/pdfs/...")만 써도 됨
 }
 
-export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
+export const PdfViewer: React.FC<PdfViewerProps> = ({file}) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
 
-  const handleLoadSuccess = ({ numPages }: { numPages: number }) => {
+  const handleLoadSuccess = ({numPages}: {numPages: number}) => {
     setNumPages(numPages);
     setPageNumber(1);
   };
 
   const goPrev = () => {
-    setPageNumber((prev) => (prev > 1 ? prev - 1 : prev));
+    setPageNumber(prev => (prev > 1 ? prev - 1 : prev));
   };
 
   const goNext = () => {
-    setPageNumber((prev) => (numPages && prev < numPages ? prev + 1 : prev));
+    setPageNumber(prev => (numPages && prev < numPages ? prev + 1 : prev));
   };
 
   return (
