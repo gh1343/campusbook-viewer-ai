@@ -2,10 +2,7 @@
 import React, {useState} from 'react';
 import {Document, Page, pdfjs} from 'react-pdf';
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PdfViewerProps {
   file: string | File | ArrayBuffer; // 지금은 string 경로("/pdfs/...")만 써도 됨
