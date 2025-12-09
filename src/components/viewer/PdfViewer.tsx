@@ -32,8 +32,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({file}) => {
           <Page
             pageNumber={pageNumber}
             // 텍스트/주석 레이어를 켜야 텍스트 드래그/복사가 됨
-            renderTextLayer={false}
-            renderAnnotationLayer={false}
+            renderTextLayer
+            renderAnnotationLayer
             // 기본 확대배율 (나중에 확대/축소 기능 붙일 때 건드리면 됨)
             scale={1.3}
           />
