@@ -132,7 +132,7 @@ export const ReaderPage: React.FC = () => {
 
         {/* Center Panel: Reader & Controls */}
         <main className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950 relative z-0">
-          <div className="max-w-3xl mx-auto min_h_[calc(100vh-12rem)]">
+          <div className="mx-auto min_h_[calc(100vh-12rem)] test">
             {/* TODO: 나중에 조건부 렌더링으로 바꿀 수 있음 */}
             <PdfViewer file={pdfUrl} />
           </div>

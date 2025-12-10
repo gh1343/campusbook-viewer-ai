@@ -1,1 +1,6 @@
-
+.textLayer :is(span, br) {
+  user-select: text !important;
+}
+.test {
+  width: 900px;
+}
