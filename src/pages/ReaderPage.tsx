@@ -91,7 +91,7 @@ export const ReaderPage: React.FC = () => {
   const pdfUrl = `${import.meta.env.BASE_URL}pdf/test2.pdf`;
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-slate-950 transition-colors duration-200 font-sans overflow-hidden">
+    <div>
       <Header toggleSidebar={toggleToc} isSidebarOpen={isTocOpen} />
 
       {/* Main Split Layout Container */}

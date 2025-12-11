@@ -1,5 +1,5 @@
-import React, {useState, useRef} from 'react';
-import {useBook} from '../../contexts/BookContext';
+import React, { useState, useRef } from "react";
+import { useBook } from "../../contexts/BookContext";
 import {
   Type,
   Book,
@@ -21,10 +21,10 @@ import {
   Columns,
   Minus,
   Plus,
-} from 'lucide-react';
-import {Link, useLocation, useNavigate} from 'react-router-dom';
-import {DrawingColor} from '../../../types';
-
+} from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { DrawingColor } from "../../../types";
+import "../../css/header.css";
 interface HeaderProps {
   toggleSidebar: () => void;
   isSidebarOpen?: boolean;
@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const location = useLocation();
   const navigate = useNavigate();
-  const isReader = location.pathname === '/';
+  const isReader = location.pathname === "/";
   const [showPenSettings, setShowPenSettings] = useState(false);
   const [showViewSettings, setShowViewSettings] = useState(false);
   const [showSysMenu, setShowSysMenu] = useState(false);
@@ -71,8 +71,8 @@ export const Header: React.FC<HeaderProps> = ({
   const isBookmarked = bookmarks.includes(currentChapter.id);
 
   const handleExit = () => {
-    if (confirm('Are you sure you want to close the viewer?')) {
-      navigate('/report');
+    if (confirm("Are you sure you want to close the viewer?")) {
+      navigate("/report");
     }
   };
 
@@ -88,83 +88,63 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleSearchClick = () => {
     setToolsOpen(true);
-    setActiveToolTab('search');
+    setActiveToolTab("search");
   };
 
-  const cycleFontSize = (dir: 'up' | 'down') => {
-    const sizes = ['small', 'medium', 'large', 'xlarge'] as const;
+  const cycleFontSize = (dir: "up" | "down") => {
+    const sizes = ["small", "medium", "large", "xlarge"] as const;
     const currentIndex = sizes.indexOf(fontSize);
-    let nextIndex = dir === 'up' ? currentIndex + 1 : currentIndex - 1;
+    let nextIndex = dir === "up" ? currentIndex + 1 : currentIndex - 1;
     if (nextIndex < 0) nextIndex = 0;
     if (nextIndex >= sizes.length) nextIndex = sizes.length - 1;
     setFontSize(sizes[nextIndex]);
   };
 
   const colors: DrawingColor[] = [
-    '#000000',
-    '#ef4444',
-    '#3b82f6',
-    '#22c55e',
-    '#eab308',
+    "#000000",
+    "#ef4444",
+    "#3b82f6",
+    "#22c55e",
+    "#eab308",
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 z-[60] transition-colors duration-200 flex items-center shadow-sm">
-      <div className="w-full px-4 flex items-center justify-between">
+    <header className="header">
+      <div className="header_inner">
         {/* Left: Branding & TOC */}
-        <div className="flex items-center gap-3">
+        <div className="header_main">
           {isReader && (
             <button
               onClick={toggleSidebar}
-              className={`p-2 rounded-lg transition-colors ${
-                isSidebarOpen
-                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                  : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
+              className={`left_toggle ${isSidebarOpen ? "open" : "off"}`}
               title="Table of Contents"
             >
               <Sidebar size={20} />
             </button>
           )}
-          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
-            <div className="bg-blue-600 rounded-md p-1">
-              <Book className="w-5 h-5 text-white" />
+          <div className="logo_wrap">
+            <div className="icon">
+              <Book />
             </div>
-            <span className="font-bold text-lg hidden sm:block tracking-tight">
-              CampusBook
-            </span>
+            <span className="logo_text">CampusBook</span>
           </div>
         </div>
 
         {/* Center: View Switcher & Upload */}
-        <div className="hidden md:flex items-center gap-2">
-          <div className="bg-slate-100 dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-800 flex">
-            <Link
-              to="/"
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                isReader
-                  ? 'bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400'
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
+        <div className="header_nav">
+          <div className="mode_select">
+            <Link to="/" className={`reader ${isReader ? "on" : "off"}`}>
               Reader
             </Link>
-            <Link
-              to="/report"
-              className={`flex items-center gap-1 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                !isReader
-                  ? 'bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400'
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
+            <Link to="/report" className={`report ${!isReader ? "on" : "off"}`}>
               Report
             </Link>
           </div>
-          <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
+          <div className="separate_bar"></div>
           <button
             onClick={handleUploadClick}
             disabled={isProcessing}
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg text-sm font-medium transition-colors border border-blue-100 dark:border-blue-900/30"
+            className="add_file"
             title="Add Reference Material (PDF)"
           >
             {isProcessing ? (
@@ -184,38 +164,35 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right: Tools */}
-        <div className="flex items-center gap-1">
+        <div className="header_tools">
           {isReader && (
             <>
               {/* Search Button */}
               <button
                 onClick={handleSearchClick}
-                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="search_icon_btn"
                 title="Search"
               >
                 <Search size={20} />
               </button>
-
               {/* Pen Tools */}
-              <div className="flex items-center gap-1 px-2 relative">
-                <div className="flex bg-slate-100 dark:bg-slate-900 rounded-lg p-0.5 border border-slate-200 dark:border-slate-800 items-center">
+              <div className="draw_icon_wrap">
+                <div className="draw_icon_inner">
                   <button
                     onClick={() =>
-                      setDrawingMode(drawingMode === 'pen' ? 'idle' : 'pen')
+                      setDrawingMode(drawingMode === "pen" ? "idle" : "pen")
                     }
-                    className={`p-2 rounded-md transition-all flex items-center gap-1 ${
-                      drawingMode === 'pen'
-                        ? 'bg-white dark:bg-slate-800 shadow text-blue-600'
-                        : 'text-slate-400 hover:text-slate-600'
+                    className={`pen_tool ${
+                      drawingMode === "pen" ? "on" : "off"
                     }`}
                     title="Pen Tool"
                   >
                     <Pen size={18} />
                   </button>
-                  {drawingMode === 'pen' && (
+                  {drawingMode === "pen" && (
                     <button
                       onClick={() => setShowPenSettings(!showPenSettings)}
-                      className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-500 mr-1"
+                      className="detail_select"
                       title="Pen Settings"
                     >
                       <Settings2 size={12} />
@@ -224,21 +201,19 @@ export const Header: React.FC<HeaderProps> = ({
                   <button
                     onClick={() => {
                       setDrawingMode(
-                        drawingMode === 'eraser' ? 'idle' : 'eraser'
+                        drawingMode === "eraser" ? "idle" : "eraser"
                       );
                       setShowPenSettings(false);
                     }}
-                    className={`p-2 rounded-md transition-all ${
-                      drawingMode === 'eraser'
-                        ? 'bg-white dark:bg-slate-800 shadow text-red-500'
-                        : 'text-slate-400 hover:text-slate-600'
+                    className={`eraser_tool ${
+                      drawingMode === "eraser" ? "on" : "off"
                     }`}
                     title="Eraser"
                   >
                     <Eraser size={18} />
                   </button>
                 </div>
-                {showPenSettings && drawingMode === 'pen' && (
+                {showPenSettings && drawingMode === "pen" && (
                   <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-4 animate-fade-in z-[70]">
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-xs font-bold text-slate-500 uppercase">
@@ -252,16 +227,16 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     </div>
                     <div className="flex justify-between mb-4">
-                      {colors.map(c => (
+                      {colors.map((c) => (
                         <button
                           key={c}
                           onClick={() => setPenColor(c)}
                           className={`w-6 h-6 rounded-full transition-transform hover:scale-110 border border-slate-200 dark:border-slate-700 ${
                             penColor === c
-                              ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                              : ''
+                              ? "ring-2 ring-offset-2 ring-blue-500 scale-110"
+                              : ""
                           }`}
-                          style={{backgroundColor: c}}
+                          style={{ backgroundColor: c }}
                         />
                       ))}
                     </div>
@@ -276,7 +251,7 @@ export const Header: React.FC<HeaderProps> = ({
                         max="15"
                         step="1"
                         value={penWidth}
-                        onChange={e => setPenWidth(parseInt(e.target.value))}
+                        onChange={(e) => setPenWidth(parseInt(e.target.value))}
                         className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                       />
                     </div>
@@ -291,7 +266,7 @@ export const Header: React.FC<HeaderProps> = ({
                         max="1"
                         step="0.1"
                         value={penOpacity}
-                        onChange={e =>
+                        onChange={(e) =>
                           setPenOpacity(parseFloat(e.target.value))
                         }
                         className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
@@ -305,7 +280,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setShowViewSettings(!showViewSettings)}
-                  className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="appearance"
                   title="Appearance"
                 >
                   <Type size={20} />
@@ -319,22 +294,22 @@ export const Header: React.FC<HeaderProps> = ({
                     {/* Font Size */}
                     <div className="flex items-center justify-between mb-4 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
                       <button
-                        onClick={() => cycleFontSize('down')}
+                        onClick={() => cycleFontSize("down")}
                         className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded shadow-sm"
                       >
                         <Minus size={14} />
                       </button>
                       <span className="text-sm font-medium">
-                        {fontSize === 'medium'
-                          ? '100%'
-                          : fontSize === 'small'
-                          ? '85%'
-                          : fontSize === 'large'
-                          ? '115%'
-                          : '130%'}
+                        {fontSize === "medium"
+                          ? "100%"
+                          : fontSize === "small"
+                          ? "85%"
+                          : fontSize === "large"
+                          ? "115%"
+                          : "130%"}
                       </span>
                       <button
-                        onClick={() => cycleFontSize('up')}
+                        onClick={() => cycleFontSize("up")}
                         className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded shadow-sm"
                       >
                         <Plus size={14} />
@@ -346,7 +321,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <button
                         onClick={() =>
                           setViewMode(
-                            viewMode === 'single' ? 'double' : 'single'
+                            viewMode === "single" ? "double" : "single"
                           )
                         }
                         className="w-full flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300"
@@ -356,14 +331,14 @@ export const Header: React.FC<HeaderProps> = ({
                         </span>
                         <div
                           className={`w-8 h-4 rounded-full relative transition-colors ${
-                            viewMode === 'double'
-                              ? 'bg-blue-500'
-                              : 'bg-slate-300'
+                            viewMode === "double"
+                              ? "bg-blue-500"
+                              : "bg-slate-300"
                           }`}
                         >
                           <div
                             className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                              viewMode === 'double' ? 'translate-x-4' : ''
+                              viewMode === "double" ? "translate-x-4" : ""
                             }`}
                           ></div>
                         </div>
@@ -377,12 +352,12 @@ export const Header: React.FC<HeaderProps> = ({
                         </span>
                         <div
                           className={`w-8 h-4 rounded-full relative transition-colors ${
-                            showAnnotations ? 'bg-blue-500' : 'bg-slate-300'
+                            showAnnotations ? "bg-blue-500" : "bg-slate-300"
                           }`}
                         >
                           <div
                             className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                              showAnnotations ? 'translate-x-4' : ''
+                              showAnnotations ? "translate-x-4" : ""
                             }`}
                           ></div>
                         </div>
@@ -396,12 +371,12 @@ export const Header: React.FC<HeaderProps> = ({
                         </span>
                         <div
                           className={`w-8 h-4 rounded-full relative transition-colors ${
-                            isBookmarked ? 'bg-blue-500' : 'bg-slate-300'
+                            isBookmarked ? "bg-blue-500" : "bg-slate-300"
                           }`}
                         >
                           <div
                             className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                              isBookmarked ? 'translate-x-4' : ''
+                              isBookmarked ? "translate-x-4" : ""
                             }`}
                           ></div>
                         </div>
@@ -414,11 +389,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Side Panel */}
               <button
                 onClick={() => setToolsOpen(!isToolsOpen)}
-                className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${
-                  isToolsOpen
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                    : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
+                className={`toggle_ai_notes ${isToolsOpen ? "on" : "off"}`}
                 title="Toggle AI & Notes"
               >
                 <PanelRight size={20} />
@@ -444,7 +415,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <Loader2 size={14} className="animate-spin" />
                   ) : (
                     <FileUp size={14} />
-                  )}{' '}
+                  )}{" "}
                   Add Reference PDF
                 </button>
                 <input
