@@ -4,7 +4,6 @@ import {
   GlobalWorkerOptions,
   getDocument,
   version as pdfjsVersion,
-  type PDFDocumentLoadingTask,
 } from "pdfjs-dist";
 import {
   PDFViewer,
@@ -27,9 +26,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<"" | "ok" | "fail">("");
+  const copyResetRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetRef.current) {
+        clearTimeout(copyResetRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!viewerContainerRef.current || !viewerRef.current) return;
+
+    setLoading(true); // 새 파일 로드 시작
+    setErrorMsg(null); // 이전 에러 메시지 초기화
 
     const eventBus = new EventBus();
     const linkService = new PDFLinkService({ eventBus });
@@ -52,16 +63,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
 
     linkService.setViewer(pdfViewer);
 
+    let cancelled = false;
     let loadingTask = getDocument(file);
 
     loadingTask.promise
       .then((pdfDoc) => {
+        if (cancelled) return;
         setLoading(false);
         setErrorMsg(null);
         pdfViewer.setDocument(pdfDoc);
         linkService.setDocument(pdfDoc, null);
       })
       .catch((err: any) => {
+        if (cancelled) return;
         if (err?.message === "Worker was destroyed") {
           console.debug("[PdfViewer] worker destroyed (cleanup)");
           return;
@@ -72,17 +86,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
       });
 
     return () => {
+      cancelled = true;
       loadingTask.destroy();
     };
   }, [file]);
 
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
     const text = window.getSelection()?.toString() ?? "";
 
     if (!text.trim()) {
       setCopyStatus("fail");
-      setTimeout(() => setCopyStatus(""), 1000);
+      copyResetRef.current = window.setTimeout(() => setCopyStatus(""), 1000);
       return;
     }
 
@@ -98,103 +114,44 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
       console.error("copy failed", e);
       setCopyStatus("fail");
     } finally {
-      setTimeout(() => setCopyStatus(""), 1000);
+      copyResetRef.current = window.setTimeout(() => setCopyStatus(""), 1000);
     }
   };
 
   const VISUAL_SCALE = 0.5; // 화면에 실제로 보여줄 축소 비율 (INTERNAL_SCALE의 역수)
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "calc(100vh - 160px)",
-        overflow: "hidden",
-        background: "#ddd",
-      }}
-    >
+    <div className="pdf-viewer">
       {/* 오른쪽 위에 복사 버튼 */}
-      <div
-        style={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          zIndex: 30,
-          display: "flex",
-          gap: 8,
-        }}
-      >
+      <div className="pdf-viewer__controls">
         <button
           onClick={handleCopySelection}
-          style={{
-            padding: "4px 8px",
-            fontSize: 12,
-            borderRadius: 4,
-            border: "1px solid #ccc",
-            background: "#fff",
-            cursor: "pointer",
-          }}
+          className="pdf-viewer__copy-button"
         >
           선택 텍스트 복사
         </button>
         {copyStatus === "ok" && (
-          <span style={{ fontSize: 11, color: "#16a34a" }}>복사됨</span>
+          <span className="pdf-viewer__copy-status pdf-viewer__copy-status--ok">
+            복사됨
+          </span>
         )}
         {copyStatus === "fail" && (
-          <span style={{ fontSize: 11, color: "#dc2626" }}>선택 없음</span>
+          <span className="pdf-viewer__copy-status pdf-viewer__copy-status--fail">
+            선택 없음
+          </span>
         )}
       </div>
       {/* 로딩/에러 overlay는 그대로 두세요 */}
       {loading && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 10,
-            pointerEvents: "none",
-          }}
-        >
-          <span
-            style={{
-              background: "#0008",
-              color: "#fff",
-              padding: "8px 12px",
-              borderRadius: 4,
-            }}
-          >
-            PDF 로딩 중...
-          </span>
+        <div className="pdf-viewer__overlay pdf-viewer__overlay--loading">
+          <span className="pdf-viewer__overlay-message">PDF 로딩 중...</span>
         </div>
       )}
 
       {errorMsg && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 20,
-          }}
-        >
-          <div
-            style={{
-              background: "#ffeded",
-              color: "#b00",
-              padding: "12px 16px",
-              borderRadius: 4,
-              maxWidth: "80%",
-              fontSize: 12,
-            }}
-          >
-            <div style={{ fontWeight: "bold", marginBottom: 4 }}>
-              PDF 로드 오류
-            </div>
+        <div className="pdf-viewer__overlay pdf-viewer__overlay--error">
+          <div className="pdf-viewer__error">
+            <div className="pdf-viewer__error-title">PDF 로드 오류</div>
             <div>{errorMsg}</div>
           </div>
         </div>
@@ -202,36 +159,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
 
       {/* ⭐⭐⭐ 화면용 스케일 래퍼 추가 (중요) ⭐⭐⭐ */}
       <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          overflow: "auto",
-          background: "#eee",
-
-          /* 화면에 보이는 실제 크기 축소 */
-          transform: `scale(${VISUAL_SCALE})`,
-          transformOrigin: "top left",
-
-          /* 축소한 만큼 실제 크기를 반대로 늘려서 스크롤 정상화 */
-          width: `${100 / VISUAL_SCALE}%`,
-          height: `${100 / VISUAL_SCALE}%`,
-        }}
+        className="pdf-viewer__scale-wrapper"
+        style={
+          {
+            "--visual-scale": VISUAL_SCALE,
+          } as React.CSSProperties
+        }
       >
         {/* ⭐ pdf.js에서 요구하는 container는 그대로 absolute 유지 ⭐ */}
-        <div
-          ref={viewerContainerRef}
-          style={{
-            position: "absolute",
-            inset: 0,
-            overflow: "auto",
-            background: "transparent",
-          }}
-        >
-          <div
-            ref={viewerRef}
-            className="pdfViewer"
-            style={{ padding: "20px" }}
-          />
+        <div ref={viewerContainerRef} className="pdf-viewer__container">
+          <div ref={viewerRef} className="pdfViewer pdf-viewer__content" />
         </div>
       </div>
     </div>

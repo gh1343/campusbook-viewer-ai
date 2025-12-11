@@ -4,3 +4,105 @@
 .test {
   width: 900px;
 }
+.pdf-viewer {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 160px);
+  overflow: hidden;
+  background: #ddd;
+}
+
+.pdf-viewer__controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+}
+
+.pdf-viewer__copy-button {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+
+.pdf-viewer__copy-button:hover {
+  background: #f5f5f5;
+}
+
+.pdf-viewer__copy-status {
+  font-size: 11px;
+}
+
+.pdf-viewer__copy-status--ok {
+  color: #16a34a;
+}
+
+.pdf-viewer__copy-status--fail {
+  color: #dc2626;
+}
+
+.pdf-viewer__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.pdf-viewer__overlay--loading {
+  z-index: 10;
+}
+
+.pdf-viewer__overlay--error {
+  z-index: 20;
+}
+
+.pdf-viewer__overlay-message {
+  background: #0008;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.pdf-viewer__error {
+  background: #ffeded;
+  color: #b00;
+  padding: 12px 16px;
+  border-radius: 4px;
+  max-width: 80%;
+  font-size: 12px;
+}
+
+.pdf-viewer__error-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.pdf-viewer__scale-wrapper {
+  --visual-scale: 1;
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: #eee;
+  transform: scale(var(--visual-scale));
+  transform-origin: top left;
+  width: calc(100% / var(--visual-scale));
+  height: calc(100% / var(--visual-scale));
+}
+
+.pdf-viewer__container {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: transparent;
+}
+
+.pdf-viewer__content {
+  padding: 20px;
+}
