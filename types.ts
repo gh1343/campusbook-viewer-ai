@@ -21,6 +21,13 @@ export interface SearchResult {
   pageNumber?: number;
 }
 
+export interface PdfBookmark {
+  id: string;
+  page: number;
+  label: string;
+  createdAt: number;
+}
+
 export interface Highlight {
   id: string;
   chapterId: string;
@@ -101,8 +108,9 @@ export interface BookContextType {
   showAnnotations: boolean;
   toggleAnnotations: () => void;
 
-  bookmarks: string[];
-  toggleBookmark: () => void;
+  bookmarks: PdfBookmark[];
+  addPdfBookmark: (page: number, label?: string) => void;
+  removePdfBookmark: (id: string) => void;
 
   highlights: Highlight[];
   addHighlight: (text: string, note?: string, targetChapterId?: string) => string;
@@ -163,4 +171,6 @@ export interface BookContextType {
   registerPdfNavigator: (fn: (page: number) => void) => void;
   pdfSearchHighlight: {page: number; term: string} | null;
   setPdfSearchHighlight: (value: {page: number; term: string} | null) => void;
+  currentPdfPage: number;
+  setCurrentPdfPage: (page: number) => void;
 }

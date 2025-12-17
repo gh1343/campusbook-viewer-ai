@@ -146,6 +146,18 @@
 .search_icon_btn:hover {
   background-color: rgb(241 245 249);
 }
+.bookmark_icon_btn {
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  color: rgb(100 116 139);
+}
+.bookmark_icon_btn:hover {
+  background-color: rgb(241 245 249);
+}
+.bookmark_icon_btn.on {
+  background-color: rgb(255 247 237);
+  color: rgb(217 119 6);
+}
 .draw_icon_wrap {
   position: relative;
   display: flex;

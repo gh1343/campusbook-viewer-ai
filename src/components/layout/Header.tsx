@@ -10,10 +10,11 @@ import {
   LogOut,
   Save,
   Eye,
-  EyeOff,
   Settings2,
   X,
   Bookmark,
+  BookmarkCheck,
+  BookmarkPlus,
   FileUp,
   Loader2,
   Search,
@@ -53,8 +54,9 @@ export const Header: React.FC<HeaderProps> = ({
     isToolsOpen,
     setToolsOpen,
     bookmarks,
-    toggleBookmark,
-    currentChapter,
+    addPdfBookmark,
+    removePdfBookmark,
+    currentPdfPage,
     uploadBook,
     isProcessing,
     setActiveToolTab,
@@ -68,7 +70,10 @@ export const Header: React.FC<HeaderProps> = ({
   const [showSysMenu, setShowSysMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isBookmarked = bookmarks.includes(currentChapter.id);
+  const currentPageBookmark = bookmarks.find(
+    (b) => b.page === currentPdfPage
+  );
+  const isBookmarked = Boolean(currentPageBookmark);
 
   const handleExit = () => {
     if (confirm("Are you sure you want to close the viewer?")) {
@@ -89,6 +94,15 @@ export const Header: React.FC<HeaderProps> = ({
   const handleSearchClick = () => {
     setToolsOpen(true);
     setActiveToolTab("search");
+  };
+
+  const handleBookmarkClick = () => {
+    if (!currentPdfPage) return;
+    if (currentPageBookmark) {
+      removePdfBookmark(currentPageBookmark.id);
+    } else {
+      addPdfBookmark(currentPdfPage, `PDF p.${currentPdfPage}`);
+    }
   };
 
   const cycleFontSize = (dir: "up" | "down") => {
@@ -174,6 +188,21 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Search"
               >
                 <Search size={20} />
+              </button>
+              <button
+                onClick={handleBookmarkClick}
+                className={`bookmark_icon_btn ${isBookmarked ? "on" : "off"}`}
+                title={
+                  isBookmarked
+                    ? "Remove bookmark for this page"
+                    : "Bookmark this page"
+                }
+              >
+                {isBookmarked ? (
+                  <BookmarkCheck size={20} />
+                ) : (
+                  <BookmarkPlus size={20} />
+                )}
               </button>
               {/* Pen Tools */}
               <div className="draw_icon_wrap">
@@ -363,7 +392,7 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                       </button>
                       <button
-                        onClick={toggleBookmark}
+                        onClick={handleBookmarkClick}
                         className="w-full flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300"
                       >
                         <span className="flex items-center gap-2">

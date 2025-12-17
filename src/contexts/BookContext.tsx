@@ -20,6 +20,7 @@ import {
   RagChunk,
   SearchResult,
   ViewMode,
+  PdfBookmark,
 } from '../../types';
 import {generateExplanation} from '../services/geminiService';
 import {processPdf, findRelevantContext} from '../services/pdfRagService';
@@ -74,7 +75,35 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const [viewMode, setViewMode] = useState<ViewMode>('single');
 
   const [showAnnotations, setShowAnnotations] = useState(true);
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<PdfBookmark[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('pdfBookmarks');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map(item => {
+            if (item && typeof item === 'object' && 'page' in item) {
+              return item as PdfBookmark;
+            }
+            if (typeof item === 'number') {
+              return {
+                id: `migrated-${item}`,
+                page: item,
+                label: `Page ${item}`,
+                createdAt: Date.now(),
+              } as PdfBookmark;
+            }
+            return null;
+          })
+          .filter(Boolean) as PdfBookmark[];
+      }
+    } catch (e) {
+      console.error('Failed to parse stored pdfBookmarks', e);
+    }
+    return [];
+  });
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
     null
@@ -109,6 +138,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const [pdfTextPages, setPdfTextPages] = useState<
     {page: number; text: string}[]
   >([]);
+  const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfNavigator, setPdfNavigator] = useState<
     ((page: number) => void) | null
   >(null);
@@ -144,6 +174,14 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     }));
   }, [currentChapter.id]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('pdfBookmarks', JSON.stringify(bookmarks));
+    } catch (e) {
+      console.error('Failed to persist pdfBookmarks', e);
+    }
+  }, [bookmarks]);
+
   const updateReadingTime = () => {
     setStats(prev => ({
       ...prev,
@@ -169,14 +207,22 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   const toggleAnnotations = () => setShowAnnotations(prev => !prev);
 
-  const toggleBookmark = () => {
+  const addPdfBookmark = (page: number, label?: string) => {
+    if (!page || page < 1) return;
     setBookmarks(prev => {
-      if (prev.includes(currentChapter.id)) {
-        return prev.filter(id => id !== currentChapter.id);
-      } else {
-        return [...prev, currentChapter.id];
-      }
+      if (prev.some(b => b.page === page)) return prev;
+      const bookmark: PdfBookmark = {
+        id: Date.now().toString(),
+        page,
+        label: label || `Page ${page}`,
+        createdAt: Date.now(),
+      };
+      return [bookmark, ...prev];
     });
+  };
+
+  const removePdfBookmark = (id: string) => {
+    setBookmarks(prev => prev.filter(b => b.id !== id));
   };
 
   const goToNextChapter = () => {
@@ -432,6 +478,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   };
 
   const goToPdfPage = (page: number) => {
+    setCurrentPdfPage(page);
     if (pdfNavigator) {
       pdfNavigator(page);
     } else {
@@ -483,7 +530,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         showAnnotations,
         toggleAnnotations,
         bookmarks,
-        toggleBookmark,
+        addPdfBookmark,
+        removePdfBookmark,
         highlights,
         addHighlight,
         updateHighlight,
@@ -532,6 +580,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         registerPdfNavigator,
         pdfSearchHighlight,
         setPdfSearchHighlight,
+        currentPdfPage,
+        setCurrentPdfPage,
       }}
     >
       {children}

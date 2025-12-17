@@ -11,15 +11,20 @@ export const ReaderPage: React.FC = () => {
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
   const [isTocOpen, setTocOpen] = useState(true);
-  const { isToolsOpen, setToolsOpen, registerPdfNavigator } = useBook();
+  const { isToolsOpen, setToolsOpen, registerPdfNavigator, setCurrentPdfPage } =
+    useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const pdfGoToPageRef = useRef<(page: number) => void>();
 
   // Stable handlers to avoid rerunning PdfViewer effect
-  const handlePdfPageChange = useCallback((page: number) => {
-    setPdfCurrentPage(page);
-  }, []);
+  const handlePdfPageChange = useCallback(
+    (page: number) => {
+      setPdfCurrentPage(page);
+      setCurrentPdfPage(page);
+    },
+    [setCurrentPdfPage]
+  );
 
   const handlePdfPagesCount = useCallback((count: number) => {
     setPdfPageCount(count);

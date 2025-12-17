@@ -117,8 +117,16 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   isOpen,
   onClose,
 }) => {
-  const { chapters, currentChapterIndex, goToChapter, hasStrokes, bookmarks } =
-    useBook();
+  const {
+    chapters,
+    currentChapterIndex,
+    goToChapter,
+    hasStrokes,
+    bookmarks,
+    goToPdfPage,
+    removePdfBookmark,
+    currentPdfPage,
+  } = useBook();
   const [activeTab, setActiveTab] = useState<"contents" | "bookmarks">(
     "contents"
   );
@@ -176,29 +184,52 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
               </button>
             ))}
           {activeTab === "bookmarks" &&
-            bookmarks.map((bid) => {
-              const chapter = chapters.find((c) => c.id === bid);
-              if (!chapter) return null;
-              return (
+            bookmarks.map((bm) => (
+              <div
+                key={bm.id}
+                className={`bookmark_item_row ${
+                  bm.page === currentPdfPage ? "active" : ""
+                }`}
+              >
                 <button
-                  key={bid}
                   onClick={() => {
-                    goToChapter(chapters.findIndex((c) => c.id === bid));
+                    goToPdfPage(bm.page);
                     if (window.innerWidth < 768) onClose();
                   }}
-                  className=""
+                  className="bookmark_item_button"
                 >
-                  <div className="">
-                    <Bookmark size={14} className="" />
-                    <span className="line_clamp_1">{chapter.title}</span>
+                  <div className="bookmark_page_badge">
+                    <Bookmark size={14} />
+                    <span>Page {bm.page}</span>
+                  </div>
+                  <div className="bookmark_item_text">
+                    <span className="bookmark_label line_clamp_1">
+                      {bm.label || `Page ${bm.page}`}
+                    </span>
+                    <span className="bookmark_meta">
+                      Saved {new Date(bm.createdAt).toLocaleDateString()}
+                    </span>
                   </div>
                 </button>
-              );
-            })}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removePdfBookmark(bm.id);
+                  }}
+                  className="bookmark_remove_btn"
+                  title="Delete bookmark"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
           {activeTab === "bookmarks" && bookmarks.length === 0 && (
             <div className="non_book_mark">
               <Bookmark size={24} className="mx-auto mb-2 text-slate-400" />
-              <p className="text_sm">No bookmarks</p>
+              <p className="text_sm">No bookmarks yet</p>
+              <p className="text_sm">
+                Use the bookmark icon near Search to save a page.
+              </p>
             </div>
           )}
         </div>

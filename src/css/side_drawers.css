@@ -93,6 +93,60 @@
   font-size: 0.875rem;
   line-height: 1.25rem;
 }
+.bookmark_item_row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  margin: 0.25rem 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(241 245 249);
+  background-color: rgb(255 255 255);
+}
+.bookmark_item_row.active {
+  border-color: rgb(59 130 246);
+  background-color: rgb(239 246 255);
+}
+.bookmark_item_button {
+  flex: 1 1 0%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+}
+.bookmark_page_badge {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: rgb(37 99 235);
+  background-color: rgb(239 246 255);
+  border-radius: 9999px;
+  padding: 0.25rem 0.5rem;
+  font-weight: 600;
+}
+.bookmark_item_text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.bookmark_label {
+  font-weight: 600;
+  color: rgb(51 65 85);
+}
+.bookmark_meta {
+  font-size: 0.75rem;
+  color: rgb(148 163 184);
+}
+.bookmark_remove_btn {
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  color: rgb(148 163 184);
+}
+.bookmark_remove_btn:hover {
+  background-color: rgb(254 242 242);
+  color: rgb(239 68 68);
+}
 
 /* 오른쪽 패널 */
 .right_panel_wrap .separate {
