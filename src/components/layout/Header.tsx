@@ -401,16 +401,13 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="relative ml-1">
             <button
               onClick={() => setShowSysMenu(!showSysMenu)}
-              className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              className="more"
             >
               <MoreVertical size={20} />
             </button>
             {showSysMenu && (
-              <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-1 animate-fade-in z-[70]">
-                <button
-                  onClick={handleUploadClick}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                >
+              <div className="more_list">
+                <button onClick={handleUploadClick} className="">
                   {isProcessing ? (
                     <Loader2 size={14} className="animate-spin" />
                   ) : (
@@ -426,17 +423,11 @@ export const Header: React.FC<HeaderProps> = ({
                   onChange={handleFileChange}
                 />
 
-                <button
-                  onClick={saveProgress}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                >
+                <button onClick={saveProgress} className="">
                   <Save size={14} /> Save Progress
                 </button>
                 <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
-                <button
-                  onClick={handleExit}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                >
+                <button onClick={handleExit} className="exit_viewer">
                   <LogOut size={14} /> Exit Viewer
                 </button>
               </div>

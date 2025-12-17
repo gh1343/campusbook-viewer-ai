@@ -5,6 +5,7 @@ import { PdfViewer } from "../components/viewer/PdfViewer";
 import { ControlBar } from "../components/viewer/ControlBar";
 import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
 import { useBook } from "../contexts/BookContext";
+import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
   // Desktop default: Open (Split view)
@@ -95,17 +96,10 @@ export const ReaderPage: React.FC = () => {
       <Header toggleSidebar={toggleToc} isSidebarOpen={isTocOpen} />
 
       {/* Main Split Layout Container */}
-      <div
-        ref={containerRef}
-        className="flex flex-1 pt-16 overflow-auto relative"
-      >
-        {/* Left Panel Area */}
+      <div ref={containerRef} className="split_container">
+        {/* 왼쪽 사이드바 */}
         <div
-          className={`relative flex-shrink-0 transition-[width] duration-100 ease-linear ${
-            !isTocOpen
-              ? "w-0 border-none"
-              : "border-r border-slate-200 dark:border-slate-800"
-          }`}
+          className={`left_side_wrap ${!isTocOpen ? "off" : "on"}`}
           style={{
             width: isTocOpen
               ? window.innerWidth < 768
@@ -115,40 +109,33 @@ export const ReaderPage: React.FC = () => {
           }}
         >
           {/* Render Panel Content */}
-          <div className="h-full w-full overflow-hidden">
+          <div className="left_side_inner">
             <TocPanel isOpen={isTocOpen} onClose={() => setTocOpen(false)} />
           </div>
 
           {/* Resizer Handle (Desktop Only) */}
           {isTocOpen && window.innerWidth >= 768 && (
-            <div
-              className="absolute top-0 right-[-4px] w-2 h-full cursor-col-resize z-50 flex items-center justify-center group hover:bg-blue-500/10 transition-colors"
-              onMouseDown={() => setIsDraggingLeft(true)}
-            >
-              <div className="w-[1px] h-8 bg-slate-300 dark:bg-slate-700 group-hover:bg-blue-400"></div>
+            <div className="" onMouseDown={() => setIsDraggingLeft(true)}>
+              <div className=""></div>
             </div>
           )}
         </div>
 
         {/* Center Panel: Reader & Controls */}
-        <main className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950 relative z-0">
-          <div className="mx-auto min_h_[calc(100vh-12rem)] test">
+        <main className="content_container">
+          <div className="cc_top">
             {/* TODO: 나중에 조건부 렌더링으로 바꿀 수 있음 */}
             <PdfViewer file={pdfUrl} />
           </div>
 
-          <div className="sticky bottom-0 z-30 w-full">
+          <div className="cc_bottom">
             <ControlBar />
           </div>
         </main>
 
         {/* Right Panel Area */}
         <div
-          className={`relative flex-shrink-0 transition-[width] duration-100 ease-linear ${
-            !isToolsOpen
-              ? "w-0 border-none"
-              : "border-l border-slate-200 dark:border-slate-800"
-          }`}
+          className={`right_panel_wrap ${!isToolsOpen ? "off" : "on"}`}
           style={{
             width: isToolsOpen
               ? window.innerWidth < 768
@@ -160,10 +147,10 @@ export const ReaderPage: React.FC = () => {
           {/* Resizer Handle */}
           {isToolsOpen && window.innerWidth >= 768 && (
             <div
-              className="absolute top-0 left-[-4px] w-2 h-full cursor-col-resize z-50 flex items-center justify-center group hover:bg-blue-500/10 transition-colors"
+              className="separate"
               onMouseDown={() => setIsDraggingRight(true)}
             >
-              <div className="w-[1px] h-8 bg-slate-300 dark:bg-slate-700 group-hover:bg-blue-400"></div>
+              <div className=""></div>
             </div>
           )}
 

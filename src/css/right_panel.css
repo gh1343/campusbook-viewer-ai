@@ -1,0 +1,58 @@
+.right_panel_wrap .separate {
+  position: absolute;
+  top: 0;
+  left: -4px;
+  z-index: 50;
+  width: 0.5rem;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.right_panel_menu {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background-color: rgb(248 250 252);
+  border-color: rgb(241 245 249);
+  border-bottom-width: 1px;
+  overflow-x: auto;
+}
+.right_panel_menu button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 0.375rem;
+  flex: 1 1 0;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  line-height: 1rem;
+  font-weight: 500;
+  font-size: 0.75rem;
+  background-color: transparent;
+}
+.right_panel_menu button.on {
+  background-color: rgb(255 255 255);
+}
+.right_panel_menu button.off:hover {
+  background-color: rgb(241 245 249);
+}
+.right_panel_menu button.off {
+  color: rgb(100 116 139);
+}
+.right_panel_menu button.ai.on {
+  color: rgb(37 99 235);
+}
+.right_panel_menu button.notes.on {
+  color: rgb(217 119 6);
+}
+.right_panel_menu button.notebook.on {
+  color: rgb(22 163 74);
+}
+.right_panel_menu button.reference.on {
+  color: rgb(147 51 234);
+}
+.right_panel_menu button.search.on {
+  color: rgb(220 38 38);
+}

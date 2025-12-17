@@ -121,37 +121,37 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
   const VISUAL_SCALE = 0.5; // 화면에 실제로 보여줄 축소 비율 (INTERNAL_SCALE의 역수)
 
   return (
-    <div className="pdf-viewer">
+    <div className="pdf_viewer">
       {/* 오른쪽 위에 복사 버튼 */}
-      <div className="pdf-viewer__controls">
+      <div className="pdf_viewer_controls">
         <button
           onClick={handleCopySelection}
-          className="pdf-viewer__copy-button"
+          className="pdf_viewer_copy_button"
         >
           선택 텍스트 복사
         </button>
         {copyStatus === "ok" && (
-          <span className="pdf-viewer__copy-status pdf-viewer__copy-status--ok">
+          <span className="pdf_viewer_copy_status pdf_viewer_copy_status_ok">
             복사됨
           </span>
         )}
         {copyStatus === "fail" && (
-          <span className="pdf-viewer__copy-status pdf-viewer__copy-status--fail">
+          <span className="pdf_viewer_copy-status pdf_viewer_copy_status_fail">
             선택 없음
           </span>
         )}
       </div>
       {/* 로딩/에러 overlay는 그대로 두세요 */}
       {loading && (
-        <div className="pdf-viewer__overlay pdf-viewer__overlay--loading">
-          <span className="pdf-viewer__overlay-message">PDF 로딩 중...</span>
+        <div className="pdf_viewer_overlay pdf_viewer_overlay_loading">
+          <span className="pdf_viewer_overlay_message">PDF 로딩 중...</span>
         </div>
       )}
 
       {errorMsg && (
-        <div className="pdf-viewer__overlay pdf-viewer__overlay--error">
-          <div className="pdf-viewer__error">
-            <div className="pdf-viewer__error-title">PDF 로드 오류</div>
+        <div className="pdf_viewer_overlay pdf_viewer_overlay_error">
+          <div className="pdf_viewer_error">
+            <div className="pdf_viewer_error_title">PDF 로드 오류</div>
             <div>{errorMsg}</div>
           </div>
         </div>
@@ -159,7 +159,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
 
       {/* ⭐⭐⭐ 화면용 스케일 래퍼 추가 (중요) ⭐⭐⭐ */}
       <div
-        className="pdf-viewer__scale-wrapper"
+        className="pdf_viewer_scale_wrapper"
         style={
           {
             "--visual-scale": VISUAL_SCALE,
@@ -167,8 +167,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ file }) => {
         }
       >
         {/* ⭐ pdf.js에서 요구하는 container는 그대로 absolute 유지 ⭐ */}
-        <div ref={viewerContainerRef} className="pdf-viewer__container">
-          <div ref={viewerRef} className="pdfViewer pdf-viewer__content" />
+        <div ref={viewerContainerRef} className="pdf_viewer_container">
+          <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
         </div>
       </div>
     </div>

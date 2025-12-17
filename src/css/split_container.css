@@ -1,0 +1,53 @@
+.split_container {
+  position: relative;
+  display: flex;
+  overflow: auto;
+  padding-top: 4rem;
+  flex: 1 1 0%;
+}
+.left_side_wrap {
+  position: relative;
+  flex-shrink: 0;
+  border-right: 1px solid rgb(226 232 240);
+}
+.left_side_wrap.on {
+}
+.left_side_wrap.off {
+}
+.left_side_inner {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+/* 컨텐츠 컨테이너 */
+.content_container {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-width: 0;
+  background-color: rgb(255 255 255);
+}
+.cc_top {
+  width: 900px;
+  margin: 0 auto;
+}
+.cc_bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  width: 100%;
+}
+/* 오른쪽 패널 */
+.right_panel_wrap {
+  position: relative;
+  flex-shrink: 0;
+  border-left: 1px solid rgb(226 232 240);
+}
+.right_panel_wrap.on {
+}
+.right_panel_wrap.off {
+  width: 0;
+  border-style: none;
+}
