@@ -223,7 +223,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     text: string,
     note?: string,
     targetChapterId?: string
-  ) => {
+  ): string => {
     const chapterId = targetChapterId || currentChapter.id;
     const newHighlight: Highlight = {
       id: Date.now().toString(),
@@ -235,6 +235,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     };
     setHighlights(prev => [newHighlight, ...prev]);
     setStats(prev => ({...prev, highlightCount: prev.highlightCount + 1}));
+    return newHighlight.id;
   };
 
   const updateHighlight = (id: string, note: string) => {

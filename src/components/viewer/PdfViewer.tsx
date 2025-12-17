@@ -32,7 +32,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scaleWrapperRef = useRef<HTMLDivElement>(null);
-  const { addHighlight } = useBook();
+  const { addHighlight, highlights, activeHighlightId } = useBook();
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -55,6 +55,35 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     left: number;
     show: boolean;
   }>({ text: "", top: 0, left: 0, show: false });
+
+  useEffect(() => {
+    // Keep local overlay in sync with global highlights (e.g., sidebar delete)
+    setPdfHighlights((prev) =>
+      prev.filter((h) => highlights.some((hl) => hl.id === h.id))
+    );
+  }, [highlights]);
+
+  useEffect(() => {
+    if (!activeHighlightId || !viewerContainerRef.current) return;
+    const target = pdfHighlights.find((h) => h.id === activeHighlightId);
+    if (!target || target.rects.length === 0) return;
+
+    const first = target.rects[0];
+    const scaleRaw =
+      scaleWrapperRef.current &&
+      getComputedStyle(scaleWrapperRef.current).getPropertyValue(
+        "--visual-scale"
+      );
+    const visualScale = parseFloat(scaleRaw || "1") || 1;
+
+    const nextTop = Math.max(0, first.top * visualScale - 40);
+    const nextLeft = Math.max(0, first.left * visualScale - 20);
+    viewerContainerRef.current.scrollTo({
+      top: nextTop,
+      left: nextLeft,
+      behavior: "smooth",
+    });
+  }, [activeHighlightId, pdfHighlights]);
 
   useEffect(() => {
     return () => {
@@ -253,10 +282,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         height: Math.max(r.height / visualScale - HEIGHT_PAD, 1),
       })
     );
-    const id = Date.now().toString();
+    // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
+    const id = addHighlight(sel.toString(), undefined, "reference-doc");
     setPdfHighlights((prev) => [...prev, { id, rects }]);
-    // BookContext에도 기록하여 사이드바/검색과 연동
-    addHighlight(sel.toString(), undefined, "reference-doc");
     setSelection((prev) => ({ ...prev, show: false }));
     sel.removeAllRanges();
   };
@@ -327,6 +355,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                 <div
                   key={`${h.id}-${idx}`}
                   className="pdf_highlight"
+                  data-highlight-id={h.id}
                   style={{
                     left: rect.left,
                     top: rect.top,

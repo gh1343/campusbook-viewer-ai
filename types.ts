@@ -104,7 +104,7 @@ export interface BookContextType {
   toggleBookmark: () => void;
 
   highlights: Highlight[];
-  addHighlight: (text: string, note?: string, targetChapterId?: string) => void;
+  addHighlight: (text: string, note?: string, targetChapterId?: string) => string;
   updateHighlight: (id: string, note: string) => void;
   removeHighlight: (id: string) => void;
   activeHighlightId: string | null;
