@@ -32,7 +32,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scaleWrapperRef = useRef<HTMLDivElement>(null);
-  const { addHighlight, highlights, activeHighlightId } = useBook();
+  const {
+    addHighlight,
+    highlights,
+    activeHighlightId,
+    triggerSmartExplain,
+    setPdfTextPages,
+  } = useBook();
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -99,6 +105,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // 새 파일 로드 시 기존 하이라이트 및 선택 상태 초기화
     setPdfHighlights([]);
     setSelection((prev) => ({ ...prev, show: false }));
+    setPdfTextPages([]);
     onPagesCount?.(0);
     onPageChange?.(1);
 
@@ -140,10 +147,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     // ControlBar에서 페이지 점프할 때 호출할 함수 등록
     registerGoToPage?.((page: number) => {
-      if (!pdfViewerRef.current) return;
+      if (
+        !pdfViewerRef.current ||
+        !pdfViewerRef.current.pdfDocument ||
+        !pdfViewerRef.current.pagesCount
+      )
+        return;
+      const maxPage = pdfViewerRef.current.pdfDocument.numPages;
       const target = Math.min(
         Math.max(page, 1),
-        pdfViewerRef.current.pagesCount || page
+        maxPage
       );
       pdfViewerRef.current.currentPageNumber = target;
       pdfViewerRef.current.scrollPageIntoView({ pageNumber: target });
@@ -162,6 +175,24 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         pdfViewer.setDocument(pdfDoc);
         linkService.setDocument(pdfDoc, null);
         onPagesCount?.(pdfDoc.numPages);
+
+        const extractText = async () => {
+          const pages: { page: number; text: string }[] = [];
+          try {
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+              const page = await pdfDoc.getPage(i);
+              const textContent = await page.getTextContent();
+              const strings = textContent.items
+                .map((item: any) => ("str" in item ? item.str : ""))
+                .join(" ");
+              pages.push({ page: i, text: strings });
+            }
+            if (!cancelled) setPdfTextPages(pages);
+          } catch (err) {
+            console.error("PDF text extraction failed", err);
+          }
+        };
+        extractText();
       })
       .catch((err: any) => {
         if (cancelled) return;
@@ -179,7 +210,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       loadingTask.destroy();
       pdfViewerRef.current = null;
     };
-  }, [file, onPageChange, onPagesCount, registerGoToPage]);
+  }, [file, onPageChange, onPagesCount, registerGoToPage, setPdfTextPages]);
 
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
@@ -294,6 +325,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setSelection((prev) => ({ ...prev, show: false }));
   };
 
+  const handleAskAi = () => {
+    if (!selection.text.trim()) {
+      setSelection((prev) => ({ ...prev, show: false }));
+      return;
+    }
+    triggerSmartExplain(selection.text);
+    setSelection((prev) => ({ ...prev, show: false }));
+    window.getSelection()?.removeAllRanges();
+  };
+
   return (
     <div className="pdf_viewer">
       {/* 로딩/에러 overlay는 그대로 두세요 */}
@@ -371,6 +412,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           <div className="pdf_selection_menu_copy_block">
             <button onClick={handleCopySelection}>Copy</button>
           </div>
+          <button onClick={handleAskAi}>AI</button>
           <button onClick={cancelSelection}>Cancel</button>
         </div>
       )}

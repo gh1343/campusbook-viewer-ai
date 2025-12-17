@@ -13,11 +13,12 @@ export interface RagChunk {
 
 export interface SearchResult {
   id: string;
-  type: 'chapter' | 'highlight' | 'note';
-  title: string; 
-  contentSnippet: string; 
+  type: 'chapter' | 'highlight' | 'note' | 'pdf';
+  title: string;
+  contentSnippet: string;
   chapterId?: string;
-  matchIndex?: number; 
+  matchIndex?: number;
+  pageNumber?: number;
 }
 
 export interface Highlight {
@@ -155,4 +156,9 @@ export interface BookContextType {
   updateReadingTime: () => void;
   
   saveProgress: () => void;
+
+  pdfTextPages: {page: number; text: string}[];
+  setPdfTextPages: (pages: {page: number; text: string}[]) => void;
+  goToPdfPage: (page: number) => void;
+  registerPdfNavigator: (fn: (page: number) => void) => void;
 }

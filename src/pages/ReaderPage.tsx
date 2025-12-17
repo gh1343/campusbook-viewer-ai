@@ -11,7 +11,7 @@ export const ReaderPage: React.FC = () => {
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
   const [isTocOpen, setTocOpen] = useState(true);
-  const { isToolsOpen, setToolsOpen } = useBook();
+  const { isToolsOpen, setToolsOpen, registerPdfNavigator } = useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const pdfGoToPageRef = useRef<(page: number) => void>();
@@ -25,9 +25,13 @@ export const ReaderPage: React.FC = () => {
     setPdfPageCount(count);
   }, []);
 
-  const handleRegisterGoToPage = useCallback((fn: (page: number) => void) => {
-    pdfGoToPageRef.current = fn;
-  }, []);
+  const handleRegisterGoToPage = useCallback(
+    (fn: (page: number) => void) => {
+      pdfGoToPageRef.current = fn;
+      registerPdfNavigator(fn);
+    },
+    [registerPdfNavigator]
+  );
 
   // Resizable Panel State
   const [leftWidth, setLeftWidth] = useState(300);

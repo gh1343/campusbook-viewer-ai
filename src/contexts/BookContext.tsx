@@ -106,6 +106,13 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     aiInteractionCount: 0,
     highlightCount: 0,
   });
+  const [pdfTextPages, setPdfTextPages] = useState<
+    {page: number; text: string}[]
+  >([]);
+  const [pdfNavigator, setPdfNavigator] = useState<
+    ((page: number) => void) | null
+  >(null);
+  const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
 
   const currentChapter = chapters[currentChapterIndex];
 
@@ -399,8 +406,53 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       }
     });
 
+    pdfTextPages.forEach(p => {
+      const idx = p.text.toLowerCase().indexOf(lowerQuery);
+      if (idx !== -1) {
+        const start = Math.max(0, idx - 40);
+        const end = Math.min(p.text.length, idx + 40 + query.length);
+        const snippet =
+          (start > 0 ? '...' : '') +
+          p.text.substring(start, end) +
+          (end < p.text.length ? '...' : '');
+        results.push({
+          id: `pdf-${p.page}-${idx}`,
+          type: 'pdf',
+          title: `PDF p.${p.page}`,
+          contentSnippet: snippet,
+          pageNumber: p.page,
+        });
+      }
+    });
+
     return results;
   };
+
+  const goToPdfPage = (page: number) => {
+    if (pdfNavigator) {
+      pdfNavigator(page);
+    } else {
+      setPendingPdfPage(page);
+    }
+  };
+
+  const registerPdfNavigator = React.useCallback(
+    (fn: (page: number) => void) => {
+      setPdfNavigator(() => fn);
+      if (pendingPdfPage !== null) {
+        fn(pendingPdfPage);
+        setPendingPdfPage(null);
+      }
+    },
+    [pendingPdfPage]
+  );
+
+  const updatePdfTextPages = React.useCallback(
+    (pages: {page: number; text: string}[]) => {
+      setPdfTextPages(pages);
+    },
+    []
+  );
 
   const saveProgress = () => {
     console.log('Saving progress...');
@@ -471,6 +523,10 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         incrementAiCount,
         updateReadingTime,
         saveProgress,
+        pdfTextPages,
+        setPdfTextPages: updatePdfTextPages,
+        goToPdfPage,
+        registerPdfNavigator,
       }}
     >
       {children}

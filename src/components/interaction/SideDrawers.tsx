@@ -238,6 +238,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     searchQuery,
     setSearchQuery,
     performSearch,
+    goToPdfPage,
   } = useBook();
 
   const [aiInput, setAiInput] = useState("");
@@ -895,6 +896,10 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                               setEditingNote(note);
                               setActiveToolTab("notebook");
                             }
+                          } else if (result.type === "pdf") {
+                            if (result.pageNumber) {
+                              goToPdfPage(result.pageNumber);
+                            }
                           } else {
                             const idx = chapters.findIndex(
                               (c) => c.id === result.chapterId
@@ -911,14 +916,16 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
-                              result.type === "chapter"
-                                ? "bg-blue-100 text-blue-600"
-                                : result.type === "highlight"
-                                ? "bg-yellow-100 text-yellow-600"
-                                : "bg-green-100 text-green-600"
-                            }`}
-                          >
+                        className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                          result.type === "chapter"
+                            ? "bg-blue-100 text-blue-600"
+                            : result.type === "highlight"
+                            ? "bg-yellow-100 text-yellow-600"
+                            : result.type === "pdf"
+                            ? "bg-indigo-100 text-indigo-600"
+                            : "bg-green-100 text-green-600"
+                        }`}
+                      >
                             {result.type}
                           </span>
                           <span className="text-xs text-slate-500 font-medium truncate flex-1">
