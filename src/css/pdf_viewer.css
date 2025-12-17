@@ -146,3 +146,18 @@
 .pdf_selection_menu button:hover {
   background: rgba(255, 255, 255, 0.12);
 }
+
+.pdf_selection_menu_copy_status {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.pdf_selection_menu_copy_block {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}

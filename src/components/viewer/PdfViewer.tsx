@@ -296,25 +296,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   return (
     <div className="pdf_viewer">
-      {/* 오른쪽 위에 복사 버튼 */}
-      <div className="pdf_viewer_controls">
-        <button
-          onClick={handleCopySelection}
-          className="pdf_viewer_copy_button"
-        >
-          선택 텍스트 복사
-        </button>
-        {copyStatus === "ok" && (
-          <span className="pdf_viewer_copy_status pdf_viewer_copy_status_ok">
-            복사됨
-          </span>
-        )}
-        {copyStatus === "fail" && (
-          <span className="pdf_viewer_copy-status pdf_viewer_copy_status_fail">
-            선택 없음
-          </span>
-        )}
-      </div>
       {/* 로딩/에러 overlay는 그대로 두세요 */}
       {loading && (
         <div className="pdf_viewer_overlay pdf_viewer_overlay_loading">
@@ -375,7 +356,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           className="pdf_selection_menu"
           style={{ top: selection.top, left: selection.left }}
         >
+          {(copyStatus === "ok" || copyStatus === "fail") && (
+            <span
+              className={`pdf_selection_menu_copy_status ${
+                copyStatus === "ok"
+                  ? "pdf_viewer_copy_status_ok"
+                  : "pdf_viewer_copy_status_fail"
+              }`}
+            >
+              {copyStatus === "ok" ? "복사됨" : "선택 없음"}
+            </span>
+          )}
           <button onClick={applyHighlight}>Highlight</button>
+          <div className="pdf_selection_menu_copy_block">
+            <button onClick={handleCopySelection}>Copy</button>
+          </div>
           <button onClick={cancelSelection}>Cancel</button>
         </div>
       )}
