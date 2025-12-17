@@ -132,15 +132,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (!target || target.rects.length === 0) return;
 
     const first = target.rects[0];
-    const scaleRaw =
-      scaleWrapperRef.current &&
-      getComputedStyle(scaleWrapperRef.current).getPropertyValue(
-        "--visual-scale"
-      );
-    const visualScale = parseFloat(scaleRaw || "1") || 1;
-
-    const nextTop = Math.max(0, first.top * visualScale - 40);
-    const nextLeft = Math.max(0, first.left * visualScale - 20);
+    const nextTop = Math.max(0, first.top - 40);
+    const nextLeft = Math.max(0, first.left - 20);
     viewerContainerRef.current.scrollTo({
       top: nextTop,
       left: nextLeft,
@@ -359,12 +352,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const TOP_OFFSET = 0.5;
     const HEIGHT_PAD = 1;
 
+    // Unscale first, then add scroll offsets so highlights don't drift after scrolling
     const rects: HighlightRect[] = Array.from(range.getClientRects()).map(
       (r) => ({
         left:
-          (r.left - containerRect.left + scrollLeft) / visualScale,
+          (r.left - containerRect.left) / visualScale + scrollLeft,
         top:
-          (r.top - containerRect.top + scrollTop) / visualScale -
+          (r.top - containerRect.top) / visualScale +
+          scrollTop -
           TOP_OFFSET,
         width: r.width / visualScale,
         height: Math.max(r.height / visualScale - HEIGHT_PAD, 1),
