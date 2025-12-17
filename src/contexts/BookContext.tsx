@@ -113,6 +113,9 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     ((page: number) => void) | null
   >(null);
   const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
+  const [pdfSearchHighlight, setPdfSearchHighlight] = useState<
+    {page: number; term: string} | null
+  >(null);
 
   const currentChapter = chapters[currentChapterIndex];
 
@@ -527,6 +530,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         setPdfTextPages: updatePdfTextPages,
         goToPdfPage,
         registerPdfNavigator,
+        pdfSearchHighlight,
+        setPdfSearchHighlight,
       }}
     >
       {children}

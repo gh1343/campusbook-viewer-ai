@@ -38,6 +38,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     activeHighlightId,
     triggerSmartExplain,
     setPdfTextPages,
+    pdfSearchHighlight,
   } = useBook();
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
@@ -68,6 +69,62 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       prev.filter((h) => highlights.some((hl) => hl.id === h.id))
     );
   }, [highlights]);
+
+  useEffect(() => {
+    if (!viewerRef.current) return;
+
+    const clearPrev = () => {
+      viewerRef.current?.querySelectorAll(".textLayer span").forEach((span) => {
+        const el = span as HTMLElement & { dataset: { origText?: string } };
+        if (el.dataset.origText !== undefined) {
+          el.textContent = el.dataset.origText;
+          delete el.dataset.origText;
+        }
+      });
+    };
+
+    if (!pdfSearchHighlight) {
+      clearPrev();
+      return;
+    }
+
+    const applyHighlight = () => {
+      const pageEl = viewerRef.current?.querySelector(
+        `.page[data-page-number="${pdfSearchHighlight.page}"]`
+      );
+      const textLayer = pageEl?.querySelector(".textLayer");
+      if (!textLayer) return false;
+
+      clearPrev();
+      const term = pdfSearchHighlight.term.trim();
+      if (!term) return false;
+      const re = new RegExp(
+        term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "gi"
+      );
+      textLayer.querySelectorAll("span").forEach((span) => {
+        const el = span as HTMLElement & { dataset: { origText?: string } };
+        const content = el.textContent || "";
+        const replaced = content.replace(
+          re,
+          (m) => `<span class="pdf_search_hit">${m}</span>`
+        );
+        if (replaced !== content) {
+          if (el.dataset.origText === undefined) {
+            el.dataset.origText = content;
+          }
+          el.innerHTML = replaced;
+        }
+      });
+      return true;
+    };
+
+    // Try immediately; if textLayer not ready, retry shortly
+    if (!applyHighlight()) {
+      const timer = setTimeout(applyHighlight, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [pdfSearchHighlight]);
 
   useEffect(() => {
     if (!activeHighlightId || !viewerContainerRef.current) return;

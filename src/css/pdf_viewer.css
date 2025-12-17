@@ -147,6 +147,13 @@
   background: rgba(255, 255, 255, 0.12);
 }
 
+.pdf_search_hit {
+  background: rgba(59, 130, 246, 0.35) !important;
+  color: transparent !important;
+  text-shadow: none !important;
+  border-radius: 2px;
+}
+
 .pdf_selection_menu_copy_status {
   position: absolute;
   top: -18px;

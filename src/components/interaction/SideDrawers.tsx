@@ -239,6 +239,8 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     setSearchQuery,
     performSearch,
     goToPdfPage,
+    pdfSearchHighlight,
+    setPdfSearchHighlight,
   } = useBook();
 
   const [aiInput, setAiInput] = useState("");
@@ -870,7 +872,10 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                     type="text"
                     placeholder="Search entire book & notes..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setPdfSearchHighlight(null);
+                    }}
                     className="w-full pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
                     autoFocus
                   />
@@ -899,6 +904,10 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                           } else if (result.type === "pdf") {
                             if (result.pageNumber) {
                               goToPdfPage(result.pageNumber);
+                              setPdfSearchHighlight({
+                                page: result.pageNumber,
+                                term: searchQuery,
+                              });
                             }
                           } else {
                             const idx = chapters.findIndex(

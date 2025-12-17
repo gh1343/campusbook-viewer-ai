@@ -161,4 +161,6 @@ export interface BookContextType {
   setPdfTextPages: (pages: {page: number; text: string}[]) => void;
   goToPdfPage: (page: number) => void;
   registerPdfNavigator: (fn: (page: number) => void) => void;
+  pdfSearchHighlight: {page: number; term: string} | null;
+  setPdfSearchHighlight: (value: {page: number; term: string} | null) => void;
 }
