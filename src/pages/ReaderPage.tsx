@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Header } from "../components/layout/Header";
 import { ContentRenderer } from "../components/viewer/ContentRenderer";
 import { PdfViewer } from "../components/viewer/PdfViewer";
@@ -12,6 +12,22 @@ export const ReaderPage: React.FC = () => {
   // Mobile default: Closed (Overlay)
   const [isTocOpen, setTocOpen] = useState(true);
   const { isToolsOpen, setToolsOpen } = useBook();
+  const [pdfPageCount, setPdfPageCount] = useState(0);
+  const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
+  const pdfGoToPageRef = useRef<(page: number) => void>();
+
+  // Stable handlers to avoid rerunning PdfViewer effect
+  const handlePdfPageChange = useCallback((page: number) => {
+    setPdfCurrentPage(page);
+  }, []);
+
+  const handlePdfPagesCount = useCallback((count: number) => {
+    setPdfPageCount(count);
+  }, []);
+
+  const handleRegisterGoToPage = useCallback((fn: (page: number) => void) => {
+    pdfGoToPageRef.current = fn;
+  }, []);
 
   // Resizable Panel State
   const [leftWidth, setLeftWidth] = useState(300);
@@ -125,11 +141,20 @@ export const ReaderPage: React.FC = () => {
         <main className="content_container">
           <div className="cc_top">
             {/* TODO: 나중에 조건부 렌더링으로 바꿀 수 있음 */}
-            <PdfViewer file={pdfUrl} />
+            <PdfViewer
+              file={pdfUrl}
+              onPageChange={handlePdfPageChange}
+              onPagesCount={handlePdfPagesCount}
+              registerGoToPage={handleRegisterGoToPage}
+            />
           </div>
 
           <div className="cc_bottom">
-            <ControlBar />
+            <ControlBar
+              pdfPageCount={pdfPageCount}
+              pdfCurrentPage={pdfCurrentPage}
+              onPdfGoToPage={(page) => pdfGoToPageRef.current?.(page)}
+            />
           </div>
         </main>
 

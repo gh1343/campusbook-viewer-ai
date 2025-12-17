@@ -106,3 +106,43 @@
 .pdf_viewer_content {
   padding: 20px;
 }
+
+.pdf_highlight_layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf_highlight {
+  position: absolute;
+  background: rgba(255, 247, 133, 0.55);
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+
+.pdf_selection_menu {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.pdf_selection_menu button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pdf_selection_menu button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}

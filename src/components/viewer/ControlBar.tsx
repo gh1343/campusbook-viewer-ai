@@ -2,7 +2,17 @@ import React, { useState, useEffect } from "react";
 import { useBook } from "../../contexts/BookContext";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import "../../css/page_navigation.css";
-export const ControlBar: React.FC = () => {
+interface ControlBarProps {
+  pdfPageCount?: number;
+  pdfCurrentPage?: number;
+  onPdfGoToPage?: (page: number) => void;
+}
+
+export const ControlBar: React.FC<ControlBarProps> = ({
+  pdfPageCount,
+  pdfCurrentPage,
+  onPdfGoToPage,
+}) => {
   const {
     chapters,
     currentChapterIndex,
@@ -11,27 +21,37 @@ export const ControlBar: React.FC = () => {
     goToChapter,
   } = useBook();
 
-  const [inputPage, setInputPage] = useState(
-    (currentChapterIndex + 1).toString()
-  );
+  const isPdfMode = !!onPdfGoToPage && (pdfPageCount || 0) > 0;
+  const totalPages = isPdfMode ? pdfPageCount || 1 : chapters.length;
+  const currentPageNumber = isPdfMode
+    ? pdfCurrentPage || 1
+    : currentChapterIndex + 1;
+  const currentIndexZeroBased = currentPageNumber - 1; // range 입력값
+
+  const [inputPage, setInputPage] = useState(currentPageNumber.toString());
 
   useEffect(() => {
-    setInputPage((currentChapterIndex + 1).toString());
-  }, [currentChapterIndex]);
+    setInputPage(currentPageNumber.toString());
+  }, [currentPageNumber]);
 
   const handlePageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const page = parseInt(inputPage);
-    if (!isNaN(page) && page >= 1 && page <= chapters.length) {
-      goToChapter(page - 1);
-    } else {
-      setInputPage((currentChapterIndex + 1).toString());
+    if (isNaN(page) || page < 1 || page > totalPages) {
+      setInputPage(currentPageNumber.toString());
+      return;
     }
+    if (isPdfMode) onPdfGoToPage?.(page);
+    else goToChapter(page - 1);
   };
 
   const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value);
-    goToChapter(val);
+    if (isPdfMode) {
+      onPdfGoToPage?.(val + 1);
+    } else {
+      goToChapter(val);
+    }
   };
 
   return (
@@ -41,15 +61,15 @@ export const ControlBar: React.FC = () => {
         <input
           type="range"
           min="0"
-          max={chapters.length - 1}
-          value={currentChapterIndex}
+          max={Math.max(totalPages - 1, 0)}
+          value={currentIndexZeroBased}
           onChange={handleScrubberChange}
           className="prograss_max"
         />
         <div
           className="prograss_range"
           style={{
-            width: `${((currentChapterIndex + 1) / chapters.length) * 100}%`,
+            width: `${(currentPageNumber / totalPages) * 100}%`,
           }}
         >
           <div className="prograss_pointer"></div>
@@ -59,10 +79,24 @@ export const ControlBar: React.FC = () => {
       <div className="navigation_bottom_box">
         {/* Prev Button */}
         <button
-          onClick={goToPrevChapter}
-          disabled={currentChapterIndex === 0}
+          onClick={() =>
+            isPdfMode
+              ? onPdfGoToPage?.(Math.max(1, currentPageNumber - 1))
+              : goToPrevChapter()
+          }
+          disabled={
+            isPdfMode ? currentPageNumber <= 1 : currentChapterIndex === 0
+          }
           className={`
-            ${currentChapterIndex === 0 ? "off" : "on"}
+            ${
+              isPdfMode
+                ? currentPageNumber <= 1
+                  ? "off"
+                  : "on"
+                : currentChapterIndex === 0
+                ? "off"
+                : "on"
+            }
           `}
         >
           <ChevronLeft size={18} />
@@ -79,20 +113,38 @@ export const ControlBar: React.FC = () => {
               onChange={(e) => setInputPage(e.target.value)}
               className=""
             />
-            <span className="slash">/ {chapters.length}</span>
+            <span className="slash">/ {totalPages}</span>
           </form>
           <span className="chapter_name">
-            {chapters[currentChapterIndex].title.split(":")[1] ||
-              chapters[currentChapterIndex].title}
+            {isPdfMode
+              ? "PDF"
+              : chapters[currentChapterIndex].title.split(":")[1] ||
+                chapters[currentChapterIndex].title}
           </span>
         </div>
 
         {/* Next Button */}
         <button
-          onClick={goToNextChapter}
-          disabled={currentChapterIndex === chapters.length - 1}
+          onClick={() =>
+            isPdfMode
+              ? onPdfGoToPage?.(Math.min(totalPages, currentPageNumber + 1))
+              : goToNextChapter()
+          }
+          disabled={
+            isPdfMode
+              ? currentPageNumber >= totalPages
+              : currentChapterIndex === chapters.length - 1
+          }
           className={`
-            ${currentChapterIndex === chapters.length - 1 ? "off" : "on"}
+            ${
+              isPdfMode
+                ? currentPageNumber >= totalPages
+                  ? "off"
+                  : "on"
+                : currentChapterIndex === chapters.length - 1
+                ? "off"
+                : "on"
+            }
           `}
         >
           <span className="hidden sm:inline">Next</span>
