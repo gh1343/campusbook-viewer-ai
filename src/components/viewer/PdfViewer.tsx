@@ -291,6 +291,44 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const VISUAL_SCALE = 0.5; // 화면에 실제로 보여줄 축소 비율 (INTERNAL_SCALE의 역수)
 
+  const mergeHighlightRects = (rects: HighlightRect[]) => {
+    const TOL = 1.5; // allow tiny overlap/adjacency without stacking opacity
+    const merged = rects.map((r) => ({ ...r }));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < merged.length; i++) {
+        for (let j = i + 1; j < merged.length; j++) {
+          const a = merged[i];
+          const b = merged[j];
+          const horizontalOverlap =
+            a.left <= b.left + b.width + TOL &&
+            a.left + a.width >= b.left - TOL;
+          const verticalOverlap =
+            a.top <= b.top + b.height + TOL &&
+            a.top + a.height >= b.top - TOL;
+          if (horizontalOverlap && verticalOverlap) {
+            const newLeft = Math.min(a.left, b.left);
+            const newTop = Math.min(a.top, b.top);
+            const right = Math.max(a.left + a.width, b.left + b.width);
+            const bottom = Math.max(a.top + a.height, b.top + b.height);
+            merged[i] = {
+              left: newLeft,
+              top: newTop,
+              width: right - newLeft,
+              height: bottom - newTop,
+            };
+            merged.splice(j, 1);
+            changed = true;
+            break;
+          }
+        }
+        if (changed) break;
+      }
+    }
+    return merged;
+  };
+
   const checkPdfSelection = () => {
     const sel = window.getSelection();
     if (!sel || !sel.toString().trim() || !viewerContainerRef.current) {
@@ -367,7 +405,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
     // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
     const id = addHighlight(sel.toString(), undefined, "reference-doc");
-    setPdfHighlights((prev) => [...prev, { id, rects }]);
+    const mergedRects = mergeHighlightRects(rects);
+    setPdfHighlights((prev) => [...prev, { id, rects: mergedRects }]);
     setSelection((prev) => ({ ...prev, show: false }));
     sel.removeAllRanges();
   };
