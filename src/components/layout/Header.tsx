@@ -62,15 +62,15 @@ export const Header: React.FC<HeaderProps> = ({
     removePdfBookmark,
     currentPdfPage,
     uploadBook,
-  isProcessing,
-  isTtsPlaying,
-  startTts,
-  stopTts,
-  pauseTts,
-  ttsConfig,
-  setTtsConfig,
-  setActiveToolTab,
-} = useBook();
+    isProcessing,
+    isTtsPlaying,
+    startTts,
+    stopTts,
+    pauseTts,
+    ttsConfig,
+    setTtsConfig,
+    setActiveToolTab,
+  } = useBook();
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -190,7 +190,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right: Tools */}
-        <div className="header_tools">
+        <div className="header_tools test">
           {isReader && (
             <>
               {/* TTS Control Area */}
