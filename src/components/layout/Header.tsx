@@ -190,7 +190,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right: Tools */}
-        <div className="header_tools test">
+        <div className="header_tools">
           {isReader && (
             <>
               {/* TTS Control Area */}

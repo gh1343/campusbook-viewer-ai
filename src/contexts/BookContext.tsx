@@ -173,6 +173,17 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     return 'other';
   };
 
+  const splitIntoSentences = (text: string): string[] => {
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+    const matches = trimmed.match(/[^.!?]+[.!?]?/g);
+    if (matches && matches.length > 0) {
+      return matches.map(s => s.trim()).filter(Boolean);
+    }
+    // fallback: single chunk
+    return [trimmed];
+  };
+
   const pickVoiceForLang = (lang: 'ko' | 'en' | 'other') => {
     if (!ttsVoicesRef.current.length) return null;
     const voices = ttsVoicesRef.current;
@@ -209,12 +220,33 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     // 새로 읽기 시작: 기존 대기열 취소
     synth.cancel();
 
-    const extractPlainText = (html: string) =>
-      html.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const extractPlainText = (raw: string) =>
+      raw.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-    const plain = extractPlainText(currentChapter.content);
-    const sentences =
-      plain.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()).filter(Boolean) || (plain ? [plain] : []);
+    const buildSentences = () => {
+      if (pdfTextPages.length > 0) {
+        const sorted = [...pdfTextPages].sort((a, b) => a.page - b.page);
+        const targetPage = currentPdfPage || sorted[0]?.page || 1;
+        const sentences: string[] = [];
+        let defaultStartIndex = 0;
+
+        sorted.forEach(p => {
+          const plain = extractPlainText(p.text || '');
+          const pageSentences = splitIntoSentences(plain);
+          if (p.page < targetPage) {
+            defaultStartIndex += pageSentences.length;
+          }
+          sentences.push(...pageSentences);
+        });
+        return { sentences, defaultStartIndex };
+      }
+
+      const plain = extractPlainText(currentChapter.content);
+      const sentences = splitIntoSentences(plain);
+      return { sentences, defaultStartIndex: 0 };
+    };
+
+    const { sentences, defaultStartIndex } = buildSentences();
 
     if (sentences.length === 0) {
       alert('읽을 텍스트가 없습니다.');
@@ -222,7 +254,9 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     }
 
     const beginIdx =
-      typeof startIndex === 'number' && startIndex >= 0 && startIndex < sentences.length ? startIndex : 0;
+      typeof startIndex === 'number' && startIndex >= 0 && startIndex < sentences.length
+        ? startIndex
+        : Math.min(defaultStartIndex, sentences.length - 1);
     ttsStateRef.current.sentences = sentences;
 
     const speakFrom = (idx: number) => {
