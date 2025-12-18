@@ -21,6 +21,7 @@ import {
   SearchResult,
   ViewMode,
   PdfBookmark,
+  TTSConfig,
 } from '../../types';
 import {generateExplanation} from '../services/geminiService';
 import {processPdf, findRelevantContext} from '../services/pdfRagService';
@@ -127,6 +128,37 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     'ai' | 'notes' | 'notebook' | 'reference' | 'search'
   >('ai');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // --- TTS (stub implementation for UI controls) ---
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+  const [currentTtsSegmentIndex, setCurrentTtsSegmentIndex] = useState<
+    number | null
+  >(null);
+  const [ttsConfig, setTtsConfigState] = useState<TTSConfig>({
+    voice: 'Kore',
+    speed: 1.0,
+    continuous: true,
+  });
+
+  const setTtsConfig = (config: Partial<TTSConfig>) => {
+    setTtsConfigState(prev => ({...prev, ...config}));
+  };
+
+  const startTts = (startIndex?: number) => {
+    if (typeof startIndex === 'number') {
+      setCurrentTtsSegmentIndex(startIndex);
+    }
+    setIsTtsPlaying(true);
+  };
+
+  const pauseTts = () => {
+    setIsTtsPlaying(false);
+  };
+
+  const stopTts = () => {
+    setIsTtsPlaying(false);
+    setCurrentTtsSegmentIndex(null);
+  };
 
   const [stats, setStats] = useState<ReadingStats>({
     totalReadingTime: 0,
@@ -570,6 +602,13 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         searchQuery,
         setSearchQuery,
         performSearch,
+        isTtsPlaying,
+        currentTtsSegmentIndex,
+        ttsConfig,
+        setTtsConfig,
+        startTts,
+        stopTts,
+        pauseTts,
         stats,
         incrementAiCount,
         updateReadingTime,

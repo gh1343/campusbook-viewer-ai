@@ -1,4 +1,3 @@
-
 export interface Chapter {
   id: string;
   title: string;
@@ -13,7 +12,7 @@ export interface RagChunk {
 
 export interface SearchResult {
   id: string;
-  type: 'chapter' | 'highlight' | 'note' | 'pdf';
+  type: "chapter" | "highlight" | "note" | "pdf";
   title: string;
   contentSnippet: string;
   chapterId?: string;
@@ -32,20 +31,20 @@ export interface Highlight {
   id: string;
   chapterId: string;
   text: string;
-  color: 'yellow' | 'green' | 'blue';
+  color: "yellow" | "green" | "blue";
   note?: string;
   createdAt: number;
 }
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'model';
+  role: "user" | "model";
   text: string;
   timestamp: number;
 }
 
 export interface ReadingStats {
-  totalReadingTime: number; 
+  totalReadingTime: number;
   sessions: number;
   chapterVisits: Record<string, number>;
   aiInteractionCount: number;
@@ -57,7 +56,12 @@ export interface Point {
   y: number;
 }
 
-export type DrawingColor = '#000000' | '#ef4444' | '#3b82f6' | '#22c55e' | '#eab308';
+export type DrawingColor =
+  | "#000000"
+  | "#ef4444"
+  | "#3b82f6"
+  | "#22c55e"
+  | "#eab308";
 
 export interface Stroke {
   id: string;
@@ -80,15 +84,23 @@ export interface GeneralNote {
   updatedAt: number;
 }
 
-export type Theme = 'light' | 'dark';
-export type FontSize = 'small' | 'medium' | 'large' | 'xlarge';
-export type DrawingMode = 'idle' | 'pen' | 'eraser';
-export type ViewMode = 'single' | 'double';
+export type Theme = "light" | "dark";
+export type FontSize = "small" | "medium" | "large" | "xlarge";
+export type DrawingMode = "idle" | "pen" | "eraser";
+export type ViewMode = "single" | "double";
+
+export type TTSVoice = "Kore" | "Puck" | "Charon" | "Fenrir" | "Zephyr";
+
+export interface TTSConfig {
+  voice: TTSVoice;
+  speed: number;
+  continuous: boolean;
+}
 
 export interface BookContextType {
   chapters: Chapter[];
   referenceDocument: Chapter | null;
-  
+
   currentChapterIndex: number;
   currentChapter: Chapter;
   goToNextChapter: () => void;
@@ -96,16 +108,16 @@ export interface BookContextType {
   goToChapter: (index: number) => void;
   uploadBook: (file: File) => Promise<void>;
   isProcessing: boolean;
-  
+
   fontSize: FontSize;
   setFontSize: (size: FontSize) => void;
-  
+
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
 
   theme: Theme;
   toggleTheme: () => void;
-  
+
   showAnnotations: boolean;
   toggleAnnotations: () => void;
 
@@ -114,7 +126,11 @@ export interface BookContextType {
   removePdfBookmark: (id: string) => void;
 
   highlights: Highlight[];
-  addHighlight: (text: string, note?: string, targetChapterId?: string) => string;
+  addHighlight: (
+    text: string,
+    note?: string,
+    targetChapterId?: string
+  ) => string;
   updateHighlight: (id: string, note: string) => void;
   removeHighlight: (id: string) => void;
   activeHighlightId: string | null;
@@ -122,7 +138,7 @@ export interface BookContextType {
 
   drawingMode: DrawingMode;
   setDrawingMode: (mode: DrawingMode) => void;
-  
+
   penColor: DrawingColor;
   setPenColor: (color: DrawingColor) => void;
   penWidth: number;
@@ -141,37 +157,47 @@ export interface BookContextType {
   removeGeneralNote: (id: string) => void;
   importNotes: (file: File) => Promise<void>;
   exportNoteAsMarkdown: (note: GeneralNote) => void;
-  
+
   isCaptureMode: boolean;
   setCaptureMode: (isCapture: boolean) => void;
   capturedImage: string | null;
   setCapturedImage: (image: string | null) => void;
-  
+
   aiChatHistory: ChatMessage[];
-  addChatMessage: (role: 'user' | 'model', text: string) => void;
+  addChatMessage: (role: "user" | "model", text: string) => void;
   triggerSmartExplain: (text: string) => void;
-  
+
   isToolsOpen: boolean;
   setToolsOpen: (isOpen: boolean) => void;
-  activeToolTab: 'ai' | 'notes' | 'notebook' | 'reference' | 'search';
-  setActiveToolTab: (tab: 'ai' | 'notes' | 'notebook' | 'reference' | 'search') => void;
+  activeToolTab: "ai" | "notes" | "notebook" | "reference" | "search";
+  setActiveToolTab: (
+    tab: "ai" | "notes" | "notebook" | "reference" | "search"
+  ) => void;
 
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   performSearch: (query: string) => SearchResult[];
 
+  isTtsPlaying: boolean;
+  currentTtsSegmentIndex: number | null;
+  ttsConfig: TTSConfig;
+  setTtsConfig: (config: Partial<TTSConfig>) => void;
+  startTts: (startIndex?: number) => void;
+  stopTts: () => void;
+  pauseTts: () => void;
+
   stats: ReadingStats;
   incrementAiCount: () => void;
   updateReadingTime: () => void;
-  
+
   saveProgress: () => void;
 
-  pdfTextPages: {page: number; text: string}[];
-  setPdfTextPages: (pages: {page: number; text: string}[]) => void;
+  pdfTextPages: { page: number; text: string }[];
+  setPdfTextPages: (pages: { page: number; text: string }[]) => void;
   goToPdfPage: (page: number) => void;
   registerPdfNavigator: (fn: (page: number) => void) => void;
-  pdfSearchHighlight: {page: number; term: string} | null;
-  setPdfSearchHighlight: (value: {page: number; term: string} | null) => void;
+  pdfSearchHighlight: { page: number; term: string } | null;
+  setPdfSearchHighlight: (value: { page: number; term: string } | null) => void;
   currentPdfPage: number;
   setCurrentPdfPage: (page: number) => void;
 }

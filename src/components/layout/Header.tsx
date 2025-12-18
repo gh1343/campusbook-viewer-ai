@@ -22,9 +22,13 @@ import {
   Columns,
   Minus,
   Plus,
+  Volume2,
+  Play,
+  Pause,
+  Square,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { DrawingColor } from "../../../types";
+import { DrawingColor, TTSVoice } from "../../../types";
 import "../../css/header.css";
 interface HeaderProps {
   toggleSidebar: () => void;
@@ -59,6 +63,11 @@ export const Header: React.FC<HeaderProps> = ({
     currentPdfPage,
     uploadBook,
     isProcessing,
+    isTtsPlaying,
+    startTts,
+    stopTts,
+    ttsConfig,
+    setTtsConfig,
     setActiveToolTab,
   } = useBook();
 
@@ -67,12 +76,11 @@ export const Header: React.FC<HeaderProps> = ({
   const isReader = location.pathname === "/";
   const [showPenSettings, setShowPenSettings] = useState(false);
   const [showViewSettings, setShowViewSettings] = useState(false);
+  const [showTtsSettings, setShowTtsSettings] = useState(false);
   const [showSysMenu, setShowSysMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const currentPageBookmark = bookmarks.find(
-    (b) => b.page === currentPdfPage
-  );
+  const currentPageBookmark = bookmarks.find((b) => b.page === currentPdfPage);
   const isBookmarked = Boolean(currentPageBookmark);
 
   const handleExit = () => {
@@ -113,6 +121,9 @@ export const Header: React.FC<HeaderProps> = ({
     if (nextIndex >= sizes.length) nextIndex = sizes.length - 1;
     setFontSize(sizes[nextIndex]);
   };
+
+  const voices: TTSVoice[] = ["Kore", "Puck", "Charon", "Fenrir", "Zephyr"];
+  const speeds = [0.75, 1.0, 1.2, 1.5, 2.0];
 
   const colors: DrawingColor[] = [
     "#000000",
@@ -181,14 +192,95 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="header_tools">
           {isReader && (
             <>
-              {/* Search Button */}
-              <button
-                onClick={handleSearchClick}
-                className="search_icon_btn"
-                title="Search"
-              >
-                <Search size={20} />
-              </button>
+              {/* TTS Control Area */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowTtsSettings(!showTtsSettings)}
+                  className={`p-2 rounded-lg transition-all ${
+                    isTtsPlaying
+                      ? "text-blue-600 bg-blue-50"
+                      : "text-slate-500 hover:bg-slate-100"
+                  }`}
+                  title="AI Voice"
+                >
+                  <Volume2 size={20} />
+                </button>
+                {showTtsSettings && (
+                  <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border p-5 z-[70]">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                        AI Reading Assistant
+                      </span>
+                      <button
+                        onClick={() => setShowTtsSettings(false)}
+                        className="text-slate-400"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="flex justify-center gap-4 mb-5 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                      <button
+                        onClick={stopTts}
+                        className="p-2.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"
+                      >
+                        <Square size={16} fill="currentColor" />
+                      </button>
+                      <button
+                        onClick={() => startTts()}
+                        className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                      >
+                        {isTtsPlaying ? (
+                          <Pause size={24} fill="white" />
+                        ) : (
+                          <Play size={24} className="ml-1" fill="white" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-bold block mb-2 text-slate-400 uppercase">
+                          Voice Tone
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {voices.map((v) => (
+                            <button
+                              key={v}
+                              onClick={() => setTtsConfig({ voice: v })}
+                              className={`px-2 py-1 rounded text-[10px] border transition-all ${
+                                ttsConfig.voice === v
+                                  ? "bg-blue-600 border-blue-600 text-white"
+                                  : "bg-slate-50 dark:bg-slate-800 text-slate-500 border-transparent hover:bg-slate-200"
+                              }`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold block mb-2 text-slate-400 uppercase">
+                          Speed
+                        </label>
+                        <div className="flex justify-between gap-1">
+                          {speeds.map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setTtsConfig({ speed: s })}
+                              className={`flex-1 py-1 rounded text-[10px] border transition-all ${
+                                ttsConfig.speed === s
+                                  ? "bg-blue-600 border-blue-600 text-white font-bold"
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent hover:bg-slate-200"
+                              }`}
+                            >
+                              {s}x
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleBookmarkClick}
                 className={`bookmark_icon_btn ${isBookmarked ? "on" : "off"}`}
