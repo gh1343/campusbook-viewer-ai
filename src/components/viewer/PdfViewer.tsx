@@ -32,6 +32,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scaleWrapperRef = useRef<HTMLDivElement>(null);
+  const penCanvasRef = useRef<HTMLCanvasElement>(null);
   const {
     addHighlight,
     highlights,
@@ -39,6 +40,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     triggerSmartExplain,
     setPdfTextPages,
     pdfSearchHighlight,
+    drawingMode,
+    penColor,
+    penWidth,
+    penOpacity,
+    chapterStrokes,
+    addStroke,
+    removeStroke,
+    showAnnotations,
   } = useBook();
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
@@ -62,6 +71,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     left: number;
     show: boolean;
   }>({ text: "", top: 0, left: 0, show: false });
+  const [isDrawing, setIsDrawing] = useState(false);
+  const isDrawingRef = useRef(false);
+  const livePointsRef = useRef<{ x: number; y: number }[]>([]);
 
   useEffect(() => {
     // Keep local overlay in sync with global highlights (e.g., sidebar delete)
@@ -262,6 +274,167 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     };
   }, [file, onPageChange, onPagesCount, registerGoToPage, setPdfTextPages]);
 
+  // ----- Pen Canvas Helpers -----
+  const getVisualScale = () => {
+    if (!scaleWrapperRef.current) return 1;
+    const raw = getComputedStyle(scaleWrapperRef.current).getPropertyValue(
+      "--visual-scale"
+    );
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 1;
+  };
+
+  const resizePenCanvas = () => {
+    const canvas = penCanvasRef.current;
+    const container = viewerContainerRef.current;
+    const viewer = viewerRef.current;
+    if (!canvas || !container || !viewer) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(viewer.scrollWidth, container.clientWidth);
+    const height = Math.max(viewer.scrollHeight, container.scrollHeight);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+    }
+    renderPenCanvas();
+  };
+
+  useEffect(() => {
+    resizePenCanvas();
+    const ro = new ResizeObserver(resizePenCanvas);
+    if (viewerRef.current) ro.observe(viewerRef.current);
+    if (viewerContainerRef.current) ro.observe(viewerContainerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const getCanvasPoint = (e: React.PointerEvent): { x: number; y: number } | null => {
+    const container = viewerContainerRef.current;
+    if (!container) return null;
+    const rect = container.getBoundingClientRect();
+    const visualScale = getVisualScale();
+    const x = (e.clientX - rect.left) / visualScale + container.scrollLeft;
+    const y = (e.clientY - rect.top) / visualScale + container.scrollTop;
+    return { x, y };
+  };
+
+  const handlePenStart = (e: React.PointerEvent) => {
+    if (drawingMode === "idle") return;
+    if (!penCanvasRef.current) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    const pt = getCanvasPoint(e);
+    if (!pt) return;
+    isDrawingRef.current = true;
+    setIsDrawing(true);
+    livePointsRef.current = [pt];
+    renderPenCanvas();
+  };
+
+  const handlePenMove = (e: React.PointerEvent) => {
+    if (!isDrawingRef.current || drawingMode === "idle") return;
+    e.preventDefault();
+    const pt = getCanvasPoint(e);
+    if (!pt) return;
+
+    if (drawingMode === "pen") {
+      livePointsRef.current = [...livePointsRef.current, pt];
+      renderPenCanvas();
+    } else if (drawingMode === "eraser") {
+      const strokes = chapterStrokes["pdf-main"] || [];
+      strokes.forEach((stroke) => {
+        const hit = stroke.points.some(
+          (p) => Math.hypot(p.x - pt.x, p.y - pt.y) < 16
+        );
+        if (hit) removeStroke("pdf-main", stroke.id);
+      });
+    }
+  };
+
+  const handlePenEnd = (e: React.PointerEvent) => {
+    if (!isDrawingRef.current) return;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    isDrawingRef.current = false;
+    setIsDrawing(false);
+    if (drawingMode === "pen" && livePointsRef.current.length > 1) {
+      const newStroke = {
+        id: Date.now().toString(),
+        points: livePointsRef.current,
+        color: penColor,
+        width: penWidth,
+        opacity: penOpacity,
+      };
+      addStroke("pdf-main", newStroke);
+    }
+    livePointsRef.current = [];
+    renderPenCanvas();
+  };
+
+  // Draw strokes + live stroke
+  const renderPenCanvas = () => {
+    const canvas = penCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    if (!showAnnotations && livePointsRef.current.length === 0) return;
+
+    const drawStroke = (
+      points: { x: number; y: number }[],
+      color: string,
+      width: number,
+      opacity: number
+    ) => {
+      if (points.length < 2) return;
+      ctx.beginPath();
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.globalAlpha = opacity;
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length - 1; i++) {
+        const mid = {
+          x: (points[i].x + points[i + 1].x) / 2,
+          y: (points[i].y + points[i + 1].y) / 2,
+        };
+        ctx.quadraticCurveTo(points[i].x, points[i].y, mid.x, mid.y);
+      }
+      ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    };
+
+    const strokes = chapterStrokes["pdf-main"] || [];
+    strokes.forEach((s) =>
+      drawStroke(s.points, s.color, s.width || 3, s.opacity ?? 1)
+    );
+    if (livePointsRef.current.length > 1 && drawingMode === "pen") {
+      drawStroke(livePointsRef.current, penColor, penWidth, penOpacity);
+    }
+  };
+
+  useEffect(() => {
+    renderPenCanvas();
+  }, [
+    chapterStrokes,
+    isDrawing,
+    drawingMode,
+    penColor,
+    penWidth,
+    penOpacity,
+    showAnnotations,
+  ]);
+
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
@@ -361,6 +534,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const handleContainerPointerUp = () => {
+    if (drawingMode !== "idle") return;
     // native selection이 완성된 뒤에 계산
     setTimeout(checkPdfSelection, 10);
   };
@@ -461,6 +635,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           onPointerUp={handleContainerPointerUp}
         >
           <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
+          {/* Pen overlay */}
+          <div
+            className={`pdf_pen_layer ${
+              drawingMode !== "idle" ? "active" : ""
+            }`}
+          >
+            <canvas
+              ref={penCanvasRef}
+              className="pdf_pen_canvas"
+              onPointerDown={handlePenStart}
+              onPointerMove={handlePenMove}
+              onPointerUp={handlePenEnd}
+              onPointerLeave={handlePenEnd}
+            />
+          </div>
           {/* 커스텀 하이라이트 오버레이 */}
           <div className="pdf_highlight_layer">
             {pdfHighlights.flatMap((h) =>
