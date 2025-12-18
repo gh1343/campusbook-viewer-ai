@@ -62,14 +62,15 @@ export const Header: React.FC<HeaderProps> = ({
     removePdfBookmark,
     currentPdfPage,
     uploadBook,
-    isProcessing,
-    isTtsPlaying,
-    startTts,
-    stopTts,
-    ttsConfig,
-    setTtsConfig,
-    setActiveToolTab,
-  } = useBook();
+  isProcessing,
+  isTtsPlaying,
+  startTts,
+  stopTts,
+  pauseTts,
+  ttsConfig,
+  setTtsConfig,
+  setActiveToolTab,
+} = useBook();
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -226,7 +227,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <Square size={16} fill="currentColor" />
                       </button>
                       <button
-                        onClick={() => startTts()}
+                        onClick={() => (isTtsPlaying ? pauseTts() : startTts())}
                         className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform"
                       >
                         {isTtsPlaying ? (

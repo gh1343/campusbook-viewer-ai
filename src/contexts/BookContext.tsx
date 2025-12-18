@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   ReactNode,
+  useRef,
 } from 'react';
 import {
   Chapter,
@@ -139,23 +140,115 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     speed: 1.0,
     continuous: true,
   });
+  const ttsVoicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const ttsStateRef = useRef<{utterance: SpeechSynthesisUtterance | null; sentences: string[]}>({
+    utterance: null,
+    sentences: [],
+  });
+  const speechSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+  useEffect(() => {
+    if (!speechSupported) return;
+    const loadVoices = () => {
+      ttsVoicesRef.current = window.speechSynthesis.getVoices();
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [speechSupported]);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState(prev => ({...prev, ...config}));
   };
 
   const startTts = (startIndex?: number) => {
-    if (typeof startIndex === 'number') {
-      setCurrentTtsSegmentIndex(startIndex);
+    if (!speechSupported) {
+      alert('이 브라우저는 음성 합성을 지원하지 않습니다.');
+      return;
     }
-    setIsTtsPlaying(true);
+
+    const synth = window.speechSynthesis;
+    // 이미 일시정지 상태라면 재개
+    if (synth.paused && ttsStateRef.current.sentences.length > 0) {
+      synth.resume();
+      setIsTtsPlaying(true);
+      return;
+    }
+
+    // 새로 읽기 시작: 기존 대기열 취소
+    synth.cancel();
+
+    const extractPlainText = (html: string) =>
+      html.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const plain = extractPlainText(currentChapter.content);
+    const sentences =
+      plain.match(/[^.!?]+[.!?]?/g)?.map(s => s.trim()).filter(Boolean) || (plain ? [plain] : []);
+
+    if (sentences.length === 0) {
+      alert('읽을 텍스트가 없습니다.');
+      return;
+    }
+
+    const beginIdx =
+      typeof startIndex === 'number' && startIndex >= 0 && startIndex < sentences.length ? startIndex : 0;
+    ttsStateRef.current.sentences = sentences;
+
+    const pickVoice = () => {
+      if (!ttsVoicesRef.current.length) return null;
+      const targetName = ttsConfig.voice.toLowerCase();
+      return (
+        ttsVoicesRef.current.find(v => v.name.toLowerCase().includes(targetName)) || ttsVoicesRef.current[0]
+      );
+    };
+
+    const speakFrom = (idx: number) => {
+      if (!ttsStateRef.current.sentences[idx]) {
+        setIsTtsPlaying(false);
+        setCurrentTtsSegmentIndex(null);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(ttsStateRef.current.sentences[idx]);
+      utterance.rate = ttsConfig.speed;
+      const voice = pickVoice();
+      if (voice) utterance.voice = voice;
+
+      utterance.onstart = () => {
+        setIsTtsPlaying(true);
+        setCurrentTtsSegmentIndex(idx);
+      };
+      utterance.onend = () => {
+        if (ttsConfig.continuous) {
+          speakFrom(idx + 1);
+        } else {
+          setIsTtsPlaying(false);
+          setCurrentTtsSegmentIndex(null);
+        }
+      };
+      utterance.onerror = () => {
+        setIsTtsPlaying(false);
+        setCurrentTtsSegmentIndex(null);
+      };
+
+      ttsStateRef.current.utterance = utterance;
+      synth.speak(utterance);
+    };
+
+    speakFrom(beginIdx);
   };
 
   const pauseTts = () => {
+    if (!speechSupported) return;
+    window.speechSynthesis.pause();
     setIsTtsPlaying(false);
   };
 
   const stopTts = () => {
+    if (!speechSupported) return;
+    window.speechSynthesis.cancel();
+    ttsStateRef.current = {utterance: null, sentences: []};
     setIsTtsPlaying(false);
     setCurrentTtsSegmentIndex(null);
   };
