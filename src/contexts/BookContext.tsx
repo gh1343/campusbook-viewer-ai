@@ -163,6 +163,35 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     setTtsConfigState(prev => ({...prev, ...config}));
   };
 
+  const detectPrimaryLanguage = (text: string): 'ko' | 'en' | 'other' => {
+    const hasKorean = /[가-힣]/.test(text);
+    const hasEnglish = /[A-Za-z]/.test(text);
+    if (hasKorean && !hasEnglish) return 'ko';
+    if (hasEnglish && !hasKorean) return 'en';
+    if (hasKorean) return 'ko';
+    if (hasEnglish) return 'en';
+    return 'other';
+  };
+
+  const pickVoiceForLang = (lang: 'ko' | 'en' | 'other') => {
+    if (!ttsVoicesRef.current.length) return null;
+    const voices = ttsVoicesRef.current;
+    const targetName = (ttsConfig.voice || '').toLowerCase();
+
+    const langFiltered =
+      lang === 'other'
+        ? voices
+        : voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang));
+
+    const preferred = langFiltered.find(v => v.name.toLowerCase().includes(targetName));
+    if (preferred) return preferred;
+
+    if (langFiltered.length) return langFiltered[0];
+
+    const byName = voices.find(v => v.name.toLowerCase().includes(targetName));
+    return byName || voices.find(v => v.default) || voices[0];
+  };
+
   const startTts = (startIndex?: number) => {
     if (!speechSupported) {
       alert('이 브라우저는 음성 합성을 지원하지 않습니다.');
@@ -196,24 +225,23 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       typeof startIndex === 'number' && startIndex >= 0 && startIndex < sentences.length ? startIndex : 0;
     ttsStateRef.current.sentences = sentences;
 
-    const pickVoice = () => {
-      if (!ttsVoicesRef.current.length) return null;
-      const targetName = ttsConfig.voice.toLowerCase();
-      return (
-        ttsVoicesRef.current.find(v => v.name.toLowerCase().includes(targetName)) || ttsVoicesRef.current[0]
-      );
-    };
-
     const speakFrom = (idx: number) => {
       if (!ttsStateRef.current.sentences[idx]) {
         setIsTtsPlaying(false);
         setCurrentTtsSegmentIndex(null);
         return;
       }
-      const utterance = new SpeechSynthesisUtterance(ttsStateRef.current.sentences[idx]);
+      const sentence = ttsStateRef.current.sentences[idx];
+      const lang = detectPrimaryLanguage(sentence);
+      const utterance = new SpeechSynthesisUtterance(sentence);
       utterance.rate = ttsConfig.speed;
-      const voice = pickVoice();
-      if (voice) utterance.voice = voice;
+      const voice = pickVoiceForLang(lang);
+      if (voice) {
+        utterance.voice = voice;
+        utterance.lang = voice.lang;
+      } else {
+        utterance.lang = lang === 'ko' ? 'ko-KR' : 'en-US';
+      }
 
       utterance.onstart = () => {
         setIsTtsPlaying(true);
