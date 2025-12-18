@@ -8,11 +8,35 @@
   --slate-300: #cbd5e1;
   --slate-200: #e2e8f0;
   --slate-100: #f1f5f9;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
   padding: 0;
+  background: #fff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #bdbdbd #f2f2f2;
+}
+
+/* 3) Chromium / Edge / Safari scrollbar */
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+*::-webkit-scrollbar-track {
+  background: #f2f2f2;
+}
+*::-webkit-scrollbar-thumb {
+  background: #bdbdbd;
+  border-radius: 8px;
+  border: 3px solid #f2f2f2;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #9e9e9e;
 }
 
 *,
