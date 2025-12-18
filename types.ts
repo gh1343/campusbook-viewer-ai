@@ -67,6 +67,7 @@ export interface Stroke {
   opacity: number;
   isEraser?: boolean;
   anchorIndex?: number;
+  pageNumber?: number;
 }
 
 export interface GeneralNote {

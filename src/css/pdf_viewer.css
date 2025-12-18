@@ -107,6 +107,10 @@
   padding: 20px;
 }
 
+.pdf_viewer .page {
+  position: relative;
+}
+
 .pdf_highlight_layer {
   position: absolute;
   inset: 0;
@@ -120,24 +124,25 @@
   mix-blend-mode: multiply;
 }
 
-.pdf_pen_layer {
+.pdf_pen_page_layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 15;
 }
 
-.pdf_pen_layer.active {
-  pointer-events: auto;
-}
-
-.pdf_pen_canvas {
+.pdf_pen_page_canvas {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  pointer-events: none;
   touch-action: none;
+}
+
+.pdf_pen_page_canvas_live {
+  pointer-events: auto;
 }
 
 .pdf_selection_menu {
