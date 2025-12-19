@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { Chapter, RagChunk } from '../types';
+import { Chapter, RagChunk } from '../../types';
 
 // Set worker source to CDN for browser compatibility
 // Pinned to 4.4.168 to match import map and using .mjs for correct module loading

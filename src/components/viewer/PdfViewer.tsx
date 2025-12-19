@@ -374,7 +374,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const syncPageCanvases = () => {
     if (!viewerRef.current) return;
-    const pages = Array.from(
+    const pages: HTMLElement[] = Array.from(
       viewerRef.current.querySelectorAll<HTMLElement>(".page")
     );
     const seen = new Set<number>();
