@@ -1,9 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 
-const apiKey = process.env.API_KEY || '';
+const apiKey = process.env.API_KEY || "";
 const ai = new GoogleGenAI({ apiKey });
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = "gemini-2.5-flash";
 
 export const generateExplanation = async (text: string, context?: string): Promise<string> => {
   if (!apiKey) return "API Key is missing.";
@@ -16,6 +16,7 @@ export const generateExplanation = async (text: string, context?: string): Promi
       
       Task: Provide a concise, easy-to-understand explanation of the target text or concept. 
       Limit the response to 3 sentences. Tone: Academic but accessible.
+      Language: Respond in Korean.
     `;
 
     const response = await ai.models.generateContent({
@@ -41,6 +42,7 @@ export const summarizeChapter = async (chapterContent: string): Promise<string> 
       - Point 1
       - Point 2
       - Point 3
+      Language: Respond in Korean.
     `;
 
     const response = await ai.models.generateContent({
@@ -67,7 +69,8 @@ export const chatWithContext = async (
       config: {
         systemInstruction: `You are a helpful teaching assistant for a student reading a digital textbook. 
         Current Chapter Content Context: ${currentChapterContent.substring(0, 2000)}...
-        Answer questions based on the context provided. Be encouraging and concise.`
+        Answer questions based on the context provided. Be encouraging and concise.
+        Language: Respond in Korean.`
       }
     });
 
