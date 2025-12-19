@@ -26,6 +26,7 @@ import {
 } from '../../types';
 import {generateExplanation} from '../services/geminiService';
 import {processPdf, findRelevantContext} from '../services/pdfRagService';
+import {synthesizeWithGemini} from '../services/ttsService';
 
 const MOCK_CHAPTERS: Chapter[] = [
   {
@@ -140,37 +141,12 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     speed: 1.0,
     continuous: true,
   });
-  const ttsVoicesRef = useRef<SpeechSynthesisVoice[]>([]);
-  const ttsStateRef = useRef<{utterance: SpeechSynthesisUtterance | null; sentences: string[]}>({
-    utterance: null,
-    sentences: [],
-  });
-  const speechSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
-
-  useEffect(() => {
-    if (!speechSupported) return;
-    const loadVoices = () => {
-      ttsVoicesRef.current = window.speechSynthesis.getVoices();
-    };
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
-  }, [speechSupported]);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsObjectUrlRef = useRef<string | null>(null);
+  const ttsGeneratingRef = useRef(false);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState(prev => ({...prev, ...config}));
-  };
-
-  const detectPrimaryLanguage = (text: string): 'ko' | 'en' | 'other' => {
-    const hasKorean = /[가-힣]/.test(text);
-    const hasEnglish = /[A-Za-z]/.test(text);
-    if (hasKorean && !hasEnglish) return 'ko';
-    if (hasEnglish && !hasKorean) return 'en';
-    if (hasKorean) return 'ko';
-    if (hasEnglish) return 'en';
-    return 'other';
   };
 
   const splitIntoSentences = (text: string): string[] => {
@@ -184,70 +160,57 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     return [trimmed];
   };
 
-  const pickVoiceForLang = (lang: 'ko' | 'en' | 'other') => {
-    if (!ttsVoicesRef.current.length) return null;
-    const voices = ttsVoicesRef.current;
-    const targetName = (ttsConfig.voice || '').toLowerCase();
+  const extractPlainText = (raw: string) =>
+    raw.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-    const langFiltered =
-      lang === 'other'
-        ? voices
-        : voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang));
+  const buildSentences = () => {
+    if (pdfTextPages.length > 0) {
+      const sorted = [...pdfTextPages].sort((a, b) => a.page - b.page);
+      const targetPage = currentPdfPage || sorted[0]?.page || 1;
+      const sentences: string[] = [];
+      let defaultStartIndex = 0;
 
-    const preferred = langFiltered.find(v => v.name.toLowerCase().includes(targetName));
-    if (preferred) return preferred;
-
-    if (langFiltered.length) return langFiltered[0];
-
-    const byName = voices.find(v => v.name.toLowerCase().includes(targetName));
-    return byName || voices.find(v => v.default) || voices[0];
-  };
-
-  const startTts = (startIndex?: number) => {
-    if (!speechSupported) {
-      alert('이 브라우저는 음성 합성을 지원하지 않습니다.');
-      return;
+      sorted.forEach(p => {
+        const plain = extractPlainText(p.text || '');
+        const pageSentences = splitIntoSentences(plain);
+        if (p.page < targetPage) {
+          defaultStartIndex += pageSentences.length;
+        }
+        sentences.push(...pageSentences);
+      });
+      return { sentences, defaultStartIndex };
     }
 
-    const synth = window.speechSynthesis;
-    // 이미 일시정지 상태라면 재개
-    if (synth.paused && ttsStateRef.current.sentences.length > 0) {
-      synth.resume();
+    const plain = extractPlainText(currentChapter.content);
+    const sentences = splitIntoSentences(plain);
+    return { sentences, defaultStartIndex: 0 };
+  };
+
+  const cleanupTtsAudio = () => {
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current.src = '';
+      ttsAudioRef.current = null;
+    }
+    if (ttsObjectUrlRef.current) {
+      URL.revokeObjectURL(ttsObjectUrlRef.current);
+      ttsObjectUrlRef.current = null;
+    }
+  };
+
+  const startTts = async (startIndex?: number) => {
+    if (ttsGeneratingRef.current) return;
+
+    // 재생 일시정지 상태라면 이어서 재생
+    if (ttsAudioRef.current && ttsAudioRef.current.paused && !ttsAudioRef.current.ended) {
+      await ttsAudioRef.current.play().catch(() => {});
       setIsTtsPlaying(true);
       return;
     }
 
-    // 새로 읽기 시작: 기존 대기열 취소
-    synth.cancel();
-
-    const extractPlainText = (raw: string) =>
-      raw.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-
-    const buildSentences = () => {
-      if (pdfTextPages.length > 0) {
-        const sorted = [...pdfTextPages].sort((a, b) => a.page - b.page);
-        const targetPage = currentPdfPage || sorted[0]?.page || 1;
-        const sentences: string[] = [];
-        let defaultStartIndex = 0;
-
-        sorted.forEach(p => {
-          const plain = extractPlainText(p.text || '');
-          const pageSentences = splitIntoSentences(plain);
-          if (p.page < targetPage) {
-            defaultStartIndex += pageSentences.length;
-          }
-          sentences.push(...pageSentences);
-        });
-        return { sentences, defaultStartIndex };
-      }
-
-      const plain = extractPlainText(currentChapter.content);
-      const sentences = splitIntoSentences(plain);
-      return { sentences, defaultStartIndex: 0 };
-    };
+    cleanupTtsAudio();
 
     const { sentences, defaultStartIndex } = buildSentences();
-
     if (sentences.length === 0) {
       alert('읽을 텍스트가 없습니다.');
       return;
@@ -257,60 +220,62 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       typeof startIndex === 'number' && startIndex >= 0 && startIndex < sentences.length
         ? startIndex
         : Math.min(defaultStartIndex, sentences.length - 1);
-    ttsStateRef.current.sentences = sentences;
 
-    const speakFrom = (idx: number) => {
-      if (!ttsStateRef.current.sentences[idx]) {
+    const MAX_CHARS = 8000;
+    const textToRead = sentences.slice(beginIdx).join(' ').slice(0, MAX_CHARS);
+    if (!textToRead) {
+      alert('읽을 텍스트가 없습니다.');
+      return;
+    }
+
+    try {
+      ttsGeneratingRef.current = true;
+      setIsTtsPlaying(true);
+      setCurrentTtsSegmentIndex(beginIdx);
+
+      const { audioUrl } = await synthesizeWithGemini(textToRead, {
+        voiceName: ttsConfig.voice,
+      });
+
+      const audio = new Audio(audioUrl);
+      audio.playbackRate = ttsConfig.speed;
+      ttsObjectUrlRef.current = audioUrl;
+      ttsAudioRef.current = audio;
+
+      audio.onended = () => {
         setIsTtsPlaying(false);
         setCurrentTtsSegmentIndex(null);
-        return;
-      }
-      const sentence = ttsStateRef.current.sentences[idx];
-      const lang = detectPrimaryLanguage(sentence);
-      const utterance = new SpeechSynthesisUtterance(sentence);
-      utterance.rate = ttsConfig.speed;
-      const voice = pickVoiceForLang(lang);
-      if (voice) {
-        utterance.voice = voice;
-        utterance.lang = voice.lang;
-      } else {
-        utterance.lang = lang === 'ko' ? 'ko-KR' : 'en-US';
-      }
-
-      utterance.onstart = () => {
-        setIsTtsPlaying(true);
-        setCurrentTtsSegmentIndex(idx);
+        cleanupTtsAudio();
       };
-      utterance.onend = () => {
-        if (ttsConfig.continuous) {
-          speakFrom(idx + 1);
-        } else {
-          setIsTtsPlaying(false);
-          setCurrentTtsSegmentIndex(null);
-        }
-      };
-      utterance.onerror = () => {
+      audio.onerror = () => {
         setIsTtsPlaying(false);
         setCurrentTtsSegmentIndex(null);
+        cleanupTtsAudio();
       };
 
-      ttsStateRef.current.utterance = utterance;
-      synth.speak(utterance);
-    };
-
-    speakFrom(beginIdx);
+      await audio.play().catch(err => {
+        console.error('Audio playback failed', err);
+        setIsTtsPlaying(false);
+      });
+    } catch (err) {
+      console.error('Gemini TTS failed', err);
+      alert('TTS 생성 중 오류가 발생했습니다.');
+      setIsTtsPlaying(false);
+      setCurrentTtsSegmentIndex(null);
+    } finally {
+      ttsGeneratingRef.current = false;
+    }
   };
 
   const pauseTts = () => {
-    if (!speechSupported) return;
-    window.speechSynthesis.pause();
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+    }
     setIsTtsPlaying(false);
   };
 
   const stopTts = () => {
-    if (!speechSupported) return;
-    window.speechSynthesis.cancel();
-    ttsStateRef.current = {utterance: null, sentences: []};
+    cleanupTtsAudio();
     setIsTtsPlaying(false);
     setCurrentTtsSegmentIndex(null);
   };

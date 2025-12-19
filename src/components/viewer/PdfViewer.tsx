@@ -447,6 +447,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     pageCanvasMapRef.current.forEach(({ liveCanvas }) => {
       liveCanvas.style.pointerEvents = active ? "auto" : "none";
       liveCanvas.style.touchAction = active ? "none" : "auto";
+      liveCanvas.style.cursor = active ? "crosshair" : "default";
     });
   };
 
