@@ -1,17 +1,26 @@
 // Gemini TTS helper (REST) for client-side usage
-// Uses gemini-2.5-flash-preview-tts to return an audio blob URL (mp3)
+// Requests audio output from a Gemini model that supports AUDIO and returns an audio blob URL (mp3)
+
+const getEnv = (key: string) => {
+  const viteVal =
+    typeof import.meta !== "undefined" && (import.meta as any)?.env?.[key];
+  const nodeVal =
+    typeof process !== "undefined" && (process as any)?.env?.[key];
+  return (viteVal || nodeVal || "").toString().trim();
+};
 
 const getApiKey = () => {
   // Prefer Vite env, fallback to process.env (for dev tools)
-  const viteKey =
-    typeof import.meta !== 'undefined' &&
-    (import.meta as any)?.env?.VITE_API_KEY;
-  const nodeKey =
-    typeof process !== 'undefined' && (process as any)?.env?.API_KEY;
-  return (viteKey || nodeKey || '').trim();
+  const viteKey = getEnv("GEMINI_API_KEY") || getEnv("VITE_API_KEY");
+  const nodeKey = getEnv("API_KEY");
+  return viteKey || nodeKey;
 };
 
-const MODEL_ID = 'models/gemini-2.5-flash-preview-tts';
+// Allow overriding the model via env; default to an audio-capable variant.
+const MODEL_ID =
+  getEnv("GEMINI_TTS_MODEL") ||
+  getEnv("VITE_GEMINI_TTS_MODEL") ||
+  "models/gemini-2.0-flash-001";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/${MODEL_ID}:generateContent`;
 
 export interface TtsOptions {
@@ -24,28 +33,32 @@ export const synthesizeWithGemini = async (
 ): Promise<{ audioUrl: string; mimeType: string }> => {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error('API key is missing. Set VITE_API_KEY or API_KEY.');
+    throw new Error(
+      "API key is missing. Set GEMINI_API_KEY (or VITE_API_KEY/API_KEY)."
+    );
   }
 
   const body: any = {
-    contents: [{ role: 'user', parts: [{ text }] }],
+    contents: [{ role: "user", parts: [{ text }] }],
     generationConfig: {
-      // Gemini TTS supports audio/mp3 or audio/pcm; mp3 keeps payload small
-      responseMimeType: 'audio/mp3',
+      // Ask for audio output
+      responseModalities: ["AUDIO"],
+      ...(options?.voiceName
+        ? {
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: options.voiceName },
+              },
+            },
+          }
+        : {}),
     },
   };
 
-  // Voice selection is optional; if unsupported, Gemini falls back to default
-  if (options?.voiceName) {
-    body.generationConfig.voiceConfig = {
-      prebuiltVoiceConfig: { voiceName: options.voiceName },
-    };
-  }
-
   const res = await fetch(`${ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   });
@@ -62,10 +75,10 @@ export const synthesizeWithGemini = async (
     ) || null;
 
   const base64 = part?.inlineData?.data;
-  const mimeType = part?.inlineData?.mimeType || 'audio/mp3';
+  const mimeType = part?.inlineData?.mimeType || "audio/mp3";
 
   if (!base64) {
-    throw new Error('Gemini TTS response missing audio data.');
+    throw new Error("Gemini TTS response missing audio data.");
   }
 
   const binary = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -74,4 +87,3 @@ export const synthesizeWithGemini = async (
 
   return { audioUrl, mimeType };
 };
-
