@@ -106,6 +106,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         </button>
 
         {/* Chapter/Page Info */}
+        {/* test */}
         <div className="chapter_page">
           <form onSubmit={handlePageSubmit} className="">
             <span className="text_xs">Page</span>
