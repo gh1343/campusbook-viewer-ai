@@ -130,6 +130,26 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   const [activeTab, setActiveTab] = useState<"contents" | "bookmarks">(
     "contents"
   );
+  const chapterListRef = useRef<HTMLDivElement | null>(null);
+  const chapterItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // 활성 챕터가 보이도록 사이드바 스크롤 자동 조정
+  useEffect(() => {
+    if (activeTab !== "contents") return;
+    const target = chapterItemRefs.current[currentChapterIndex];
+    if (!target) return;
+    const container = chapterListRef.current;
+    if (!container) {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    const cRect = container.getBoundingClientRect();
+    const tRect = target.getBoundingClientRect();
+    const isVisible = tRect.top >= cRect.top && tRect.bottom <= cRect.bottom;
+    if (!isVisible) {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [currentChapterIndex, activeTab]);
 
   return (
     <PanelWrapper
@@ -153,11 +173,14 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
             <Bookmark size={14} /> Favorites
           </button>
         </div>
-        <div className="chapter_list">
+        <div className="chapter_list" ref={chapterListRef}>
           {activeTab === "contents" &&
             chapters.map((chapter, idx) => (
               <button
                 key={chapter.id}
+                ref={(el) => {
+                  chapterItemRefs.current[idx] = el;
+                }}
                 onClick={() => {
                   goToChapter(idx);
                   if (window.innerWidth < 768) onClose();
