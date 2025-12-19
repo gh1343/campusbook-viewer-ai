@@ -427,6 +427,43 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     }));
   };
 
+  // PDF 현재 페이지에 맞춰 챕터 포커스 동기화
+  const findChapterIndexForPage = React.useCallback(
+    (page: number) => {
+      if (chapters.length === 0 || Object.keys(chapterPageMap).length === 0)
+        return -1;
+
+      let bestIdx = -1;
+      let bestPage = Number.NEGATIVE_INFINITY;
+      let fallbackIdx = -1;
+      let fallbackPage = Number.POSITIVE_INFINITY;
+
+      chapters.forEach((ch, idx) => {
+        const mappedPage = chapterPageMap[ch.id];
+        if (!mappedPage) return;
+
+        if (mappedPage <= page && mappedPage > bestPage) {
+          bestPage = mappedPage;
+          bestIdx = idx;
+        }
+        if (mappedPage < fallbackPage) {
+          fallbackPage = mappedPage;
+          fallbackIdx = idx;
+        }
+      });
+
+      return bestIdx !== -1 ? bestIdx : fallbackIdx;
+    },
+    [chapters, chapterPageMap]
+  );
+
+  useEffect(() => {
+    const idx = findChapterIndexForPage(currentPdfPage);
+    if (idx !== -1 && idx !== currentChapterIndex) {
+      setCurrentChapterIndex(idx);
+    }
+  }, [currentPdfPage, findChapterIndexForPage, currentChapterIndex]);
+
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
     if (theme === 'light') {
