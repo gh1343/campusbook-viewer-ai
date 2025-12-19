@@ -114,7 +114,7 @@ export const ReaderPage: React.FC = () => {
   }, [isDraggingLeft, isDraggingRight]);
 
   const toggleToc = () => setTocOpen(!isTocOpen);
-  const pdfUrl = `${import.meta.env.BASE_URL}pdf/test2.pdf`;
+  const pdfUrl = `${import.meta.env.BASE_URL}pdf/test3.pdf`;
 
   return (
     <div>

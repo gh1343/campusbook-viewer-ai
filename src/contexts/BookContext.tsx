@@ -27,6 +27,7 @@ import {
 import {generateExplanation} from '../services/geminiService';
 import {processPdf, findRelevantContext} from '../services/pdfRagService';
 import {synthesizeWithGemini} from '../services/ttsService';
+import navTocRaw from '../../nav.xhtml?raw';
 
 const MOCK_CHAPTERS: Chapter[] = [
   {
@@ -61,6 +62,70 @@ const MOCK_CHAPTERS: Chapter[] = [
     `,
   },
 ];
+
+const normalizeForMatch = (value: string) =>
+  value
+    .replace(/\s+/g, '')
+    .replace(/[^0-9A-Za-z가-힣]/g, '')
+    .toLowerCase();
+
+const parseNavChapters = (
+  raw: string
+): {chapters: Chapter[]; pageMap: Record<string, number>} => {
+  if (typeof window === 'undefined') return {chapters: [], pageMap: {}};
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(raw, 'application/xhtml+xml');
+    const nav =
+      doc.querySelector('nav#toc') || doc.querySelector('nav[epub\\:type="toc"]');
+    if (!nav) return {chapters: [], pageMap: {}};
+
+    const usedIds = new Set<string>();
+    const anchors = Array.from(nav.querySelectorAll('a'));
+    const pageMap: Record<string, number> = {};
+
+    const chapters = anchors
+      .map((anchor, index) => {
+        const title = (anchor.textContent || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!title) return null;
+
+        const href = anchor.getAttribute('href') || `toc-${index + 1}`;
+        const rawId = href;
+        const baseId =
+          rawId.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') ||
+          `toc-${index + 1}`;
+
+        let id = baseId;
+        let suffix = 1;
+        while (usedIds.has(id)) {
+          id = `${baseId}-${suffix++}`;
+        }
+        usedIds.add(id);
+
+        const pageMatch = href.match(/p0*([0-9]+)_/i) || href.match(/p0*([0-9]+)/i);
+        if (pageMatch && pageMatch[1]) {
+          const pageNum = parseInt(pageMatch[1], 10);
+          if (Number.isFinite(pageNum)) {
+            pageMap[id] = pageNum;
+          }
+        }
+
+        return {
+          id,
+          title,
+          content: '',
+        } as Chapter;
+      })
+      .filter(Boolean) as Chapter[];
+
+    return {chapters, pageMap};
+  } catch (err) {
+    console.error('Failed to parse nav.xhtml', err);
+    return {chapters: [], pageMap: {}};
+  }
+};
 
 const BookContext = createContext<BookContextType | undefined>(undefined);
 
@@ -141,6 +206,9 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     speed: 1.0,
     continuous: true,
   });
+  const [chapterPageMap, setChapterPageMap] = useState<Record<string, number>>(
+    {}
+  );
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
@@ -334,6 +402,17 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     }
   }, [bookmarks]);
 
+  // nav.xhtml을 chapters로 반영
+  useEffect(() => {
+    if (!navTocRaw) return;
+    const {chapters: parsedChapters, pageMap} = parseNavChapters(navTocRaw);
+    if (parsedChapters.length > 0) {
+      setChapters(parsedChapters);
+      setChapterPageMap(pageMap);
+      setCurrentChapterIndex(0);
+    }
+  }, []);
+
   const updateReadingTime = () => {
     setStats(prev => ({
       ...prev,
@@ -379,19 +458,24 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   const goToNextChapter = () => {
     if (currentChapterIndex < chapters.length - 1) {
-      setCurrentChapterIndex(prev => prev + 1);
+      goToChapter(currentChapterIndex + 1);
     }
   };
 
   const goToPrevChapter = () => {
     if (currentChapterIndex > 0) {
-      setCurrentChapterIndex(prev => prev - 1);
+      goToChapter(currentChapterIndex - 1);
     }
   };
 
   const goToChapter = (index: number) => {
     if (index >= 0 && index < chapters.length) {
       setCurrentChapterIndex(index);
+      const target = chapters[index];
+      const targetPage = chapterPageMap[target.id];
+      if (targetPage) {
+        goToPdfPage(targetPage);
+      }
     }
   };
 
