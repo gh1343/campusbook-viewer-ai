@@ -27,6 +27,8 @@ export const ControlBar: React.FC<ControlBarProps> = ({
     ? pdfCurrentPage || 1
     : currentChapterIndex + 1;
   const currentIndexZeroBased = currentPageNumber - 1; // range 입력값
+  const chapterLabel =
+    chapters[currentChapterIndex]?.title || (isPdfMode ? "PDF" : "Chapter");
 
   const [inputPage, setInputPage] = useState(currentPageNumber.toString());
 
@@ -115,12 +117,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             />
             <span className="slash">/ {totalPages}</span>
           </form>
-          <span className="chapter_name">
-            {isPdfMode
-              ? "PDF"
-              : chapters[currentChapterIndex].title.split(":")[1] ||
-                chapters[currentChapterIndex].title}
-          </span>
+          <span className="chapter_name">{chapterLabel}</span>
         </div>
 
         {/* Next Button */}
