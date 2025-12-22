@@ -110,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (currentPageBookmark) {
       removePdfBookmark(currentPageBookmark.id);
     } else {
-      addPdfBookmark(currentPdfPage, `PDF p.${currentPdfPage}`);
+      addPdfBookmark(currentPdfPage, `p.${currentPdfPage}`);
     }
   };
 

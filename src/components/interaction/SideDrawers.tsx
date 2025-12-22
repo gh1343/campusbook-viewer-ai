@@ -222,13 +222,16 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                   className="bookmark_item_button"
                 >
                   <div className="bookmark_page_badge">
-                    <Bookmark size={14} />
-                    <span>Page {bm.page}</span>
+                    {/* <Bookmark size={14} />
+                    <span>Page {bm.page}</span> */}
+                    <span className="bookmark_label line_clamp_1">
+                      {`P. ${bm.page}`}
+                    </span>
                   </div>
                   <div className="bookmark_item_text">
-                    <span className="bookmark_label line_clamp_1">
+                    {/* <span className="bookmark_label line_clamp_1">
                       {bm.label || `Page ${bm.page}`}
-                    </span>
+                    </span> */}
                     <span className="bookmark_meta">
                       Saved {new Date(bm.createdAt).toLocaleDateString()}
                     </span>
@@ -979,16 +982,16 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
-                          result.type === "chapter"
-                            ? "bg-blue-100 text-blue-600"
-                            : result.type === "highlight"
-                            ? "bg-yellow-100 text-yellow-600"
-                            : result.type === "pdf"
-                            ? "bg-indigo-100 text-indigo-600"
-                            : "bg-green-100 text-green-600"
-                        }`}
-                      >
+                            className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                              result.type === "chapter"
+                                ? "bg-blue-100 text-blue-600"
+                                : result.type === "highlight"
+                                ? "bg-yellow-100 text-yellow-600"
+                                : result.type === "pdf"
+                                ? "bg-indigo-100 text-indigo-600"
+                                : "bg-green-100 text-green-600"
+                            }`}
+                          >
                             {result.type}
                           </span>
                           <span className="text-xs text-slate-500 font-medium truncate flex-1">

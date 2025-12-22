@@ -740,7 +740,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         results.push({
           id: `pdf-${p.page}-${idx}`,
           type: 'pdf',
-          title: `PDF p.${p.page}`,
+          title: `p.${p.page}`,
           contentSnippet: snippet,
           pageNumber: p.page,
         });

@@ -190,10 +190,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       const term = pdfSearchHighlight.term.trim();
       if (!term) return false;
-      const re = new RegExp(
-        term.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&"),
-        "gi"
-      );
+      const re = new RegExp(term.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&"), "gi");
       textLayer
         .querySelectorAll('span[role="presentation"]')
         .forEach((span) => {
@@ -325,10 +322,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       )
         return;
       const maxPage = pdfViewerRef.current.pdfDocument.numPages;
-      const target = Math.min(
-        Math.max(page, 1),
-        maxPage
-      );
+      const target = Math.min(Math.max(page, 1), maxPage);
       pdfViewerRef.current.currentPageNumber = target;
       pdfViewerRef.current.scrollPageIntoView({ pageNumber: target });
     });
@@ -460,8 +454,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         staticCanvas.setAttribute("aria-hidden", "true");
 
         liveCanvas = document.createElement("canvas");
-        liveCanvas.className =
-          "pdf_pen_page_canvas pdf_pen_page_canvas_live";
+        liveCanvas.className = "pdf_pen_page_canvas pdf_pen_page_canvas_live";
 
         liveCanvas.addEventListener("pointerdown", handlePenStart);
         liveCanvas.addEventListener("pointermove", handlePenMove);
@@ -473,14 +466,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         layer.appendChild(liveCanvas);
         pageEl.appendChild(layer);
       } else {
-        staticCanvas =
-          layer.querySelector<HTMLCanvasElement>(
-            ".pdf_pen_page_canvas:not(.pdf_pen_page_canvas_live)"
-          );
-        liveCanvas =
-          layer.querySelector<HTMLCanvasElement>(
-            ".pdf_pen_page_canvas_live"
-          );
+        staticCanvas = layer.querySelector<HTMLCanvasElement>(
+          ".pdf_pen_page_canvas:not(.pdf_pen_page_canvas_live)"
+        );
+        liveCanvas = layer.querySelector<HTMLCanvasElement>(
+          ".pdf_pen_page_canvas_live"
+        );
         if (liveCanvas && !liveCanvas.dataset.penBound) {
           liveCanvas.addEventListener("pointerdown", handlePenStart);
           liveCanvas.addEventListener("pointermove", handlePenMove);
@@ -556,9 +547,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (e.buttons === 0 && !isDrawingRef.current) return;
 
     const pageNumber =
-      currentPageRef.current ||
-      getPageElementFromEvent(e)?.pageNumber ||
-      null;
+      currentPageRef.current || getPageElementFromEvent(e)?.pageNumber || null;
     if (!pageNumber) return;
     const pageEl = getPageElementByNumber(pageNumber);
     if (!pageEl) return;
@@ -577,10 +566,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       }
       renderLiveCanvas();
     } else if (drawingModeRef.current === "eraser") {
-      const strokes =
-        (chapterStrokesRef.current["pdf-main"] || []).filter((s) =>
-          strokeMatchesPage(s, pageNumber)
-        );
+      const strokes = (chapterStrokesRef.current["pdf-main"] || []).filter(
+        (s) => strokeMatchesPage(s, pageNumber)
+      );
       strokes.forEach((stroke) => {
         const hit = stroke.points.some(
           (p) => Math.hypot(p.x - pt.x, p.y - pt.y) < 16
@@ -655,10 +643,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       ctx.restore();
       if (!showAnnotationsRef.current) return;
 
-      const strokes =
-        (chapterStrokesRef.current["pdf-main"] || []).filter((s) =>
-          strokeMatchesPage(s, pageNumber)
-        );
+      const strokes = (chapterStrokesRef.current["pdf-main"] || []).filter(
+        (s) => strokeMatchesPage(s, pageNumber)
+      );
       strokes.forEach((s) =>
         drawStrokePath(ctx, s.points, s.color, s.width || 3, s.opacity ?? 1)
       );
@@ -773,8 +760,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             a.left <= b.left + b.width + TOL &&
             a.left + a.width >= b.left - TOL;
           const verticalOverlap =
-            a.top <= b.top + b.height + TOL &&
-            a.top + a.height >= b.top - TOL;
+            a.top <= b.top + b.height + TOL && a.top + a.height >= b.top - TOL;
           if (horizontalOverlap && verticalOverlap) {
             const newLeft = Math.min(a.left, b.left);
             const newTop = Math.min(a.top, b.top);
@@ -862,12 +848,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // Unscale first, then add scroll offsets so highlights don't drift after scrolling
     const rects: HighlightRect[] = Array.from(range.getClientRects()).map(
       (r) => ({
-        left:
-          (r.left - containerRect.left) / visualScale + scrollLeft,
-        top:
-          (r.top - containerRect.top) / visualScale +
-          scrollTop -
-          TOP_OFFSET,
+        left: (r.left - containerRect.left) / visualScale + scrollLeft,
+        top: (r.top - containerRect.top) / visualScale + scrollTop - TOP_OFFSET,
         width: r.width / visualScale,
         height: Math.max(r.height / visualScale - HEIGHT_PAD, 1),
       })

@@ -30,7 +30,8 @@
   background-color: rgb(255 255 255);
 }
 .cc_top {
-  width: 900px;
+  /* width: 900px; */
+  width: 100%;
   margin: 0 auto;
 }
 .cc_bottom {
