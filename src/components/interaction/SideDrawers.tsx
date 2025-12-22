@@ -106,7 +106,7 @@ const PanelWrapper: React.FC<PanelProps> = ({
               <X size={18} />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto h-full">{children}</div>
+          <div className="flex-1 h-full">{children}</div>
         </div>
       </aside>
     </>
@@ -481,7 +481,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
   return (
     <PanelWrapper isOpen={isOpen} onClose={onClose} side="right">
-      <div className="h-full">
+      <div className="h-full flex flex-col min-h-0">
         <div className="right_panel_menu">
           <button
             onClick={() => handleTabChange("ai")}
