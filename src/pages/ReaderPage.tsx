@@ -11,6 +11,7 @@ export const ReaderPage: React.FC = () => {
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
   const [isTocOpen, setTocOpen] = useState(true);
+  const [isNarrow, setIsNarrow] = useState(false);
   const { isToolsOpen, setToolsOpen, registerPdfNavigator, setCurrentPdfPage } =
     useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
@@ -45,22 +46,34 @@ export const ReaderPage: React.FC = () => {
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Handle responsive defaults
+  // Handle responsive defaults and exclusive sidebars
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
+    const applyLayout = () => {
+      const narrow = window.innerWidth <= 1300;
+      setIsNarrow(narrow);
+      if (narrow) {
+        // Small/medium screens: only right panel open by default
         setTocOpen(false);
-        setToolsOpen(false);
+        setToolsOpen(true);
       } else {
+        // Large screens: original behavior (both open)
         setTocOpen(true);
         setToolsOpen(true);
       }
     };
 
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    applyLayout();
+    window.addEventListener("resize", applyLayout);
+    return () => window.removeEventListener("resize", applyLayout);
   }, [setToolsOpen]);
+
+  // Enforce only one sidebar open at a time on narrow screens (tools has priority when opened elsewhere)
+  useEffect(() => {
+    if (!isNarrow) return;
+    if (isToolsOpen) {
+      setTocOpen(false);
+    }
+  }, [isToolsOpen, isNarrow]);
 
   // Drag Logic for Resizing
   useEffect(() => {
@@ -113,7 +126,17 @@ export const ReaderPage: React.FC = () => {
     };
   }, [isDraggingLeft, isDraggingRight]);
 
-  const toggleToc = () => setTocOpen(!isTocOpen);
+  const toggleToc = () => {
+    if (isNarrow) {
+      const next = !isTocOpen;
+      setTocOpen(next);
+      if (next) {
+        setToolsOpen(false);
+      }
+      return;
+    }
+    setTocOpen(!isTocOpen);
+  };
   const pdfUrl = `${import.meta.env.BASE_URL}pdf/test3.pdf`;
 
   return (
