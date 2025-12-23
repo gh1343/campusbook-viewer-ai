@@ -1,5 +1,5 @@
 // src/components/viewer/PdfViewer.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   GlobalWorkerOptions,
   getDocument,
@@ -59,6 +59,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     removeStroke,
     showAnnotations,
   } = useBook();
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+  const isMobileSafari =
+    /iP(hone|od|ad)/.test(ua) &&
+    /Safari/i.test(ua) &&
+    !/Chrome/i.test(ua) &&
+    !/CriOS/i.test(ua);
+  const isMobileLike = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
+    return touchUA || window.innerWidth <= 1300;
+  }, [ua]);
+  const MAX_CANVAS_PIXELS = useMemo(() => undefined, []);
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -81,6 +93,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     left: number;
     show: boolean;
   }>({ text: "", top: 0, left: 0, show: false });
+  const rafRefreshId = useRef<number | null>(null);
   const isDrawingRef = useRef(false);
   const livePointsRef = useRef<{ x: number; y: number }[]>([]);
   const drawingModeRef = useRef(drawingMode);
@@ -108,6 +121,17 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   useEffect(() => {
     showAnnotationsRef.current = showAnnotations;
   }, [showAnnotations]);
+
+  const scheduleRenderRefresh = () => {
+    if (rafRefreshId.current !== null) return;
+    rafRefreshId.current = requestAnimationFrame(() => {
+      rafRefreshId.current = null;
+      syncPageCanvases();
+      syncCanvasPointers();
+      renderStaticCanvases();
+      renderLiveCanvas();
+    });
+  };
 
   useEffect(() => {
     // Keep local overlay in sync with global highlights (e.g., sidebar delete)
@@ -273,7 +297,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const eventBus = new EventBus();
     const linkService = new PDFLinkService({ eventBus });
 
-    const pdfViewer = new PDFViewer({
+    const pdfViewerOptions: any = {
       container: viewerContainerRef.current,
       viewer: viewerRef.current,
       eventBus,
@@ -281,20 +305,24 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       textLayerMode: 2,
       annotationMode: 2,
       removePageBorders: true,
-    });
+      enableScripting: false, // skip JS in PDFs
+      disableAutoFetch: false,
+      useOnlyCssZoom: false,
+    };
+    if (MAX_CANVAS_PIXELS !== undefined) {
+      pdfViewerOptions.maxCanvasPixels = MAX_CANVAS_PIXELS;
+    }
+    const pdfViewer = new PDFViewer(pdfViewerOptions);
     pdfViewerRef.current = pdfViewer;
 
-    const INTERNAL_SCALE = 2.1; // 내부 렌더링 확대 비율(원하는 숫자)
+    const INTERNAL_SCALE = 2.1; // 기본 스케일
     const handlePageRendered = () => {
-      syncPageCanvases();
-      syncCanvasPointers();
-      renderStaticCanvases();
-      renderLiveCanvas();
+      scheduleRenderRefresh();
     };
 
     eventBus.on("pagesinit", () => {
       pdfViewer.currentScale = INTERNAL_SCALE;
-      handlePageRendered();
+      scheduleRenderRefresh();
     });
 
     eventBus.on("pagechanging", (evt: any) => {
@@ -331,10 +359,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     let cancelled = false;
     let loadingTask = getDocument(file);
+    const loadingTimeout = window.setTimeout(() => {
+      if (cancelled) return;
+      console.warn("[PdfViewer] load timeout, cancelling task");
+      setErrorMsg("PDF 로드가 지연되고 있습니다. 다시 시도해주세요.");
+      setLoading(false);
+      loadingTask?.destroy();
+    }, isMobileLike ? 20000 : 30000);
 
     loadingTask.promise
       .then((pdfDoc) => {
         if (cancelled) return;
+        clearTimeout(loadingTimeout);
         setLoading(false);
         setErrorMsg(null);
         pdfViewer.setDocument(pdfDoc);
@@ -342,6 +378,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         onPagesCount?.(pdfDoc.numPages);
 
         const extractText = async () => {
+          if (isMobileSafari) return; // iOS Safari는 메모리 보호
           const pages: { page: number; text: string }[] = [];
           try {
             for (let i = 1; i <= pdfDoc.numPages; i++) {
@@ -361,6 +398,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       })
       .catch((err: any) => {
         if (cancelled) return;
+        clearTimeout(loadingTimeout);
         if (err?.message === "Worker was destroyed") {
           console.debug("[PdfViewer] worker destroyed (cleanup)");
           return;
@@ -372,14 +410,27 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     return () => {
       cancelled = true;
+      clearTimeout(loadingTimeout);
       loadingTask.destroy();
       pdfViewerRef.current = null;
       eventBus.off?.("pagerendered", handlePageRendered);
       pageCanvasMapRef.current.forEach(({ layer }) => layer.remove());
       pageCanvasMapRef.current.clear();
       currentPageRef.current = null;
+      if (rafRefreshId.current !== null) {
+        cancelAnimationFrame(rafRefreshId.current);
+        rafRefreshId.current = null;
+      }
     };
-  }, [file, onPageChange, onPagesCount, registerGoToPage, setPdfTextPages]);
+  }, [
+    file,
+    onPageChange,
+    onPagesCount,
+    registerGoToPage,
+    setPdfTextPages,
+    isMobileSafari,
+    isMobileLike,
+  ]);
 
   // ----- Pen Canvas Helpers -----
   const getVisualScale = () => {
@@ -432,10 +483,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const syncPageCanvases = () => {
-    if (!viewerRef.current) return;
+    if (!viewerRef.current || !viewerContainerRef.current) return;
+    const viewRect = viewerContainerRef.current.getBoundingClientRect();
+    const BUFFER = 800; // 처리 범위 여유
     const pages: HTMLElement[] = Array.from(
       viewerRef.current.querySelectorAll<HTMLElement>(".page")
-    );
+    ).filter((pageEl) => {
+      const r = pageEl.getBoundingClientRect();
+      return r.bottom >= viewRect.top - BUFFER && r.top <= viewRect.bottom + BUFFER;
+    });
     const seen = new Set<number>();
     pages.forEach((pageEl) => {
       const pageNumber = Number(pageEl.dataset.pageNumber);
@@ -708,9 +764,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   useEffect(() => {
     const ro = new ResizeObserver(() => {
-      syncPageCanvases();
-      renderStaticCanvases();
-      renderLiveCanvas();
+      scheduleRenderRefresh();
     });
     if (viewerRef.current) ro.observe(viewerRef.current);
     if (viewerContainerRef.current) ro.observe(viewerContainerRef.current);
