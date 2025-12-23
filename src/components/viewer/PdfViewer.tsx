@@ -315,7 +315,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const pdfViewer = new PDFViewer(pdfViewerOptions);
     pdfViewerRef.current = pdfViewer;
 
-    const INTERNAL_SCALE = 2.1; // 기본 스케일
+    const INTERNAL_SCALE = 1.37; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
     const handlePageRendered = () => {
       scheduleRenderRefresh();
     };
@@ -359,13 +359,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     let cancelled = false;
     let loadingTask = getDocument(file);
-    const loadingTimeout = window.setTimeout(() => {
-      if (cancelled) return;
-      console.warn("[PdfViewer] load timeout, cancelling task");
-      setErrorMsg("PDF 로드가 지연되고 있습니다. 다시 시도해주세요.");
-      setLoading(false);
-      loadingTask?.destroy();
-    }, isMobileLike ? 20000 : 30000);
+    const loadingTimeout = window.setTimeout(
+      () => {
+        if (cancelled) return;
+        console.warn("[PdfViewer] load timeout, cancelling task");
+        setErrorMsg("PDF 로드가 지연되고 있습니다. 다시 시도해주세요.");
+        setLoading(false);
+        loadingTask?.destroy();
+      },
+      isMobileLike ? 20000 : 30000
+    );
 
     loadingTask.promise
       .then((pdfDoc) => {
@@ -490,7 +493,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       viewerRef.current.querySelectorAll<HTMLElement>(".page")
     ).filter((pageEl) => {
       const r = pageEl.getBoundingClientRect();
-      return r.bottom >= viewRect.top - BUFFER && r.top <= viewRect.bottom + BUFFER;
+      return (
+        r.bottom >= viewRect.top - BUFFER && r.top <= viewRect.bottom + BUFFER
+      );
     });
     const seen = new Set<number>();
     pages.forEach((pageEl) => {
@@ -798,7 +803,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
   };
 
-  const VISUAL_SCALE = 0.5; // 화면에 실제로 보여줄 축소 비율 (INTERNAL_SCALE의 역수)
+  const VISUAL_SCALE = 1; // CSS 축소 제거해 텍스트 블러 방지 (INTERNAL_SCALE과 동일 배율로 표시)
 
   const mergeHighlightRects = (rects: HighlightRect[]) => {
     const TOL = 1.5; // allow tiny overlap/adjacency without stacking opacity
