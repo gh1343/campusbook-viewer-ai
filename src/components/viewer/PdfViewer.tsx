@@ -268,9 +268,26 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (!target || target.rects.length === 0) return;
 
     const first = target.rects[0];
-    const nextTop = Math.max(0, first.top - 40);
-    const nextLeft = Math.max(0, first.left - 20);
-    viewerContainerRef.current.scrollTo({
+    const containerEl = viewerContainerRef.current;
+    const pageEl = viewerRef.current?.querySelector<HTMLElement>(
+      `.page[data-page-number="${first.pageNumber}"]`
+    );
+    if (!containerEl || !pageEl) return;
+
+    const containerRect = containerEl.getBoundingClientRect();
+    const pageRect = pageEl.getBoundingClientRect();
+    const pageOffsetLeft = pageRect.left - containerRect.left + containerEl.scrollLeft;
+    const pageOffsetTop = pageRect.top - containerRect.top + containerEl.scrollTop;
+
+    const scaleX =
+      first.pageWidth > 0 ? pageRect.width / first.pageWidth : 1;
+    const scaleY =
+      first.pageHeight > 0 ? pageRect.height / first.pageHeight : 1;
+
+    const nextTop = Math.max(0, pageOffsetTop + first.top * scaleY - 40);
+    const nextLeft = Math.max(0, pageOffsetLeft + first.left * scaleX - 20);
+
+    containerEl.scrollTo({
       top: nextTop,
       left: nextLeft,
       behavior: "smooth",
@@ -489,70 +506,91 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
   };
 
+  type PageCanvasEntry = {
+    layer: HTMLDivElement;
+    staticCanvas: HTMLCanvasElement;
+    liveCanvas: HTMLCanvasElement;
+  };
+
+  const createCanvas = (className: string, ariaHidden?: string) => {
+    const canvas = document.createElement("canvas");
+    canvas.className = className;
+    if (ariaHidden) {
+      canvas.setAttribute("aria-hidden", ariaHidden);
+    }
+    return canvas;
+  };
+
+  const bindPenHandlers = (canvas: HTMLCanvasElement) => {
+    if (canvas.dataset.penBound) return;
+    canvas.addEventListener("pointerdown", handlePenStart);
+    canvas.addEventListener("pointermove", handlePenMove);
+    canvas.addEventListener("pointerup", handlePenEnd);
+    canvas.addEventListener("pointerleave", handlePenEnd);
+    canvas.dataset.penBound = "1";
+  };
+
+  const ensurePenLayer = (pageEl: HTMLElement): PageCanvasEntry | null => {
+    let layer = pageEl.querySelector<HTMLDivElement>(".pdf_pen_page_layer");
+    let staticCanvas: HTMLCanvasElement | null = null;
+    let liveCanvas: HTMLCanvasElement | null = null;
+
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = "pdf_pen_page_layer";
+
+      staticCanvas = createCanvas("pdf_pen_page_canvas", "true");
+      liveCanvas = createCanvas(
+        "pdf_pen_page_canvas pdf_pen_page_canvas_live"
+      );
+      bindPenHandlers(liveCanvas);
+
+      layer.appendChild(staticCanvas);
+      layer.appendChild(liveCanvas);
+      pageEl.appendChild(layer);
+    } else {
+      staticCanvas = layer.querySelector<HTMLCanvasElement>(
+        ".pdf_pen_page_canvas:not(.pdf_pen_page_canvas_live)"
+      );
+      liveCanvas = layer.querySelector<HTMLCanvasElement>(
+        ".pdf_pen_page_canvas_live"
+      );
+      if (liveCanvas) {
+        bindPenHandlers(liveCanvas);
+      }
+    }
+
+    if (!layer || !staticCanvas || !liveCanvas) return null;
+    return { layer, staticCanvas, liveCanvas };
+  };
+
+  const pageWithinBuffer = (
+    pageEl: HTMLElement,
+    viewRect: DOMRect,
+    buffer: number
+  ) => {
+    const r = pageEl.getBoundingClientRect();
+    return r.bottom >= viewRect.top - buffer && r.top <= viewRect.bottom + buffer;
+  };
+
   const syncPageCanvases = () => {
     if (!viewerRef.current || !viewerContainerRef.current) return;
     const viewRect = viewerContainerRef.current.getBoundingClientRect();
     const BUFFER = 800; // 처리 범위 여유
     const pages: HTMLElement[] = Array.from(
       viewerRef.current.querySelectorAll<HTMLElement>(".page")
-    ).filter((pageEl) => {
-      const r = pageEl.getBoundingClientRect();
-      return (
-        r.bottom >= viewRect.top - BUFFER && r.top <= viewRect.bottom + BUFFER
-      );
-    });
+    ).filter((pageEl) => pageWithinBuffer(pageEl, viewRect, BUFFER));
     const seen = new Set<number>();
     pages.forEach((pageEl) => {
       const pageNumber = Number(pageEl.dataset.pageNumber);
       if (!pageNumber) return;
       seen.add(pageNumber);
 
-      let layer = pageEl.querySelector<HTMLDivElement>(".pdf_pen_page_layer");
-      let staticCanvas: HTMLCanvasElement | null = null;
-      let liveCanvas: HTMLCanvasElement | null = null;
-      if (!layer) {
-        layer = document.createElement("div");
-        layer.className = "pdf_pen_page_layer";
+      const entry = ensurePenLayer(pageEl);
+      if (!entry) return;
 
-        staticCanvas = document.createElement("canvas");
-        staticCanvas.className = "pdf_pen_page_canvas";
-        staticCanvas.setAttribute("aria-hidden", "true");
-
-        liveCanvas = document.createElement("canvas");
-        liveCanvas.className = "pdf_pen_page_canvas pdf_pen_page_canvas_live";
-
-        liveCanvas.addEventListener("pointerdown", handlePenStart);
-        liveCanvas.addEventListener("pointermove", handlePenMove);
-        liveCanvas.addEventListener("pointerup", handlePenEnd);
-        liveCanvas.addEventListener("pointerleave", handlePenEnd);
-        liveCanvas.dataset.penBound = "1";
-
-        layer.appendChild(staticCanvas);
-        layer.appendChild(liveCanvas);
-        pageEl.appendChild(layer);
-      } else {
-        staticCanvas = layer.querySelector<HTMLCanvasElement>(
-          ".pdf_pen_page_canvas:not(.pdf_pen_page_canvas_live)"
-        );
-        liveCanvas = layer.querySelector<HTMLCanvasElement>(
-          ".pdf_pen_page_canvas_live"
-        );
-        if (liveCanvas && !liveCanvas.dataset.penBound) {
-          liveCanvas.addEventListener("pointerdown", handlePenStart);
-          liveCanvas.addEventListener("pointermove", handlePenMove);
-          liveCanvas.addEventListener("pointerup", handlePenEnd);
-          liveCanvas.addEventListener("pointerleave", handlePenEnd);
-          liveCanvas.dataset.penBound = "1";
-        }
-      }
-      if (!layer || !staticCanvas || !liveCanvas) return;
-
-      pageCanvasMapRef.current.set(pageNumber, {
-        layer,
-        staticCanvas,
-        liveCanvas,
-      });
-      sizePageCanvas(pageEl, staticCanvas, liveCanvas);
+      pageCanvasMapRef.current.set(pageNumber, entry);
+      sizePageCanvas(pageEl, entry.staticCanvas, entry.liveCanvas);
     });
 
     for (const [pageNumber, entry] of pageCanvasMapRef.current.entries()) {
@@ -564,7 +602,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const syncCanvasPointers = () => {
-    const active = drawingModeRef.current !== "idle";
+    const mode = drawingModeRef.current || "idle";
+    const active = mode === "pen" || mode === "eraser";
     pageCanvasMapRef.current.forEach(({ liveCanvas }) => {
       liveCanvas.style.pointerEvents = active ? "auto" : "none";
       liveCanvas.style.touchAction = active ? "none" : "auto";
@@ -967,7 +1006,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       })
     );
     // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
-    const id = addHighlight(sel.toString(), undefined, "reference-doc");
+    const id = addHighlight(
+      sel.toString(),
+      undefined,
+      "reference-doc",
+      pageNumber
+    );
     const mergedRects = mergeHighlightRects(rects);
     setPdfHighlights((prev) => [...prev, { id, rects: mergedRects }]);
     setSelection((prev) => ({ ...prev, show: false }));

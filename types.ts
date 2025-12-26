@@ -32,6 +32,7 @@ export interface Highlight {
   chapterId: string;
   text: string;
   color: "yellow" | "green" | "blue";
+  pageNumber?: number;
   note?: string;
   createdAt: number;
 }
@@ -129,7 +130,8 @@ export interface BookContextType {
   addHighlight: (
     text: string,
     note?: string,
-    targetChapterId?: string
+    targetChapterId?: string,
+    pageNumber?: number
   ) => string;
   updateHighlight: (id: string, note: string) => void;
   removeHighlight: (id: string) => void;

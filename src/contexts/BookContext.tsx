@@ -551,7 +551,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const addHighlight = (
     text: string,
     note?: string,
-    targetChapterId?: string
+    targetChapterId?: string,
+    pageNumber?: number
   ): string => {
     const chapterId = targetChapterId || currentChapter.id;
     const newHighlight: Highlight = {
@@ -559,6 +560,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       chapterId: chapterId,
       text,
       color: 'yellow',
+      pageNumber,
       note,
       createdAt: Date.now(),
     };
@@ -708,6 +710,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
           title: 'Highlight',
           contentSnippet: hl.note ? `${hl.text} - ${hl.note}` : hl.text,
           chapterId: hl.chapterId,
+          pageNumber: hl.pageNumber,
         });
       }
     });
@@ -751,11 +754,12 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   };
 
   const goToPdfPage = (page: number) => {
-    setCurrentPdfPage(page);
+    const safePage = Number.isFinite(page) ? Math.max(1, Math.round(page)) : 1;
+    setCurrentPdfPage(safePage);
     if (pdfNavigator) {
-      pdfNavigator(page);
+      pdfNavigator(safePage);
     } else {
-      setPendingPdfPage(page);
+      setPendingPdfPage(safePage);
     }
   };
 

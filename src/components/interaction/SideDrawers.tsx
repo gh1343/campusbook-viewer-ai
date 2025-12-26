@@ -610,9 +610,19 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                   <div
                     key={hl.id}
                     onClick={() => {
-                      goToChapter(
-                        chapters.findIndex((c) => c.id === hl.chapterId)
-                      );
+                      if (hl.chapterId === "reference-doc") {
+                        const target = Number(hl.pageNumber);
+                        if (Number.isFinite(target) && target > 0) {
+                          goToPdfPage(target);
+                        }
+                      } else {
+                        const idx = chapters.findIndex(
+                          (c) => c.id === hl.chapterId
+                        );
+                        if (idx >= 0) {
+                          goToChapter(idx);
+                        }
+                      }
                       focusHighlight(hl.id);
                     }}
                     className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-300 transition-all"
@@ -970,11 +980,20 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                             const idx = chapters.findIndex(
                               (c) => c.id === result.chapterId
                             );
-                            if (idx !== -1) {
-                              goToChapter(idx);
-                              if (result.type === "highlight") {
-                                focusHighlight(result.id.replace("hl-", ""));
+                            if (result.type === "highlight") {
+                              const target = Number(result.pageNumber);
+                              if (
+                                result.chapterId === "reference-doc" &&
+                                Number.isFinite(target) &&
+                                target > 0
+                              ) {
+                                goToPdfPage(target);
+                              } else if (idx !== -1) {
+                                goToChapter(idx);
                               }
+                              focusHighlight(result.id.replace("hl-", ""));
+                            } else if (idx !== -1) {
+                              goToChapter(idx);
                             }
                           }
                         }}
