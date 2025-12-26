@@ -137,7 +137,9 @@ export const ReaderPage: React.FC = () => {
     }
     setTocOpen(!isTocOpen);
   };
-  const pdfUrl = `${import.meta.env.BASE_URL}pdf/test4.pdf`;
+  const pdfUrl =
+    import.meta.env.VITE_PDF_URL ||
+    "/api/pdf/test4.pdf"; // served via GitHub API proxy (see vite.config.ts)
 
   return (
     <div>
