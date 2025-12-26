@@ -13,6 +13,16 @@ import {
 import "pdfjs-dist/web/pdf_viewer.css";
 import "../../css/pdf_viewer.css";
 import { useBook } from "../../contexts/BookContext";
+import {
+  getCanvasMetrics,
+  getPageOffsetInfo,
+  getPagePoint,
+  HighlightRect,
+  PdfHighlight,
+  PageCanvasEntry,
+} from "./pdfUtils";
+const warn = (msg: string, extra?: unknown) =>
+  extra !== undefined ? console.warn(msg, extra) : console.warn(msg);
 // ✅ worker 설정 (v4 ESM)
 GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.mjs`;
 
@@ -77,17 +87,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<"" | "ok" | "fail">("");
   const copyResetRef = useRef<number | null>(null);
-
-  type HighlightRect = {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    pageNumber: number;
-    pageWidth: number;
-    pageHeight: number;
-  };
-  type PdfHighlight = { id: string; rects: HighlightRect[] };
 
   const [pdfHighlights, setPdfHighlights] = useState<PdfHighlight[]>([]);
   const [selection, setSelection] = useState<{
@@ -274,15 +273,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
     if (!containerEl || !pageEl) return;
 
-    const containerRect = containerEl.getBoundingClientRect();
-    const pageRect = pageEl.getBoundingClientRect();
-    const pageOffsetLeft = pageRect.left - containerRect.left + containerEl.scrollLeft;
-    const pageOffsetTop = pageRect.top - containerRect.top + containerEl.scrollTop;
-
-    const scaleX =
-      first.pageWidth > 0 ? pageRect.width / first.pageWidth : 1;
-    const scaleY =
-      first.pageHeight > 0 ? pageRect.height / first.pageHeight : 1;
+    const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } = getPageOffsetInfo(
+      containerEl,
+      pageEl,
+      first.pageWidth,
+      first.pageHeight
+    );
 
     const nextTop = Math.max(0, pageOffsetTop + first.top * scaleY - 40);
     const nextLeft = Math.max(0, pageOffsetLeft + first.left * scaleX - 20);
@@ -501,7 +497,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     staticCanvas: HTMLCanvasElement,
     liveCanvas: HTMLCanvasElement
   ) => {
-    const { width, height, dpr } = getCanvasMetrics(pageEl);
+    const { width, height, dpr } = getCanvasMetrics(pageEl, getVisualScale);
     if (!width || !height) return;
     [staticCanvas, liveCanvas].forEach((canvas) => {
       canvas.width = width * dpr;
@@ -514,12 +510,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         ctx.scale(dpr, dpr);
       }
     });
-  };
-
-  type PageCanvasEntry = {
-    layer: HTMLDivElement;
-    staticCanvas: HTMLCanvasElement;
-    liveCanvas: HTMLCanvasElement;
   };
 
   const createCanvas = (className: string, ariaHidden?: string) => {
@@ -652,24 +642,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       strokeMatchesPage(s, pageNumber)
     );
 
-  const getPagePoint = (
-    e: React.PointerEvent,
-    pageEl: HTMLElement
-  ): { x: number; y: number } | null => {
-    const rect = pageEl.getBoundingClientRect();
-    const visualScale = getVisualScale();
-    const x = (e.clientX - rect.left) / visualScale;
-    const y = (e.clientY - rect.top) / visualScale;
-    return { x, y };
-  };
-
   const handlePenStart = (e: React.PointerEvent) => {
     if (drawingModeRef.current === "idle") return;
     const info = getPageElementFromEvent(e);
     if (!info) return;
     const { pageEl, pageNumber } = info;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    const pt = getPagePoint(e, pageEl);
+    const pt = getPagePoint(e, pageEl, getVisualScale);
     if (!pt) return;
     currentPageRef.current = pageNumber;
     isDrawingRef.current = true;
@@ -688,7 +667,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (!pageEl) return;
 
     e.preventDefault();
-    const pt = getPagePoint(e, pageEl);
+    const pt = getPagePoint(e, pageEl, getVisualScale);
     if (!pt) return;
 
     if (drawingModeRef.current === "pen") {
@@ -823,10 +802,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
   };
 
-  useEffect(() => {
+  const refreshCanvases = () => {
     syncPageCanvases();
     syncCanvasPointers();
     renderStaticCanvases();
+    renderLiveCanvas();
+  };
+
+  useEffect(() => {
+    refreshCanvases();
   }, [drawingMode, showAnnotations]);
 
   useEffect(() => {
@@ -1119,17 +1103,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                 );
                 if (!containerEl || !pageEl) return null;
 
-                const containerRect = containerEl.getBoundingClientRect();
-                const pageRect = pageEl.getBoundingClientRect();
-                const pageOffsetLeft =
-                  pageRect.left - containerRect.left + containerEl.scrollLeft;
-                const pageOffsetTop =
-                  pageRect.top - containerRect.top + containerEl.scrollTop;
-
-                const scaleX =
-                  rect.pageWidth > 0 ? pageRect.width / rect.pageWidth : 1;
-                const scaleY =
-                  rect.pageHeight > 0 ? pageRect.height / rect.pageHeight : 1;
+                const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } =
+                  getPageOffsetInfo(
+                    containerEl,
+                    pageEl,
+                    rect.pageWidth,
+                    rect.pageHeight
+                  );
 
                 const left = pageOffsetLeft + rect.left * scaleX;
                 const top = pageOffsetTop + rect.top * scaleY;
