@@ -569,8 +569,13 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     return newHighlight.id;
   };
 
-  const updateHighlight = (id: string, note: string) => {
-    setHighlights(prev => prev.map(hl => (hl.id === id ? {...hl, note} : hl)));
+  const updateHighlight = (
+    id: string,
+    data: Partial<Highlight> & {note?: string}
+  ) => {
+    setHighlights(prev =>
+      prev.map(hl => (hl.id === id ? {...hl, ...data} : hl))
+    );
   };
 
   const removeHighlight = (id: string) => {
@@ -581,6 +586,31 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     setShowAnnotations(true);
     setActiveHighlightId(id);
     setTimeout(() => setActiveHighlightId(null), 2000);
+  };
+
+  const goToHighlight = (hlOrId: Highlight | string) => {
+    const hl =
+      typeof hlOrId === 'string'
+        ? highlights.find(h => h.id === hlOrId)
+        : hlOrId;
+    if (!hl) return;
+
+    // Try to fill missing pageNumber for reference-doc
+    if (hl.chapterId === 'reference-doc' && !hl.pageNumber) {
+      if (currentPdfPage) {
+        updateHighlight(hl.id, {pageNumber: currentPdfPage});
+      }
+    }
+
+    if (hl.chapterId === 'reference-doc' && hl.pageNumber) {
+      goToPdfPage(hl.pageNumber);
+    } else {
+      const idx = chapters.findIndex(c => c.id === hl.chapterId);
+      if (idx >= 0) {
+        goToChapter(idx);
+      }
+    }
+    focusHighlight(hl.id);
   };
 
   const addStroke = (chapterId: string, stroke: Stroke) => {
@@ -861,6 +891,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         pdfTextPages,
         setPdfTextPages: updatePdfTextPages,
         goToPdfPage,
+        goToHighlight,
         registerPdfNavigator,
         pdfSearchHighlight,
         setPdfSearchHighlight,

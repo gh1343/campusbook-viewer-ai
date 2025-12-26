@@ -361,6 +361,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
 
     eventBus.on("pagerendered", handlePageRendered);
+    eventBus.on("pagedestroy", (evt: any) => {
+      if (evt?.pageNumber) {
+        disposePageEntry(evt.pageNumber);
+      }
+    });
 
     // ControlBar에서 페이지 점프할 때 호출할 함수 등록
     registerGoToPage?.((page: number) => {
@@ -482,16 +487,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
   };
 
-  const sizePageCanvas = (
-    pageEl: HTMLElement,
-    staticCanvas: HTMLCanvasElement,
-    liveCanvas: HTMLCanvasElement
-  ) => {
+  const getCanvasMetrics = (pageEl: HTMLElement) => {
     const rect = pageEl.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const visualScale = getVisualScale();
     const width = rect.width / visualScale;
     const height = rect.height / visualScale;
+    return { rect, dpr, visualScale, width, height };
+  };
+
+  const sizePageCanvas = (
+    pageEl: HTMLElement,
+    staticCanvas: HTMLCanvasElement,
+    liveCanvas: HTMLCanvasElement
+  ) => {
+    const { width, height, dpr } = getCanvasMetrics(pageEl);
     if (!width || !height) return;
     [staticCanvas, liveCanvas].forEach((canvas) => {
       canvas.width = width * dpr;
@@ -530,6 +540,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     canvas.dataset.penBound = "1";
   };
 
+  const unbindPenHandlers = (canvas: HTMLCanvasElement) => {
+    if (!canvas.dataset.penBound) return;
+    canvas.removeEventListener("pointerdown", handlePenStart);
+    canvas.removeEventListener("pointermove", handlePenMove);
+    canvas.removeEventListener("pointerup", handlePenEnd);
+    canvas.removeEventListener("pointerleave", handlePenEnd);
+    delete canvas.dataset.penBound;
+  };
+
   const ensurePenLayer = (pageEl: HTMLElement): PageCanvasEntry | null => {
     let layer = pageEl.querySelector<HTMLDivElement>(".pdf_pen_page_layer");
     let staticCanvas: HTMLCanvasElement | null = null;
@@ -564,6 +583,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return { layer, staticCanvas, liveCanvas };
   };
 
+  const disposePageEntry = (pageNumber: number) => {
+    const entry = pageCanvasMapRef.current.get(pageNumber);
+    if (!entry) return;
+    unbindPenHandlers(entry.liveCanvas);
+    entry.layer?.remove();
+    pageCanvasMapRef.current.delete(pageNumber);
+  };
+
   const pageWithinBuffer = (
     pageEl: HTMLElement,
     viewRect: DOMRect,
@@ -595,8 +622,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     for (const [pageNumber, entry] of pageCanvasMapRef.current.entries()) {
       if (!seen.has(pageNumber)) {
-        entry.layer?.remove();
-        pageCanvasMapRef.current.delete(pageNumber);
+        disposePageEntry(pageNumber);
       }
     }
   };
@@ -620,6 +646,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
     return stroke.pageNumber === pageNumber;
   };
+
+  const getPageStrokes = (pageNumber: number) =>
+    (chapterStrokesRef.current["pdf-main"] || []).filter((s) =>
+      strokeMatchesPage(s, pageNumber)
+    );
 
   const getPagePoint = (
     e: React.PointerEvent,
@@ -670,9 +701,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       }
       renderLiveCanvas();
     } else if (drawingModeRef.current === "eraser") {
-      const strokes = (chapterStrokesRef.current["pdf-main"] || []).filter(
-        (s) => strokeMatchesPage(s, pageNumber)
-      );
+      const strokes = getPageStrokes(pageNumber);
       strokes.forEach((stroke) => {
         const hit = stroke.points.some(
           (p) => Math.hypot(p.x - pt.x, p.y - pt.y) < 16
@@ -747,9 +776,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       ctx.restore();
       if (!showAnnotationsRef.current) return;
 
-      const strokes = (chapterStrokesRef.current["pdf-main"] || []).filter(
-        (s) => strokeMatchesPage(s, pageNumber)
-      );
+      const strokes = getPageStrokes(pageNumber);
       strokes.forEach((s) =>
         drawStrokePath(ctx, s.points, s.color, s.width || 3, s.opacity ?? 1)
       );
@@ -832,6 +859,17 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const onScroll = () => scheduleRenderRefresh();
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Cleanup pen handlers and layers on unmount
+  useEffect(() => {
+    return () => {
+      pageCanvasMapRef.current.forEach((entry) => {
+        unbindPenHandlers(entry.liveCanvas);
+        entry.layer?.remove();
+      });
+      pageCanvasMapRef.current.clear();
+    };
   }, []);
 
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수

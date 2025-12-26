@@ -126,6 +126,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     goToPdfPage,
     removePdfBookmark,
     currentPdfPage,
+    goToHighlight,
   } = useBook();
   const [activeTab, setActiveTab] = useState<"contents" | "bookmarks">(
     "contents"
@@ -298,6 +299,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     goToPdfPage,
     pdfSearchHighlight,
     setPdfSearchHighlight,
+    goToHighlight,
   } = useBook();
 
   const [aiInput, setAiInput] = useState("");
@@ -344,7 +346,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   };
 
   const saveHighlightNote = (id: string) => {
-    updateHighlight(id, highlightText);
+    updateHighlight(id, { note: highlightText });
     setEditingHighlightId(null);
     setHighlightText("");
   };
@@ -609,22 +611,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                 {filteredHighlights.map((hl) => (
                   <div
                     key={hl.id}
-                    onClick={() => {
-                      if (hl.chapterId === "reference-doc") {
-                        const target = Number(hl.pageNumber);
-                        if (Number.isFinite(target) && target > 0) {
-                          goToPdfPage(target);
-                        }
-                      } else {
-                        const idx = chapters.findIndex(
-                          (c) => c.id === hl.chapterId
-                        );
-                        if (idx >= 0) {
-                          goToChapter(idx);
-                        }
-                      }
-                      focusHighlight(hl.id);
-                    }}
+                    onClick={() => goToHighlight(hl)}
                     className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-300 transition-all"
                   >
                     <div className="flex justify-between mb-2 text-xs text-slate-400">
@@ -977,23 +964,32 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                               });
                             }
                           } else {
-                            const idx = chapters.findIndex(
-                              (c) => c.id === result.chapterId
-                            );
                             if (result.type === "highlight") {
-                              const target = Number(result.pageNumber);
-                              if (
-                                result.chapterId === "reference-doc" &&
-                                Number.isFinite(target) &&
-                                target > 0
-                              ) {
-                                goToPdfPage(target);
+                              if (result.chapterId === "reference-doc") {
+                                const target = Number(result.pageNumber);
+                                if (
+                                  Number.isFinite(target) &&
+                                  target > 0
+                                ) {
+                                  goToPdfPage(target);
+                                } else {
+                                  console.warn(
+                                    "[highlight] pageNumber missing for search result",
+                                    result.id
+                                  );
+                                }
                               } else if (idx !== -1) {
-                                goToChapter(idx);
+                                const idx = chapters.findIndex(
+                                  (c) => c.id === result.chapterId
+                                );
+                                if (idx !== -1) goToChapter(idx);
                               }
                               focusHighlight(result.id.replace("hl-", ""));
-                            } else if (idx !== -1) {
-                              goToChapter(idx);
+                            } else {
+                              const idx = chapters.findIndex(
+                                (c) => c.id === result.chapterId
+                              );
+                              if (idx !== -1) goToChapter(idx);
                             }
                           }
                         }}

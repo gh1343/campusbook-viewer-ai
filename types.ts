@@ -133,10 +133,11 @@ export interface BookContextType {
     targetChapterId?: string,
     pageNumber?: number
   ) => string;
-  updateHighlight: (id: string, note: string) => void;
+  updateHighlight: (id: string, data: Partial<Highlight> & { note?: string }) => void;
   removeHighlight: (id: string) => void;
   activeHighlightId: string | null;
   focusHighlight: (id: string) => void;
+  goToHighlight: (hl: Highlight | string) => void;
 
   drawingMode: DrawingMode;
   setDrawingMode: (mode: DrawingMode) => void;
