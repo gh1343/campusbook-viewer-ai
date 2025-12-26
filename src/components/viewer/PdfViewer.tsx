@@ -786,6 +786,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     };
   }, []);
 
+  // Scroll 시 보이는 페이지 집합을 재계산해 캔버스 레이어가 사라지지 않도록 함
+  useEffect(() => {
+    const el = viewerContainerRef.current;
+    if (!el) return;
+    const onScroll = () => scheduleRenderRefresh();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
