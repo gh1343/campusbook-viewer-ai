@@ -137,7 +137,7 @@ export const ReaderPage: React.FC = () => {
     }
     setTocOpen(!isTocOpen);
   };
-  const pdfUrl = `${import.meta.env.BASE_URL}pdf/test3.pdf`;
+  const pdfUrl = `${import.meta.env.BASE_URL}pdf/test4.pdf`;
 
   return (
     <div>

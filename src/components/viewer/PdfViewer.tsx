@@ -83,6 +83,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     top: number;
     width: number;
     height: number;
+    pageNumber: number;
+    pageWidth: number;
+    pageHeight: number;
   };
   type PdfHighlight = { id: string; rects: HighlightRect[] };
 
@@ -93,6 +96,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     left: number;
     show: boolean;
   }>({ text: "", top: 0, left: 0, show: false });
+  const [layoutTick, setLayoutTick] = useState(0); // force re-render on layout resize
   const rafRefreshId = useRef<number | null>(null);
   const isDrawingRef = useRef(false);
   const livePointsRef = useRef<{ x: number; y: number }[]>([]);
@@ -315,7 +319,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const pdfViewer = new PDFViewer(pdfViewerOptions);
     pdfViewerRef.current = pdfViewer;
 
-    const INTERNAL_SCALE = 1.37; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
+    const INTERNAL_SCALE = 1; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
     const handlePageRendered = () => {
       scheduleRenderRefresh();
     };
@@ -770,10 +774,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   useEffect(() => {
     const ro = new ResizeObserver(() => {
       scheduleRenderRefresh();
+      setLayoutTick((t) => t + 1);
     });
     if (viewerRef.current) ro.observe(viewerRef.current);
     if (viewerContainerRef.current) ro.observe(viewerContainerRef.current);
-    return () => ro.disconnect();
+    const handleWinResize = () => setLayoutTick((t) => t + 1);
+    window.addEventListener("resize", handleWinResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", handleWinResize);
+    };
   }, []);
 
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
@@ -806,40 +816,56 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const VISUAL_SCALE = 1; // CSS 축소 제거해 텍스트 블러 방지 (INTERNAL_SCALE과 동일 배율로 표시)
 
   const mergeHighlightRects = (rects: HighlightRect[]) => {
+    // 페이지별로만 합쳐서 사이드바 토글/리사이즈에도 상대 위치가 유지되도록 함
+    const byPage = new Map<number, HighlightRect[]>();
+    rects.forEach((r) => {
+      const list = byPage.get(r.pageNumber) ?? [];
+      list.push({ ...r });
+      byPage.set(r.pageNumber, list);
+    });
+
     const TOL = 1.5; // allow tiny overlap/adjacency without stacking opacity
-    const merged = rects.map((r) => ({ ...r }));
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (let i = 0; i < merged.length; i++) {
-        for (let j = i + 1; j < merged.length; j++) {
-          const a = merged[i];
-          const b = merged[j];
-          const horizontalOverlap =
-            a.left <= b.left + b.width + TOL &&
-            a.left + a.width >= b.left - TOL;
-          const verticalOverlap =
-            a.top <= b.top + b.height + TOL && a.top + a.height >= b.top - TOL;
-          if (horizontalOverlap && verticalOverlap) {
-            const newLeft = Math.min(a.left, b.left);
-            const newTop = Math.min(a.top, b.top);
-            const right = Math.max(a.left + a.width, b.left + b.width);
-            const bottom = Math.max(a.top + a.height, b.top + b.height);
-            merged[i] = {
-              left: newLeft,
-              top: newTop,
-              width: right - newLeft,
-              height: bottom - newTop,
-            };
-            merged.splice(j, 1);
-            changed = true;
-            break;
+    const mergedAll: HighlightRect[] = [];
+
+    byPage.forEach((pageRects) => {
+      const merged = pageRects;
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (let i = 0; i < merged.length; i++) {
+          for (let j = i + 1; j < merged.length; j++) {
+            const a = merged[i];
+            const b = merged[j];
+            const horizontalOverlap =
+              a.left <= b.left + b.width + TOL &&
+              a.left + a.width >= b.left - TOL;
+            const verticalOverlap =
+              a.top <= b.top + b.height + TOL &&
+              a.top + a.height >= b.top - TOL;
+            if (horizontalOverlap && verticalOverlap) {
+              const newLeft = Math.min(a.left, b.left);
+              const newTop = Math.min(a.top, b.top);
+              const right = Math.max(a.left + a.width, b.left + b.width);
+              const bottom = Math.max(a.top + a.height, b.top + b.height);
+              merged[i] = {
+                ...a,
+                left: newLeft,
+                top: newTop,
+                width: right - newLeft,
+                height: bottom - newTop,
+              };
+              merged.splice(j, 1);
+              changed = true;
+              break;
+            }
           }
+          if (changed) break;
         }
-        if (changed) break;
       }
-    }
-    return merged;
+      mergedAll.push(...merged);
+    });
+
+    return mergedAll;
   };
 
   const checkPdfSelection = () => {
@@ -891,9 +917,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       return;
     }
     const range = sel.getRangeAt(0);
+    // 선택 지점이 속한 PDF 페이지 찾기
+    const anchorElement =
+      (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
+      range.startContainer?.parentElement?.closest?.(".page");
+    const pageEl = anchorElement as HTMLElement | null;
+    const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) : null;
+    if (!pageEl || !pageNumber) {
+      setSelection((prev) => ({ ...prev, show: false }));
+      return;
+    }
+
     const containerRect = viewerContainerRef.current.getBoundingClientRect();
     const scrollLeft = viewerContainerRef.current.scrollLeft;
     const scrollTop = viewerContainerRef.current.scrollTop;
+    const pageRect = pageEl.getBoundingClientRect();
 
     const scaleRaw = getComputedStyle(scaleWrapperRef.current).getPropertyValue(
       "--visual-scale"
@@ -907,10 +945,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // Unscale first, then add scroll offsets so highlights don't drift after scrolling
     const rects: HighlightRect[] = Array.from(range.getClientRects()).map(
       (r) => ({
-        left: (r.left - containerRect.left) / visualScale + scrollLeft,
-        top: (r.top - containerRect.top) / visualScale + scrollTop - TOP_OFFSET,
+        // 페이지 좌표계 기준으로 저장해 리사이즈/사이드바 토글에도 스케일 재적용 가능하도록 함
+        left: (r.left - pageRect.left) / visualScale,
+        top:
+          (r.top - pageRect.top) / visualScale -
+          TOP_OFFSET / Math.max(visualScale, 0.0001),
         width: r.width / visualScale,
         height: Math.max(r.height / visualScale - HEIGHT_PAD, 1),
+        pageNumber,
+        pageWidth: pageRect.width / visualScale,
+        pageHeight: pageRect.height / visualScale,
       })
     );
     // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
@@ -972,21 +1016,49 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         >
           <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
           {/* 커스텀 하이라이트 오버레이 */}
-          <div className="pdf_highlight_layer">
+          <div
+            className="pdf_highlight_layer"
+            data-layout-tick={layoutTick} // layout 변경 시 리렌더 트리거
+          >
             {pdfHighlights.flatMap((h) =>
-              h.rects.map((rect, idx) => (
-                <div
-                  key={`${h.id}-${idx}`}
-                  className="pdf_highlight"
-                  data-highlight-id={h.id}
-                  style={{
-                    left: rect.left,
-                    top: rect.top,
-                    width: rect.width,
-                    height: rect.height,
-                  }}
-                />
-              ))
+              h.rects.map((rect, idx) => {
+                const containerEl = viewerContainerRef.current;
+                const pageEl = viewerRef.current?.querySelector<HTMLElement>(
+                  `.page[data-page-number="${rect.pageNumber}"]`
+                );
+                if (!containerEl || !pageEl) return null;
+
+                const containerRect = containerEl.getBoundingClientRect();
+                const pageRect = pageEl.getBoundingClientRect();
+                const pageOffsetLeft =
+                  pageRect.left - containerRect.left + containerEl.scrollLeft;
+                const pageOffsetTop =
+                  pageRect.top - containerRect.top + containerEl.scrollTop;
+
+                const scaleX =
+                  rect.pageWidth > 0 ? pageRect.width / rect.pageWidth : 1;
+                const scaleY =
+                  rect.pageHeight > 0 ? pageRect.height / rect.pageHeight : 1;
+
+                const left = pageOffsetLeft + rect.left * scaleX;
+                const top = pageOffsetTop + rect.top * scaleY;
+                const width = rect.width * scaleX;
+                const height = rect.height * scaleY;
+
+                return (
+                  <div
+                    key={`${h.id}-${idx}`}
+                    className="pdf_highlight"
+                    data-highlight-id={h.id}
+                    style={{
+                      left,
+                      top,
+                      width,
+                      height,
+                    }}
+                  />
+                );
+              })
             )}
           </div>
         </div>
