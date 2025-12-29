@@ -84,6 +84,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<"" | "ok" | "fail">("");
   const copyResetRef = useRef<number | null>(null);
@@ -309,6 +310,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     onPageChange?.(1);
 
     setLoading(true); // 새 파일 로드 시작
+    setLoadProgress(1); // 진행률 표시 시작
     setErrorMsg(null); // 이전 에러 메시지 초기화
 
     const eventBus = new EventBus();
@@ -381,11 +383,24 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     let cancelled = false;
     let loadingTask = getDocument(file);
+    loadingTask.onProgress = ({ loaded = 0, total = 0 }) => {
+      if (cancelled) return;
+      if (!total) {
+        setLoadProgress((prev) => Math.min(95, Math.max(1, prev + 1)));
+        return;
+      }
+      const percent = Math.min(
+        99,
+        Math.max(1, Math.round((loaded / total) * 100))
+      );
+      setLoadProgress(percent);
+    };
     const loadingTimeout = window.setTimeout(
       () => {
         if (cancelled) return;
         console.warn("[PdfViewer] load timeout, cancelling task");
         setErrorMsg("PDF 로드가 지연되고 있습니다. 다시 시도해주세요.");
+        setLoadProgress(0);
         setLoading(false);
         loadingTask?.destroy();
       },
@@ -396,11 +411,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       .then((pdfDoc) => {
         if (cancelled) return;
         clearTimeout(loadingTimeout);
-        setLoading(false);
+        setLoadProgress(100);
         setErrorMsg(null);
         pdfViewer.setDocument(pdfDoc);
         linkService.setDocument(pdfDoc, null);
         onPagesCount?.(pdfDoc.numPages);
+        setLoading(false);
 
         const extractText = async () => {
           if (isMobileSafari) return; // iOS Safari는 메모리 보호
@@ -430,6 +446,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         }
         console.error("[PdfViewer] load error:", err);
         setErrorMsg(err?.message || "PDF 로드 실패");
+        setLoadProgress(0);
         setLoading(false);
       });
 
@@ -1055,12 +1072,28 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     window.getSelection()?.removeAllRanges();
   };
 
+  const displayProgress = Math.min(
+    100,
+    Math.max(1, Math.round(loadProgress || 0))
+  );
+
   return (
     <div className="pdf_viewer">
       {/* 로딩/에러 overlay는 그대로 두세요 */}
       {loading && (
         <div className="pdf_viewer_overlay pdf_viewer_overlay_loading">
-          <span className="pdf_viewer_overlay_message">PDF 로딩 중...</span>
+          <div className="pdf_viewer_progress">
+            <div className="pdf_viewer_progress_title">PDF 로딩 중...</div>
+            <div className="pdf_viewer_progress_bar">
+              <div
+                className="pdf_viewer_progress_bar_fill"
+                style={{ width: `${displayProgress}%` }}
+              />
+            </div>
+            <div className="pdf_viewer_progress_percent">
+              {displayProgress}%
+            </div>
+          </div>
         </div>
       )}
 
