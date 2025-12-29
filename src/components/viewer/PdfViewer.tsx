@@ -8,7 +8,7 @@ import { useBook } from "../../contexts/BookContext";
 import { PdfSelectionMenu } from "../../viewer/components/PdfSelectionMenu";
 import { usePdfViewerUiState } from "../../viewer/hooks/usePdfViewerUiState";
 import { askAiAction } from "../../viewer/actions/pdf_viewer_ui_actions";
-import { initPdfJsRuntime } from "../../viewer/pdfjs/pdfjs_runtime";
+import { usePdfJsViewer } from "../../viewer/hooks/usePdfJsViewer";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
@@ -305,53 +305,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (!viewerContainerRef.current || !viewerRef.current) return;
-
-    // 새 파일 로드 시 기존 하이라이트 및 선택 상태 초기화
-    setPdfHighlights([]);
-    setSelection((prev) => ({ ...prev, show: false }));
-    setPdfTextPages([]);
-    onPagesCount?.(0);
-    onPageChange?.(1);
-
-    setLoading(true); // 새 파일 로드 시작
-    setLoadProgress(1); // 진행률 표시 시작
-    setErrorMsg(null); // 이전 에러 메시지 초기화
-
-    const cleanup = initPdfJsRuntime({
-      file,
-      viewerContainer: viewerContainerRef.current,
-      viewer: viewerRef.current,
-      pdfViewerRef,
-      pageCanvasMapRef,
-      currentPageRef,
-      rafRefreshId,
-      MAX_CANVAS_PIXELS,
-      isMobileLike,
-      isMobileSafari,
-      onPageChange,
-      onPagesCount,
-      registerGoToPage,
-      setPdfTextPages,
-      setLoading,
-      setLoadProgress,
-      setErrorMsg,
-      scheduleRenderRefresh,
-      disposePageEntry,
-    });
-
-    return cleanup;
-  }, [
-    file,
-    onPageChange,
-    onPagesCount,
-    registerGoToPage,
-    setPdfTextPages,
-    isMobileSafari,
-    isMobileLike,
-  ]);
-
   // ----- Pen Canvas Helpers -----
   const getVisualScale = () => {
     if (!scaleWrapperRef.current) return 1;
@@ -527,6 +480,28 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     (chapterStrokesRef.current["pdf-main"] || []).filter((s) =>
       strokeMatchesPage(s, pageNumber)
     );
+
+  usePdfJsViewer({
+    file,
+    viewerContainerRef,
+    viewerRef,
+    pdfViewerRef,
+    pageCanvasMapRef,
+    currentPageRef,
+    rafRefreshId,
+    MAX_CANVAS_PIXELS,
+    isMobileLike,
+    isMobileSafari,
+    onPageChange,
+    onPagesCount,
+    registerGoToPage,
+    setPdfTextPages,
+    setLoading,
+    setLoadProgress,
+    setErrorMsg,
+    scheduleRenderRefresh,
+    disposePageEntry,
+  });
 
   const handlePenStart = (e: React.PointerEvent) => {
     if (drawingModeRef.current === "idle") return;
