@@ -21,6 +21,13 @@ import {
   PdfHighlight,
   PageCanvasEntry,
 } from "./pdfUtils";
+import { PdfViewerOverlay } from "../../viewer/components/PdfViewerOverlay";
+import {
+  drawStrokePath,
+  mergeHighlightRects,
+  pageWithinBuffer,
+  VISUAL_SCALE,
+} from "../../viewer/utils/pdf_viewer_utils";
 const warn = (msg: string, extra?: unknown) =>
   extra !== undefined ? console.warn(msg, extra) : console.warn(msg);
 // ✅ worker 설정 (v4 ESM)
@@ -598,15 +605,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     pageCanvasMapRef.current.delete(pageNumber);
   };
 
-  const pageWithinBuffer = (
-    pageEl: HTMLElement,
-    viewRect: DOMRect,
-    buffer: number
-  ) => {
-    const r = pageEl.getBoundingClientRect();
-    return r.bottom >= viewRect.top - buffer && r.top <= viewRect.bottom + buffer;
-  };
-
   const syncPageCanvases = () => {
     if (!viewerRef.current || !viewerContainerRef.current) return;
     const viewRect = viewerContainerRef.current.getBoundingClientRect();
@@ -733,33 +731,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     livePointsRef.current = [];
     currentPageRef.current = null;
     renderLiveCanvas();
-  };
-
-  const drawStrokePath = (
-    ctx: CanvasRenderingContext2D,
-    points: { x: number; y: number }[],
-    color: string,
-    width: number,
-    opacity: number
-  ) => {
-    if (points.length < 2) return;
-    ctx.beginPath();
-    ctx.lineWidth = width;
-    ctx.strokeStyle = color;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.globalAlpha = opacity;
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length - 1; i++) {
-      const mid = {
-        x: (points[i].x + points[i + 1].x) / 2,
-        y: (points[i].y + points[i + 1].y) / 2,
-      };
-      ctx.quadraticCurveTo(points[i].x, points[i].y, mid.x, mid.y);
-    }
-    ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
   };
 
   const renderStaticCanvases = () => {
@@ -900,61 +871,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
   };
 
-  const VISUAL_SCALE = 1; // CSS 축소 제거해 텍스트 블러 방지 (INTERNAL_SCALE과 동일 배율로 표시)
-
-  const mergeHighlightRects = (rects: HighlightRect[]) => {
-    // 페이지별로만 합쳐서 사이드바 토글/리사이즈에도 상대 위치가 유지되도록 함
-    const byPage = new Map<number, HighlightRect[]>();
-    rects.forEach((r) => {
-      const list = byPage.get(r.pageNumber) ?? [];
-      list.push({ ...r });
-      byPage.set(r.pageNumber, list);
-    });
-
-    const TOL = 1.5; // allow tiny overlap/adjacency without stacking opacity
-    const mergedAll: HighlightRect[] = [];
-
-    byPage.forEach((pageRects) => {
-      const merged = pageRects;
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (let i = 0; i < merged.length; i++) {
-          for (let j = i + 1; j < merged.length; j++) {
-            const a = merged[i];
-            const b = merged[j];
-            const horizontalOverlap =
-              a.left <= b.left + b.width + TOL &&
-              a.left + a.width >= b.left - TOL;
-            const verticalOverlap =
-              a.top <= b.top + b.height + TOL &&
-              a.top + a.height >= b.top - TOL;
-            if (horizontalOverlap && verticalOverlap) {
-              const newLeft = Math.min(a.left, b.left);
-              const newTop = Math.min(a.top, b.top);
-              const right = Math.max(a.left + a.width, b.left + b.width);
-              const bottom = Math.max(a.top + a.height, b.top + b.height);
-              merged[i] = {
-                ...a,
-                left: newLeft,
-                top: newTop,
-                width: right - newLeft,
-                height: bottom - newTop,
-              };
-              merged.splice(j, 1);
-              changed = true;
-              break;
-            }
-          }
-          if (changed) break;
-        }
-      }
-      mergedAll.push(...merged);
-    });
-
-    return mergedAll;
-  };
-
   const checkPdfSelection = () => {
     const sel = window.getSelection();
     if (!sel || !sel.toString().trim() || !viewerContainerRef.current) {
@@ -1072,39 +988,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     window.getSelection()?.removeAllRanges();
   };
 
-  const displayProgress = Math.min(
-    100,
-    Math.max(1, Math.round(loadProgress || 0))
-  );
-
   return (
     <div className="pdf_viewer">
-      {/* 로딩/에러 overlay는 그대로 두세요 */}
-      {loading && (
-        <div className="pdf_viewer_overlay pdf_viewer_overlay_loading">
-          <div className="pdf_viewer_progress">
-            <div className="pdf_viewer_progress_title">PDF 로딩 중...</div>
-            <div className="pdf_viewer_progress_bar">
-              <div
-                className="pdf_viewer_progress_bar_fill"
-                style={{ width: `${displayProgress}%` }}
-              />
-            </div>
-            <div className="pdf_viewer_progress_percent">
-              {displayProgress}%
-            </div>
-          </div>
-        </div>
-      )}
-
-      {errorMsg && (
-        <div className="pdf_viewer_overlay pdf_viewer_overlay_error">
-          <div className="pdf_viewer_error">
-            <div className="pdf_viewer_error_title">PDF 로드 오류</div>
-            <div>{errorMsg}</div>
-          </div>
-        </div>
-      )}
+      <PdfViewerOverlay
+        loading={loading}
+        errorMsg={errorMsg}
+        progress={loadProgress}
+      />
 
       {/* ⭐⭐⭐ 화면용 스케일 래퍼 추가 (중요) ⭐⭐⭐ */}
       <div
