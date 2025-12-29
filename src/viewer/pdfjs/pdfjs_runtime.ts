@@ -2,6 +2,7 @@ import { getDocument } from "pdfjs-dist";
 import { Dispatch, SetStateAction } from "react";
 import { EventBus, PDFLinkService, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import { PageCanvasEntry } from "../../components/viewer/pdfUtils";
+import { extractPdfText } from "./pdf_text_extract";
 
 type MutableRef<T> = { current: T };
 type Setter<T> = Dispatch<SetStateAction<T>>;
@@ -151,24 +152,11 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       onPagesCount?.(pdfDoc.numPages);
       setLoading(false);
 
-      const extractText = async () => {
-        if (isMobileSafari) return; // iOS Safari는 메모리 보호
-        const pages: { page: number; text: string }[] = [];
-        try {
-          for (let i = 1; i <= pdfDoc.numPages; i++) {
-            const page = await pdfDoc.getPage(i);
-            const textContent = await page.getTextContent();
-            const strings = textContent.items
-              .map((item: any) => ("str" in item ? item.str : ""))
-              .join(" ");
-            pages.push({ page: i, text: strings });
-          }
-          if (!cancelled) setPdfTextPages(pages);
-        } catch (err) {
-          console.error("PDF text extraction failed", err);
-        }
-      };
-      extractText();
+      extractPdfText(pdfDoc, {
+        isMobileSafari,
+        setPdfTextPages,
+        isCancelled: () => cancelled,
+      });
     })
     .catch((err: any) => {
       if (cancelled) return;

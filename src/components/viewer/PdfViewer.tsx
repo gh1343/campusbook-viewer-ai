@@ -9,6 +9,7 @@ import { PdfSelectionMenu } from "../../viewer/components/PdfSelectionMenu";
 import { usePdfViewerUiState } from "../../viewer/hooks/usePdfViewerUiState";
 import { askAiAction } from "../../viewer/actions/pdf_viewer_ui_actions";
 import { usePdfJsViewer } from "../../viewer/hooks/usePdfJsViewer";
+import { applySearchHighlightWithRetry } from "../../viewer/pdfjs/pdf_search_highlight_dom";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
@@ -152,120 +153,36 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   useEffect(() => {
     if (!viewerRef.current || !viewerContainerRef.current) return;
+    const cleanup = applySearchHighlightWithRetry({
+      viewerRoot: viewerRef.current,
+      pdfSearchHighlight,
+      getVisualScale,
+      onScrollToFirstHit: (pageEl) => {
+        const hit = pageEl.querySelector<HTMLElement>(".pdf_search_hit");
+        if (!hit || !viewerContainerRef.current) return;
 
-    const clearPrev = () => {
-      viewerRef.current
-        ?.querySelectorAll('.textLayer span[role="presentation"]')
-        .forEach((span) => {
-          const el = span as HTMLElement & { dataset: { origText?: string } };
-          if (el.dataset.origText !== undefined) {
-            el.textContent = el.dataset.origText;
-            delete el.dataset.origText;
-          }
+        const container = viewerContainerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const hitRect = hit.getBoundingClientRect();
+        const visualScale = getVisualScale();
+
+        const nextTop =
+          (hitRect.top - containerRect.top) / visualScale +
+          container.scrollTop -
+          40;
+        const nextLeft =
+          (hitRect.left - containerRect.left) / visualScale +
+          container.scrollLeft -
+          20;
+
+        container.scrollTo({
+          top: Math.max(0, nextTop),
+          left: Math.max(0, nextLeft),
+          behavior: "smooth",
         });
-    };
-
-    if (!pdfSearchHighlight) {
-      clearPrev();
-      return;
-    }
-
-    clearPrev();
-
-    let cancelled = false;
-    let retryTimer: number | null = null;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 10;
-
-    const isTextLayerReady = (layer: Element) => {
-      const spans = Array.from(layer.querySelectorAll("span"));
-      if (spans.length === 0) return false;
-      return spans.some((s) => {
-        const el = s as HTMLElement;
-        return (
-          el.style.left !== "" ||
-          el.style.top !== "" ||
-          el.style.transform !== ""
-        );
-      });
-    };
-
-    const scrollToFirstHit = (pageEl: HTMLElement) => {
-      const hit = pageEl.querySelector<HTMLElement>(".pdf_search_hit");
-      if (!hit || !viewerContainerRef.current) return;
-
-      const container = viewerContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const hitRect = hit.getBoundingClientRect();
-      const visualScale = getVisualScale();
-
-      const nextTop =
-        (hitRect.top - containerRect.top) / visualScale +
-        container.scrollTop -
-        40;
-      const nextLeft =
-        (hitRect.left - containerRect.left) / visualScale +
-        container.scrollLeft -
-        20;
-
-      container.scrollTo({
-        top: Math.max(0, nextTop),
-        left: Math.max(0, nextLeft),
-        behavior: "smooth",
-      });
-    };
-
-    const applyHighlight = () => {
-      const pageEl = viewerRef.current?.querySelector<HTMLElement>(
-        `.page[data-page-number="${pdfSearchHighlight.page}"]`
-      );
-      const textLayer = pageEl?.querySelector(".textLayer");
-      if (!textLayer || !isTextLayerReady(textLayer)) return false;
-
-      const term = pdfSearchHighlight.term.trim();
-      if (!term) return false;
-      const re = new RegExp(term.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&"), "gi");
-      textLayer
-        .querySelectorAll('span[role="presentation"]')
-        .forEach((span) => {
-          const el = span as HTMLElement & { dataset: { origText?: string } };
-          const content = el.textContent || "";
-          const replaced = content.replace(
-            re,
-            (m) => `<span class="pdf_search_hit">${m}</span>`
-          );
-          if (replaced !== content) {
-            if (el.dataset.origText === undefined) {
-              el.dataset.origText = content;
-            }
-            el.innerHTML = replaced;
-          }
-        });
-
-      if (pageEl) {
-        requestAnimationFrame(() => scrollToFirstHit(pageEl));
-      }
-
-      return true;
-    };
-
-    const tryApply = () => {
-      if (cancelled) return;
-      if (applyHighlight()) return;
-      if (attempts < MAX_ATTEMPTS) {
-        attempts += 1;
-        retryTimer = window.setTimeout(tryApply, 150);
-      }
-    };
-
-    tryApply();
-
-    return () => {
-      cancelled = true;
-      if (retryTimer !== null) {
-        clearTimeout(retryTimer);
-      }
-    };
+      },
+    });
+    return cleanup;
   }, [pdfSearchHighlight]);
 
   useEffect(() => {
