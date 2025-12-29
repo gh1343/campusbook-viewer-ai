@@ -4,27 +4,27 @@ import { GlobalWorkerOptions, version as pdfjsVersion } from "pdfjs-dist";
 import { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 import "pdfjs-dist/web/pdf_viewer.css";
 import "../../css/pdf_viewer.css";
-import { useBook } from "../../contexts/BookContext";
-import { PdfSelectionMenu } from "../../viewer/components/PdfSelectionMenu";
-import { usePdfViewerUiState } from "../../viewer/hooks/usePdfViewerUiState";
-import { askAiAction } from "../../viewer/actions/pdf_viewer_ui_actions";
-import { usePdfJsViewer } from "../../viewer/hooks/usePdfJsViewer";
-import { applySearchHighlightWithRetry } from "../../viewer/pdfjs/pdf_search_highlight_dom";
+
 import {
+  applySearchHighlightWithRetry,
+  askAiAction,
   buildHighlightRectsFromSelection,
+  createPenLayerRuntime,
   mergeHighlightRects,
-} from "../../viewer/highlight/highlight_geometry";
-import { createPenLayerRuntime } from "../../viewer/pen/pen_layer_runtime";
-import { usePdfPenLayer } from "../../viewer/hooks/usePdfPenLayer";
+  PdfSelectionMenu,
+  PdfViewerOverlay,
+  usePdfJsViewer,
+  usePdfPenLayer,
+  usePdfViewerUiState,
+} from "../../viewer";
+import { useBook } from "../../contexts/BookContext";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
   getPagePoint,
   HighlightRect,
   PdfHighlight,
-  PageCanvasEntry,
 } from "./pdfUtils";
-import { PdfViewerOverlay } from "../../viewer/components/PdfViewerOverlay";
 import { drawStrokePath, VISUAL_SCALE } from "../../viewer/utils/pdf_viewer_utils";
 const warn = (msg: string, extra?: unknown) =>
   extra !== undefined ? console.warn(msg, extra) : console.warn(msg);
