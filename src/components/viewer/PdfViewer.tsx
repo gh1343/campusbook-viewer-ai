@@ -11,6 +11,10 @@ import { askAiAction } from "../../viewer/actions/pdf_viewer_ui_actions";
 import { usePdfJsViewer } from "../../viewer/hooks/usePdfJsViewer";
 import { applySearchHighlightWithRetry } from "../../viewer/pdfjs/pdf_search_highlight_dom";
 import {
+  buildHighlightRectsFromSelection,
+  mergeHighlightRects,
+} from "../../viewer/highlight/highlight_geometry";
+import {
   getCanvasMetrics,
   getPageOffsetInfo,
   getPagePoint,
@@ -19,12 +23,7 @@ import {
   PageCanvasEntry,
 } from "./pdfUtils";
 import { PdfViewerOverlay } from "../../viewer/components/PdfViewerOverlay";
-import {
-  drawStrokePath,
-  mergeHighlightRects,
-  pageWithinBuffer,
-  VISUAL_SCALE,
-} from "../../viewer/utils/pdf_viewer_utils";
+import { drawStrokePath, pageWithinBuffer, VISUAL_SCALE } from "../../viewer/utils/pdf_viewer_utils";
 const warn = (msg: string, extra?: unknown) =>
   extra !== undefined ? console.warn(msg, extra) : console.warn(msg);
 // ✅ worker 설정 (v4 ESM)
@@ -683,7 +682,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       return;
     }
     const range = sel.getRangeAt(0);
-    // 선택 지점이 속한 PDF 페이지 찾기
     const anchorElement =
       (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
       range.startContainer?.parentElement?.closest?.(".page");
@@ -694,34 +692,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       return;
     }
 
-    const containerRect = viewerContainerRef.current.getBoundingClientRect();
-    const scrollLeft = viewerContainerRef.current.scrollLeft;
-    const scrollTop = viewerContainerRef.current.scrollTop;
-    const pageRect = pageEl.getBoundingClientRect();
-
     const scaleRaw = getComputedStyle(scaleWrapperRef.current).getPropertyValue(
       "--visual-scale"
     );
     const visualScale = parseFloat(scaleRaw) || 1;
 
-    // 미세 보정 값 (살짝 위로, 높이 축소)
-    const TOP_OFFSET = 0.5;
-    const HEIGHT_PAD = 1;
-
-    // Unscale first, then add scroll offsets so highlights don't drift after scrolling
-    const rects: HighlightRect[] = Array.from(range.getClientRects()).map(
-      (r) => ({
-        // 페이지 좌표계 기준으로 저장해 리사이즈/사이드바 토글에도 스케일 재적용 가능하도록 함
-        left: (r.left - pageRect.left) / visualScale,
-        top:
-          (r.top - pageRect.top) / visualScale -
-          TOP_OFFSET / Math.max(visualScale, 0.0001),
-        width: r.width / visualScale,
-        height: Math.max(r.height / visualScale - HEIGHT_PAD, 1),
-        pageNumber,
-        pageWidth: pageRect.width / visualScale,
-        pageHeight: pageRect.height / visualScale,
-      })
+    const rects: HighlightRect[] = buildHighlightRectsFromSelection(
+      range,
+      pageEl,
+      visualScale
     );
     // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
     const id = addHighlight(
