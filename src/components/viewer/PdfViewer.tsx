@@ -13,6 +13,9 @@ import {
 import "pdfjs-dist/web/pdf_viewer.css";
 import "../../css/pdf_viewer.css";
 import { useBook } from "../../contexts/BookContext";
+import { PdfSelectionMenu } from "../../viewer/components/PdfSelectionMenu";
+import { usePdfViewerUiState } from "../../viewer/hooks/usePdfViewerUiState";
+import { askAiAction } from "../../viewer/actions/pdf_viewer_ui_actions";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
@@ -90,20 +93,23 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const MAX_CANVAS_PIXELS = useMemo(() => undefined, []);
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [loadProgress, setLoadProgress] = useState(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [copyStatus, setCopyStatus] = useState<"" | "ok" | "fail">("");
+  const {
+    loading,
+    setLoading,
+    loadProgress,
+    setLoadProgress,
+    errorMsg,
+    setErrorMsg,
+    copyStatus,
+    setCopyStatus,
+    selection,
+    setSelection,
+    layoutTick,
+    setLayoutTick,
+  } = usePdfViewerUiState();
   const copyResetRef = useRef<number | null>(null);
 
   const [pdfHighlights, setPdfHighlights] = useState<PdfHighlight[]>([]);
-  const [selection, setSelection] = useState<{
-    text: string;
-    top: number;
-    left: number;
-    show: boolean;
-  }>({ text: "", top: 0, left: 0, show: false });
-  const [layoutTick, setLayoutTick] = useState(0); // force re-render on layout resize
   const rafRefreshId = useRef<number | null>(null);
   const isDrawingRef = useRef(false);
   const livePointsRef = useRef<{ x: number; y: number }[]>([]);
@@ -979,13 +985,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const handleAskAi = () => {
-    if (!selection.text.trim()) {
-      setSelection((prev) => ({ ...prev, show: false }));
-      return;
+    const success = askAiAction(
+      selection.text,
+      triggerSmartExplain,
+      () => setSelection((prev) => ({ ...prev, show: false }))
+    );
+    if (success) {
+      window.getSelection()?.removeAllRanges();
     }
-    triggerSmartExplain(selection.text);
-    setSelection((prev) => ({ ...prev, show: false }));
-    window.getSelection()?.removeAllRanges();
   };
 
   return (
@@ -1059,30 +1066,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       </div>
 
       {/* 선택 플로팅 메뉴 */}
-      {selection.show && (
-        <div
-          className="pdf_selection_menu"
-          style={{ top: selection.top, left: selection.left }}
-        >
-          {(copyStatus === "ok" || copyStatus === "fail") && (
-            <span
-              className={`pdf_selection_menu_copy_status ${
-                copyStatus === "ok"
-                  ? "pdf_viewer_copy_status_ok"
-                  : "pdf_viewer_copy_status_fail"
-              }`}
-            >
-              {copyStatus === "ok" ? "복사됨" : "선택 없음"}
-            </span>
-          )}
-          <button onClick={applyHighlight}>Highlight</button>
-          <div className="pdf_selection_menu_copy_block">
-            <button onClick={handleCopySelection}>Copy</button>
-          </div>
-          <button onClick={handleAskAi}>AI</button>
-          <button onClick={cancelSelection}>Cancel</button>
-        </div>
-      )}
+      <PdfSelectionMenu
+        visible={selection.show}
+        top={selection.top}
+        left={selection.left}
+        copyStatus={copyStatus}
+        onHighlight={applyHighlight}
+        onCopy={handleCopySelection}
+        onAskAi={handleAskAi}
+        onCancel={cancelSelection}
+      />
     </div>
   );
 };
