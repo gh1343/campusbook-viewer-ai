@@ -15,6 +15,7 @@ import {
   mergeHighlightRects,
 } from "../../viewer/highlight/highlight_geometry";
 import { createPenLayerRuntime } from "../../viewer/pen/pen_layer_runtime";
+import { usePdfPenLayer } from "../../viewer/hooks/usePdfPenLayer";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
@@ -320,50 +321,20 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     disposePageEntry: penRuntime.disposePageEntry,
   });
 
-  useEffect(() => {
-    penRuntime.refreshCanvases();
-  }, [drawingMode, showAnnotations]);
-
-  useEffect(() => {
-    penRuntime.renderStaticCanvases();
-  }, [chapterStrokes]);
-
-  useEffect(() => {
-    penRuntime.renderLiveCanvas();
-  }, [drawingMode, penColor, penWidth, penOpacity]);
-  useEffect(() => {
-    const ro = new ResizeObserver(() => {
-      scheduleRenderRefresh();
-      setLayoutTick((t) => t + 1);
-    });
-    if (viewerRef.current) ro.observe(viewerRef.current);
-    if (viewerContainerRef.current) ro.observe(viewerContainerRef.current);
-    const handleWinResize = () => setLayoutTick((t) => t + 1);
-    window.addEventListener("resize", handleWinResize);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", handleWinResize);
-    };
-  }, []);
-
-  // Scroll 시 보이는 페이지 집합을 재계산해 캔버스 레이어가 사라지지 않도록 함
-  useEffect(() => {
-    const el = viewerContainerRef.current;
-    if (!el) return;
-    const onScroll = () => scheduleRenderRefresh();
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Cleanup pen handlers and layers on unmount
-  useEffect(() => {
-    return () => {
-      pageCanvasMapRef.current.forEach((entry) => {
-        entry.layer?.remove();
-      });
-      pageCanvasMapRef.current.clear();
-    };
-  }, []);
+  usePdfPenLayer({
+    penRuntime,
+    viewerRef,
+    viewerContainerRef,
+    pageCanvasMapRef,
+    drawingMode,
+    showAnnotations,
+    chapterStrokes,
+    penColor,
+    penWidth,
+    penOpacity,
+    scheduleRenderRefresh,
+    setLayoutTick,
+  });
 
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
