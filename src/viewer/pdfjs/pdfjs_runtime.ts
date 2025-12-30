@@ -88,7 +88,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   eventBus.on("pagesinit", () => {
     pdfViewer.currentScale = INTERNAL_SCALE;
-    pdfViewer.spreadMode = spreadViewPreferred ? SpreadMode.ODD : SpreadMode.NONE; // 데스크톱에서는 좌우 2페이지씩 배치
+    pdfViewer.spreadMode = spreadViewPreferred
+      ? SpreadMode.ODD
+      : SpreadMode.NONE; // 데스크톱에서는 좌우 2페이지씩 배치
     scheduleRenderRefresh();
   });
 
@@ -135,25 +137,28 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       setLoadProgress((prev) => Math.min(95, Math.max(1, prev + 1)));
       return;
     }
-    const percent = Math.min(99, Math.max(1, Math.round((loaded / total) * 100)));
+    const percent = Math.min(
+      99,
+      Math.max(1, Math.round((loaded / total) * 100))
+    );
     setLoadProgress(percent);
   };
-  const loadingTimeout = window.setTimeout(
-    () => {
-      if (cancelled) return;
-      console.warn("[PdfViewer] load timeout, cancelling task");
-      setErrorMsg("PDF 로드가 지연되고 있습니다. 다시 시도해주세요.");
-      setLoadProgress(0);
-      setLoading(false);
-      loadingTask?.destroy();
-    },
-    isMobileLike ? 20000 : 30000
-  );
+  // const loadingTimeout = window.setTimeout(
+  //   () => {
+  //     if (cancelled) return;
+  //     console.warn("[PdfViewer] load timeout, cancelling task");
+  //     setErrorMsg("PDF 로드가 지연되고 있습니다. 다시 시도해주세요.");
+  //     setLoadProgress(0);
+  //     setLoading(false);
+  //     loadingTask?.destroy();
+  //   },
+  //   isMobileLike ? 20000 : 30000
+  // );
 
   loadingTask.promise
     .then((pdfDoc) => {
       if (cancelled) return;
-      clearTimeout(loadingTimeout);
+      // clearTimeout(loadingTimeout);
       setLoadProgress(100);
       setErrorMsg(null);
       pdfViewer.setDocument(pdfDoc);
@@ -169,7 +174,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     })
     .catch((err: any) => {
       if (cancelled) return;
-      clearTimeout(loadingTimeout);
+      // clearTimeout(loadingTimeout);
       if (err?.message === "Worker was destroyed") {
         console.debug("[PdfViewer] worker destroyed (cleanup)");
         return;
@@ -182,7 +187,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   return () => {
     cancelled = true;
-    clearTimeout(loadingTimeout);
+    // clearTimeout(loadingTimeout);
     loadingTask.destroy();
     pdfViewerRef.current = null;
     eventBus.off?.("pagerendered", handlePageRendered);
