@@ -59,6 +59,9 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     removeStroke,
   } = deps;
 
+  const isTouchInputBlocked = (e: React.PointerEvent) =>
+    drawingModeRef.current === "pen" && e.pointerType === "touch";
+
   const createCanvas = (className: string, ariaHidden?: string) => {
     const canvas = document.createElement("canvas");
     canvas.className = className;
@@ -89,6 +92,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenStart = (e: React.PointerEvent) => {
+    if (isTouchInputBlocked(e)) return; // Ignore finger/palm when pen tool is active
     if (drawingModeRef.current === "idle") return;
     const info = getPageElementFromEvent(e);
     if (!info) return;
@@ -103,6 +107,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenMove = (e: React.PointerEvent) => {
+    if (isTouchInputBlocked(e)) return;
     if (drawingModeRef.current === "idle") return;
     if (e.buttons === 0 && !isDrawingRef.current) return;
 
@@ -137,6 +142,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenEnd = (e: React.PointerEvent) => {
+    if (isTouchInputBlocked(e)) return;
     if (!isDrawingRef.current && drawingModeRef.current !== "eraser") return;
     const el = e.target as HTMLElement;
     if (el.hasPointerCapture?.(e.pointerId)) {
