@@ -12,6 +12,9 @@
   align-items: center;
   width: 100%;
   border-bottom: 1px solid rgb(226 232 240);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .header_inner {
   display: flex;
