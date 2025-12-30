@@ -1,6 +1,11 @@
 import { getDocument } from "pdfjs-dist";
 import { Dispatch, SetStateAction } from "react";
-import { EventBus, PDFLinkService, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
+import {
+  EventBus,
+  PDFLinkService,
+  PDFViewer,
+  SpreadMode,
+} from "pdfjs-dist/web/pdf_viewer.mjs";
 import { PageCanvasEntry } from "../../components/viewer/pdfUtils";
 import { extractPdfText } from "./pdf_text_extract";
 
@@ -27,6 +32,7 @@ interface PdfJsRuntimeOptions {
   setErrorMsg: Setter<string | null>;
   scheduleRenderRefresh: () => void;
   disposePageEntry: (pageNumber: number) => void;
+  preferSpreadView?: boolean;
 }
 
 export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
@@ -50,6 +56,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     setErrorMsg,
     scheduleRenderRefresh,
     disposePageEntry,
+    preferSpreadView,
   } = opts;
 
   const eventBus = new EventBus();
@@ -72,6 +79,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   }
   const pdfViewer = new PDFViewer(pdfViewerOptions);
   pdfViewerRef.current = pdfViewer;
+  const spreadViewPreferred = preferSpreadView ?? !isMobileLike;
 
   const INTERNAL_SCALE = 1; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
   const handlePageRendered = () => {
@@ -80,6 +88,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   eventBus.on("pagesinit", () => {
     pdfViewer.currentScale = INTERNAL_SCALE;
+    pdfViewer.spreadMode = spreadViewPreferred ? SpreadMode.ODD : SpreadMode.NONE; // 데스크톱에서는 좌우 2페이지씩 배치
     scheduleRenderRefresh();
   });
 

@@ -24,6 +24,7 @@ interface UsePdfJsViewerParams {
   setErrorMsg: (msg: string | null) => void;
   scheduleRenderRefresh: () => void;
   disposePageEntry: (pageNumber: number) => void;
+  preferSpreadView?: boolean;
 }
 
 export const usePdfJsViewer = ({
@@ -46,6 +47,7 @@ export const usePdfJsViewer = ({
   setErrorMsg,
   scheduleRenderRefresh,
   disposePageEntry,
+  preferSpreadView,
 }: UsePdfJsViewerParams) => {
   useEffect(() => {
     if (!viewerContainerRef.current || !viewerRef.current) return;
@@ -77,6 +79,7 @@ export const usePdfJsViewer = ({
       setErrorMsg,
       scheduleRenderRefresh,
       disposePageEntry,
+      preferSpreadView,
     });
 
     return cleanup;

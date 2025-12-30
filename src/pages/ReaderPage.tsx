@@ -17,6 +17,7 @@ export const ReaderPage: React.FC = () => {
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const pdfGoToPageRef = useRef<(page: number) => void>();
+  const hasOpenSidebar = isTocOpen || isToolsOpen;
 
   // Stable handlers to avoid rerunning PdfViewer effect
   const handlePdfPageChange = useCallback(
@@ -180,6 +181,7 @@ export const ReaderPage: React.FC = () => {
               onPageChange={handlePdfPageChange}
               onPagesCount={handlePdfPagesCount}
               registerGoToPage={handleRegisterGoToPage}
+              forceSinglePage={hasOpenSidebar}
             />
           </div>
 

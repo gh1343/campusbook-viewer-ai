@@ -1,7 +1,7 @@
 // src/components/viewer/PdfViewer.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GlobalWorkerOptions, version as pdfjsVersion } from "pdfjs-dist";
-import { PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
+import { PDFViewer, SpreadMode } from "pdfjs-dist/web/pdf_viewer.mjs";
 import "pdfjs-dist/web/pdf_viewer.css";
 import "../../css/pdf_viewer.css";
 
@@ -36,6 +36,7 @@ interface PdfViewerProps {
   onPageChange?: (page: number) => void;
   onPagesCount?: (count: number) => void;
   registerGoToPage?: (fn: (page: number) => void) => void;
+  forceSinglePage?: boolean;
 }
 
 export const PdfViewer: React.FC<PdfViewerProps> = ({
@@ -43,6 +44,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   onPageChange,
   onPagesCount,
   registerGoToPage,
+  forceSinglePage = false,
 }) => {
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -319,6 +321,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setErrorMsg,
     scheduleRenderRefresh,
     disposePageEntry: penRuntime.disposePageEntry,
+    preferSpreadView: !isMobileLike && !forceSinglePage,
   });
 
   usePdfPenLayer({
@@ -335,6 +338,22 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     scheduleRenderRefresh,
     setLayoutTick,
   });
+
+  // 사이드바가 열리면 단일 페이지, 닫히면 2페이지 스프레드(데스크톱)로 전환
+  useEffect(() => {
+    const viewer = pdfViewerRef.current;
+    if (!viewer) return;
+    const preferSpreadView = !isMobileLike;
+    const nextMode = forceSinglePage
+      ? SpreadMode.NONE
+      : preferSpreadView
+        ? SpreadMode.ODD
+        : SpreadMode.NONE;
+    if (viewer.spreadMode !== nextMode) {
+      viewer.spreadMode = nextMode;
+      scheduleRenderRefresh();
+    }
+  }, [forceSinglePage, isMobileLike]);
 
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
