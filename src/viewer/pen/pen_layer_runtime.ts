@@ -59,6 +59,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     removeStroke,
   } = deps;
 
+  let activePointerId: number | null = null;
+
   const isTouchInputBlocked = (e: React.PointerEvent) =>
     drawingModeRef.current === "pen" && e.pointerType === "touch";
 
@@ -92,8 +94,12 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenStart = (e: React.PointerEvent) => {
-    if (isTouchInputBlocked(e)) return; // Ignore finger/palm when pen tool is active
+    if (isTouchInputBlocked(e)) {
+      e.preventDefault();
+      return; // Ignore finger/palm when pen tool is active
+    }
     if (drawingModeRef.current === "idle") return;
+    activePointerId = e.pointerId;
     const info = getPageElementFromEvent(e);
     if (!info) return;
     const { pageEl, pageNumber } = info;
@@ -107,7 +113,11 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenMove = (e: React.PointerEvent) => {
-    if (isTouchInputBlocked(e)) return;
+    if (isTouchInputBlocked(e)) {
+      e.preventDefault();
+      return;
+    }
+    if (activePointerId !== null && e.pointerId !== activePointerId) return;
     if (drawingModeRef.current === "idle") return;
     if (e.buttons === 0 && !isDrawingRef.current) return;
 
@@ -142,7 +152,11 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenEnd = (e: React.PointerEvent) => {
-    if (isTouchInputBlocked(e)) return;
+    if (isTouchInputBlocked(e)) {
+      e.preventDefault();
+      return;
+    }
+    if (activePointerId !== null && e.pointerId !== activePointerId) return;
     if (!isDrawingRef.current && drawingModeRef.current !== "eraser") return;
     const el = e.target as HTMLElement;
     if (el.hasPointerCapture?.(e.pointerId)) {
@@ -167,6 +181,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     isDrawingRef.current = false;
     livePointsRef.current = [];
     currentPageRef.current = null;
+    activePointerId = null;
     renderLiveCanvas();
   };
 
@@ -176,6 +191,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     canvas.addEventListener("pointermove", handlePenMove);
     canvas.addEventListener("pointerup", handlePenEnd);
     canvas.addEventListener("pointerleave", handlePenEnd);
+    canvas.addEventListener("pointercancel", handlePenEnd);
     canvas.dataset.penBound = "1";
   };
 
@@ -185,6 +201,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     canvas.removeEventListener("pointermove", handlePenMove);
     canvas.removeEventListener("pointerup", handlePenEnd);
     canvas.removeEventListener("pointerleave", handlePenEnd);
+    canvas.removeEventListener("pointercancel", handlePenEnd);
     delete canvas.dataset.penBound;
   };
 
