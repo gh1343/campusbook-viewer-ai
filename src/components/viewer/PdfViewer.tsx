@@ -82,6 +82,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     /Safari/i.test(ua) &&
     !/Chrome/i.test(ua) &&
     !/CriOS/i.test(ua);
+  const isTouchDevice = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      ("ontouchstart" in window || navigator.maxTouchPoints > 0),
+    []
+  );
   const isMobileLike = useMemo(() => {
     if (typeof window === "undefined") return false;
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
@@ -383,8 +389,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const checkPdfSelection = () => {
+    if (drawingMode !== "idle") {
+      setSelection((prev) => ({ ...prev, show: false }));
+      return;
+    }
+
     const sel = window.getSelection();
-    if (!sel || !sel.toString().trim() || !viewerContainerRef.current) {
+    if (
+      !sel ||
+      sel.isCollapsed ||
+      !sel.toString().trim() ||
+      !viewerContainerRef.current ||
+      sel.rangeCount === 0
+    ) {
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
@@ -398,26 +415,58 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    let top = rect.top - 50;
-    let left = rect.left + rect.width / 2 - 80;
-    if (top < 8) top = rect.bottom + 8;
-    if (left < 8) left = 8;
-    if (left + 180 > window.innerWidth) left = window.innerWidth - 200;
+    const primaryRect = range.getBoundingClientRect();
+    const clientRects = Array.from(range.getClientRects());
+    const rect =
+      (primaryRect.width > 0 && primaryRect.height > 0 && primaryRect) ||
+      clientRects.find((r) => r.width > 0 && r.height > 0);
+
+    if (!rect || rect.width === 0) {
+      setSelection((prev) => ({ ...prev, show: false }));
+      return;
+    }
+
+    const menuWidth = 210;
+    const margin = 10;
+    const top = isTouchDevice
+      ? rect.bottom + margin // drop below native selection handles
+      : rect.top - 56;
+    const left = rect.left + rect.width / 2 - menuWidth / 2;
+
+    const clampedTop = top < margin ? rect.bottom + margin : top;
+    const clampedLeft = Math.min(
+      Math.max(left, margin),
+      window.innerWidth - menuWidth - margin
+    );
 
     setSelection({
-      text: sel.toString(),
-      top,
-      left,
+      text: sel.toString().trim(),
+      top: clampedTop,
+      left: clampedLeft,
       show: true,
     });
   };
 
+  const scheduleSelectionCheck = () => {
+    const delays = [0, 40, 120];
+    delays.forEach((d) => setTimeout(checkPdfSelection, d));
+  };
+
   const handleContainerPointerUp = () => {
     if (drawingMode !== "idle") return;
-    // native selection이 완성된 뒤에 계산
-    setTimeout(checkPdfSelection, 10);
+    scheduleSelectionCheck();
   };
+
+  useEffect(() => {
+    const onSelectionChange = () => scheduleSelectionCheck();
+    const onTouchEnd = () => scheduleSelectionCheck();
+    document.addEventListener("selectionchange", onSelectionChange);
+    document.addEventListener("touchend", onTouchEnd);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
 
   const applyHighlight = () => {
     const sel = window.getSelection();

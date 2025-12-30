@@ -51,6 +51,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     show: false,
     text: '',
   });
+  const [isTouchDevice] = useState(
+    () => 'ontouchstart' in window || navigator.maxTouchPoints > 0
+  );
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
   const [captureStart, setCaptureStart] = useState<Point | null>(null);
@@ -122,38 +125,65 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [variant]);
 
-  // --- Unified Selection Logic (Pointer Events) ---
+  // --- Unified Selection Logic: react to selection changes (works for touch & mouse) ---
   const checkSelection = () => {
-    const winSelection = window.getSelection();
-    if (winSelection && winSelection.toString().trim().length > 0) {
-      const isInside =
-        contentRef.current?.contains(winSelection.anchorNode) ||
-        contentRef.current?.contains(winSelection.focusNode);
-
-      if (!isInside) return;
-
-      const range = winSelection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-
-      let top = rect.top - 60;
-      let left = rect.left + rect.width / 2 - 100;
-
-      if (top < 0) top = rect.bottom + 10;
-      if (left < 10) left = 10;
-      if (left + 200 > window.innerWidth) left = window.innerWidth - 220;
-
-      setSelection({text: winSelection.toString(), top, left, show: true});
-    } else {
+    if (drawingMode !== 'idle' || isCaptureMode) {
       setSelection(prev => ({...prev, show: false}));
+      return;
     }
+
+    const winSelection = window.getSelection();
+    if (!winSelection || winSelection.isCollapsed || winSelection.rangeCount === 0) {
+      setSelection(prev => ({...prev, show: false}));
+      return;
+    }
+
+    const isInside =
+      contentRef.current?.contains(winSelection.anchorNode) ||
+      contentRef.current?.contains(winSelection.focusNode);
+
+    if (!isInside || !contentRef.current) {
+      setSelection(prev => ({...prev, show: false}));
+      return;
+    }
+
+    const range = winSelection.getRangeAt(0);
+    const primaryRect = range.getBoundingClientRect();
+    const clientRects = Array.from(range.getClientRects());
+    const rect =
+      (primaryRect.width > 0 && primaryRect.height > 0 && primaryRect) ||
+      clientRects.find(r => r.width > 0 && r.height > 0);
+
+    if (!rect || rect.width === 0) {
+      setSelection(prev => ({...prev, show: false}));
+      return;
+    }
+
+    // On touch devices, position the menu below the native copy/paste bar to avoid overlap
+    const menuWidth = 240;
+    const margin = 12;
+    let top = isTouchDevice ? rect.bottom + margin : rect.top - 56;
+    let left = rect.left + rect.width / 2 - menuWidth / 2;
+
+    if (top < margin) top = rect.bottom + margin;
+    if (left < margin) left = margin;
+    if (left + menuWidth > window.innerWidth - margin) {
+      left = window.innerWidth - menuWidth - margin;
+    }
+
+    setSelection({text: winSelection.toString().trim(), top, left, show: true});
   };
 
-  const handleWrapperPointerUp = (e: React.PointerEvent) => {
+  const scheduleSelectionCheck = () => {
+    // Multiple passes to wait for OS selection handles to finalize (tablet/long-press)
+    const delays = [0, 40, 120];
+    delays.forEach(delay => setTimeout(checkSelection, delay));
+  };
+
+  const handleWrapperPointerUp = () => {
     if (canCapture && isCaptureMode) return;
     if (drawingMode !== 'idle') return;
-
-    // Allow native selection to settle before checking
-    setTimeout(checkSelection, 10);
+    scheduleSelectionCheck();
   };
 
   const handleHighlight = () => {
@@ -364,6 +394,18 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     return () => ro.disconnect();
   }, [targetChapter.id, viewMode]); // Trigger resize on viewMode change
 
+  // Listen to selection changes (mouse, touch) instead of relying on mouseup
+  useEffect(() => {
+    const handleSelectionChange = () => scheduleSelectionCheck();
+    const handleTouchEnd = () => scheduleSelectionCheck();
+    document.addEventListener('selectionchange', handleSelectionChange);
+    document.addEventListener('touchend', handleTouchEnd);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isCaptureMode, drawingMode, isTouchDevice]);
+
   // Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -495,7 +537,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       : 'relative w-full bg-slate-50 dark:bg-slate-950';
 
   return (
-    <div className={wrapperClass} onPointerUp={handleWrapperPointerUp}>
+    <div className={wrapperClass} onPointerUp={handleWrapperPointerUp} onTouchEnd={handleWrapperPointerUp}>
       {canCapture && isCaptureMode && (
         <div
           className="fixed inset-0 z-[9999] cursor-crosshair capture-overlay-ui"
