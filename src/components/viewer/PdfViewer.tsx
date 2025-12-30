@@ -503,6 +503,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           ref={viewerContainerRef}
           className="pdf_viewer_container"
           onPointerUp={handleContainerPointerUp}
+          onContextMenu={(e) => e.preventDefault()}
         >
           <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
           {/* 커스텀 하이라이트 오버레이 */}
