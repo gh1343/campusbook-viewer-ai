@@ -11,7 +11,6 @@
   flex-shrink: 0;
   border-right: 1px solid rgb(226 232 240);
   -webkit-user-select: none;
-  -ms-user-select: none;
   user-select: none;
 }
 .left_side_wrap.on {
@@ -53,7 +52,6 @@
   flex-shrink: 0;
   border-left: 1px solid rgb(226 232 240);
   -webkit-user-select: none;
-  -ms-user-select: none;
   user-select: none;
 }
 .right_panel_wrap.on {

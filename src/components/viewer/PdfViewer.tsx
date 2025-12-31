@@ -517,7 +517,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         activeRange?.startContainer?.parentElement?.closest?.(".page")
       : selectionCacheRef.current?.pageEl;
 
-    const pageEl = anchorElement as HTMLElement | null;
+    const pageElFromCache =
+      selectionCacheRef.current?.pageNumber !== null &&
+      selectionCacheRef.current?.pageNumber !== undefined
+        ? getPageElementByNumber(selectionCacheRef.current?.pageNumber!)
+        : null;
+
+    const pageEl = (anchorElement as HTMLElement | null) || pageElFromCache;
     const pageNumber = hasLiveSelection
       ? pageEl
         ? Number(pageEl.dataset.pageNumber) || null
@@ -527,10 +533,24 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const visualScale =
       selectionCacheRef.current?.visualScale ?? getVisualScale();
 
-    const rects: HighlightRect[] =
+    let rects: HighlightRect[] =
       hasLiveSelection && activeRange && pageEl && pageNumber
         ? buildHighlightRectsFromSelection(activeRange, pageEl, visualScale)
         : selectionCacheRef.current?.rects ?? [];
+
+    // If rects are empty but we still have a cached range/page, try rebuilding once more
+    if (
+      rects.length === 0 &&
+      selectionCacheRef.current?.range &&
+      pageEl &&
+      pageNumber
+    ) {
+      rects = buildHighlightRectsFromSelection(
+        selectionCacheRef.current.range,
+        pageEl,
+        visualScale
+      );
+    }
 
     if (!activeText || !pageNumber || rects.length === 0) {
       setSelection((prev) => ({ ...prev, show: false }));
