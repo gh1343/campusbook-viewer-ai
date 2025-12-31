@@ -140,7 +140,9 @@ export const ReaderPage: React.FC = () => {
   };
   const pdfUrl = import.meta.env.DEV
     ? "/api/pdf/test4.pdf" // local dev: proxy를 통해 GitHub에서 가져옴
-    : import.meta.env.VITE_PDF_URL || "/pdf/test4.pdf"; // 배포: 사전 설정된 URL 사용
+    : import.meta.env.VITE_PDF_URL ||
+      `${import.meta.env.BASE_URL ?? "/"}pdf/test4.pdf`; // 배포: 정적 파일 (base 포함)
+  console.log(pdfUrl);
 
   return (
     <div>
