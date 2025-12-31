@@ -115,6 +115,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     range: Range | null;
     pageEl: HTMLElement | null;
     pageNumber: number | null;
+    rects: HighlightRect[];
     text: string;
     visualScale: number;
   } | null>(null);
@@ -451,12 +452,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       (range.endContainer as HTMLElement | null)?.closest?.(".page");
     const pageEl = anchorElement as HTMLElement | null;
     const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) || null : null;
+    const visualScale = getVisualScale();
+    const rects =
+      pageEl && pageNumber
+        ? buildHighlightRectsFromSelection(range, pageEl, visualScale)
+        : [];
     selectionCacheRef.current = {
       range: range.cloneRange(),
       pageEl,
       pageNumber,
       text: sel.toString().trim(),
-      visualScale: getVisualScale(),
+      visualScale,
+      rects,
     };
 
     setSelection({
@@ -498,8 +505,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       viewerContainerRef.current &&
       scaleWrapperRef.current;
 
-    const activeRange = hasLiveSelection ? sel!.getRangeAt(0) : selectionCacheRef.current?.range;
-    const activeText = hasLiveSelection ? sel!.toString().trim() : selectionCacheRef.current?.text;
+    const activeRange = hasLiveSelection
+      ? sel!.getRangeAt(0)
+      : selectionCacheRef.current?.range;
+    const activeText = hasLiveSelection
+      ? sel!.toString().trim()
+      : selectionCacheRef.current?.text;
 
     const anchorElement = hasLiveSelection
       ? (activeRange?.startContainer as HTMLElement | null)?.closest?.(".page") ||
@@ -513,18 +524,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         : null
       : selectionCacheRef.current?.pageNumber ?? null;
 
-    const visualScale = selectionCacheRef.current?.visualScale ?? getVisualScale();
+    const visualScale =
+      selectionCacheRef.current?.visualScale ?? getVisualScale();
 
-    if (!activeRange || !activeText || !pageEl || !pageNumber) {
+    const rects: HighlightRect[] =
+      hasLiveSelection && activeRange && pageEl && pageNumber
+        ? buildHighlightRectsFromSelection(activeRange, pageEl, visualScale)
+        : selectionCacheRef.current?.rects ?? [];
+
+    if (!activeText || !pageNumber || rects.length === 0) {
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
-
-    const rects: HighlightRect[] = buildHighlightRectsFromSelection(
-      activeRange,
-      pageEl,
-      visualScale
-    );
     // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
     const id = addHighlight(
       activeText,
