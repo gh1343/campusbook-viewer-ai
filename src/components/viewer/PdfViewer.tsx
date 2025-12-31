@@ -111,6 +111,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setLayoutTick,
   } = usePdfViewerUiState();
   const copyResetRef = useRef<number | null>(null);
+  const selectionCacheRef = useRef<{
+    range: Range | null;
+    pageEl: HTMLElement | null;
+    pageNumber: number | null;
+    text: string;
+    visualScale: number;
+  } | null>(null);
 
   const [pdfHighlights, setPdfHighlights] = useState<PdfHighlight[]>([]);
   const rafRefreshId = useRef<number | null>(null);
@@ -439,6 +446,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       window.innerWidth - menuWidth - margin
     );
 
+    const anchorElement =
+      (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
+      (range.endContainer as HTMLElement | null)?.closest?.(".page");
+    const pageEl = anchorElement as HTMLElement | null;
+    const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) || null : null;
+    selectionCacheRef.current = {
+      range: range.cloneRange(),
+      pageEl,
+      pageNumber,
+      text: sel.toString().trim(),
+      visualScale: getVisualScale(),
+    };
+
     setSelection({
       text: sel.toString().trim(),
       top: clampedTop,
@@ -470,39 +490,44 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const applyHighlight = () => {
     const sel = window.getSelection();
-    if (
-      !sel ||
-      !sel.toString().trim() ||
-      !viewerContainerRef.current ||
-      !scaleWrapperRef.current
-    ) {
-      setSelection((prev) => ({ ...prev, show: false }));
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    const anchorElement =
-      (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
-      range.startContainer?.parentElement?.closest?.(".page");
-    const pageEl = anchorElement as HTMLElement | null;
-    const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) : null;
-    if (!pageEl || !pageNumber) {
-      setSelection((prev) => ({ ...prev, show: false }));
-      return;
-    }
+    const hasLiveSelection =
+      sel &&
+      !sel.isCollapsed &&
+      sel.rangeCount > 0 &&
+      !!sel.toString().trim() &&
+      viewerContainerRef.current &&
+      scaleWrapperRef.current;
 
-    const scaleRaw = getComputedStyle(scaleWrapperRef.current).getPropertyValue(
-      "--visual-scale"
-    );
-    const visualScale = parseFloat(scaleRaw) || 1;
+    const activeRange = hasLiveSelection ? sel!.getRangeAt(0) : selectionCacheRef.current?.range;
+    const activeText = hasLiveSelection ? sel!.toString().trim() : selectionCacheRef.current?.text;
+
+    const anchorElement = hasLiveSelection
+      ? (activeRange?.startContainer as HTMLElement | null)?.closest?.(".page") ||
+        activeRange?.startContainer?.parentElement?.closest?.(".page")
+      : selectionCacheRef.current?.pageEl;
+
+    const pageEl = anchorElement as HTMLElement | null;
+    const pageNumber = hasLiveSelection
+      ? pageEl
+        ? Number(pageEl.dataset.pageNumber) || null
+        : null
+      : selectionCacheRef.current?.pageNumber ?? null;
+
+    const visualScale = selectionCacheRef.current?.visualScale ?? getVisualScale();
+
+    if (!activeRange || !activeText || !pageEl || !pageNumber) {
+      setSelection((prev) => ({ ...prev, show: false }));
+      return;
+    }
 
     const rects: HighlightRect[] = buildHighlightRectsFromSelection(
-      range,
+      activeRange,
       pageEl,
       visualScale
     );
     // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
     const id = addHighlight(
-      sel.toString(),
+      activeText,
       undefined,
       "reference-doc",
       pageNumber
@@ -510,7 +535,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const mergedRects = mergeHighlightRects(rects);
     setPdfHighlights((prev) => [...prev, { id, rects: mergedRects }]);
     setSelection((prev) => ({ ...prev, show: false }));
-    sel.removeAllRanges();
+    selectionCacheRef.current = null;
+    sel?.removeAllRanges();
   };
 
   const cancelSelection = () => {
