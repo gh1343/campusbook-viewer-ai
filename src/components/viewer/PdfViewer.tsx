@@ -369,10 +369,52 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
   }, [forceSinglePage, isMobileLike]);
 
+  const getSelectionSnapshot = () => {
+    if (selectionCacheRef.current) return selectionCacheRef.current;
+
+    const sel = window.getSelection();
+    if (
+      !sel ||
+      sel.isCollapsed ||
+      sel.rangeCount === 0 ||
+      !sel.toString().trim()
+    ) {
+      return null;
+    }
+
+    const range = sel.getRangeAt(0);
+    const pageEl =
+      (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
+      (range.endContainer as HTMLElement | null)?.closest?.(".page");
+    const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) || null : null;
+    if (!pageEl || !pageNumber) return null;
+
+    const visualScale = getVisualScale();
+    const rects = buildHighlightRectsFromSelection(range, pageEl, visualScale);
+    const snapshot = {
+      range: range.cloneRange(),
+      pageEl,
+      pageNumber,
+      rects,
+      text: sel.toString().trim(),
+      visualScale,
+    };
+    selectionCacheRef.current = snapshot;
+    return snapshot;
+  };
+
+  const getSelectionTextSafe = () =>
+    (
+      selectionCacheRef.current?.text ||
+      selection.text ||
+      window.getSelection()?.toString() ||
+      ""
+    ).trim();
+
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
-    const text = window.getSelection()?.toString() ?? "";
+    const text = getSelectionTextSafe();
 
     if (!text.trim()) {
       setCopyStatus("fail");
@@ -384,8 +426,20 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
       } else {
-        // fallback
-        document.execCommand("copy");
+        // fallback that still works after mobile Safari clears the live selection
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "true");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        if (!success) {
+          throw new Error("execCommand copy returned false");
+        }
       }
       setCopyStatus("ok");
     } catch (e) {
@@ -496,61 +550,24 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   }, []);
 
   const applyHighlight = () => {
-    const sel = window.getSelection();
-    const hasLiveSelection =
-      sel &&
-      !sel.isCollapsed &&
-      sel.rangeCount > 0 &&
-      !!sel.toString().trim() &&
-      viewerContainerRef.current &&
-      scaleWrapperRef.current;
-
-    const activeRange = hasLiveSelection
-      ? sel!.getRangeAt(0)
-      : selectionCacheRef.current?.range;
-    const activeText = hasLiveSelection
-      ? sel!.toString().trim()
-      : selectionCacheRef.current?.text;
-
-    const anchorElement = hasLiveSelection
-      ? (activeRange?.startContainer as HTMLElement | null)?.closest?.(".page") ||
-        activeRange?.startContainer?.parentElement?.closest?.(".page")
-      : selectionCacheRef.current?.pageEl;
-
-    const pageElFromCache =
-      selectionCacheRef.current?.pageNumber !== null &&
-      selectionCacheRef.current?.pageNumber !== undefined
-        ? getPageElementByNumber(selectionCacheRef.current?.pageNumber!)
-        : null;
-
-    const pageEl = (anchorElement as HTMLElement | null) || pageElFromCache;
-    const pageNumber = hasLiveSelection
-      ? pageEl
-        ? Number(pageEl.dataset.pageNumber) || null
-        : null
-      : selectionCacheRef.current?.pageNumber ?? null;
-
-    const visualScale =
-      selectionCacheRef.current?.visualScale ?? getVisualScale();
+    const snapshot = getSelectionSnapshot();
+    const activeText = snapshot?.text || selection.text;
+    const pageNumber = snapshot?.pageNumber ?? null;
+    const visualScale = snapshot?.visualScale ?? getVisualScale();
 
     let rects: HighlightRect[] =
-      hasLiveSelection && activeRange && pageEl && pageNumber
-        ? buildHighlightRectsFromSelection(activeRange, pageEl, visualScale)
-        : selectionCacheRef.current?.rects ?? [];
-
-    // If rects are empty but we still have a cached range/page, try rebuilding once more
-    if (
-      rects.length === 0 &&
-      selectionCacheRef.current?.range &&
-      pageEl &&
-      pageNumber
-    ) {
-      rects = buildHighlightRectsFromSelection(
-        selectionCacheRef.current.range,
-        pageEl,
-        visualScale
-      );
-    }
+      snapshot?.rects && snapshot.rects.length > 0
+        ? snapshot.rects
+        : snapshot?.range &&
+            snapshot.pageEl &&
+            snapshot.pageNumber !== null &&
+            snapshot.pageNumber !== undefined
+          ? buildHighlightRectsFromSelection(
+              snapshot.range,
+              snapshot.pageEl,
+              visualScale
+            )
+          : [];
 
     if (!activeText || !pageNumber || rects.length === 0) {
       setSelection((prev) => ({ ...prev, show: false }));
@@ -567,7 +584,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfHighlights((prev) => [...prev, { id, rects: mergedRects }]);
     setSelection((prev) => ({ ...prev, show: false }));
     selectionCacheRef.current = null;
-    sel?.removeAllRanges();
+    window.getSelection()?.removeAllRanges();
   };
 
   const cancelSelection = () => {
