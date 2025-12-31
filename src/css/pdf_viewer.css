@@ -10,7 +10,13 @@
   -webkit-user-select: text !important;
   -ms-user-select: text !important;
   user-select: text !important;
+  line-height: 2;
 }
+
+.pdf_viewer_container .textLayer span {
+  margin-top: -0.2em;
+}
+
 .test {
   width: 900px;
 }
