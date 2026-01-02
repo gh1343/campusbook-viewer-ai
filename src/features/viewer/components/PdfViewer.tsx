@@ -369,6 +369,17 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
   }, [forceSinglePage, isMobileLike]);
 
+  const getClosestPageEl = (node: Node | null) => {
+    if (!node) return null;
+    const element = node instanceof Element ? node : node.parentElement;
+    const pageEl = element?.closest?.(".page");
+    return pageEl instanceof HTMLElement ? pageEl : null;
+  };
+
+  const getPageElFromRange = (range: Range) =>
+    getClosestPageEl(range.startContainer) ||
+    getClosestPageEl(range.endContainer);
+
   const getSelectionSnapshot = () => {
     if (selectionCacheRef.current) return selectionCacheRef.current;
 
@@ -383,10 +394,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     const range = sel.getRangeAt(0);
-    const pageEl =
-      (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
-      (range.endContainer as HTMLElement | null)?.closest?.(".page");
-    if (!(pageEl instanceof HTMLElement)) return null;
+    const pageEl = getPageElFromRange(range);
+    if (!pageEl) return null;
     const pageNumber = Number(pageEl.dataset.pageNumber) || null;
     if (!pageNumber) return null;
 
@@ -502,10 +511,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       window.innerWidth - menuWidth - margin
     );
 
-    const anchorElement =
-      (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
-      (range.endContainer as HTMLElement | null)?.closest?.(".page");
-    const pageEl = anchorElement as HTMLElement | null;
+    const pageEl = getPageElFromRange(range);
     const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) || null : null;
     const visualScale = getVisualScale();
     const rects =
