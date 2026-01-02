@@ -6,7 +6,7 @@ import {
   PDFViewer,
   SpreadMode,
 } from "pdfjs-dist/web/pdf_viewer.mjs";
-import { PageCanvasEntry } from "../../components/viewer/pdfUtils";
+import { PageCanvasEntry } from "../utils/pdfUtils";
 import { extractPdfText } from "./pdf_text_extract";
 
 type MutableRef<T> = { current: T };

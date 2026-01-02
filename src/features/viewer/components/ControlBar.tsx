@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useBook } from "../../contexts/BookContext";
+import { useBook } from "../../../contexts/BookContext";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import "../../css/page_navigation.css";
+import "../../../css/page_navigation.css";
 interface ControlBarProps {
   pdfPageCount?: number;
   pdfCurrentPage?: number;

@@ -1,9 +1,9 @@
-// src/components/viewer/PdfViewer.tsx
+// src/features/viewer/components/PdfViewer.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GlobalWorkerOptions, version as pdfjsVersion } from "pdfjs-dist";
 import { PDFViewer, SpreadMode } from "pdfjs-dist/web/pdf_viewer.mjs";
 import "pdfjs-dist/web/pdf_viewer.css";
-import "../../css/pdf_viewer.css";
+import "../../../css/pdf_viewer.css";
 
 import {
   applySearchHighlightWithRetry,
@@ -16,16 +16,16 @@ import {
   usePdfJsViewer,
   usePdfPenLayer,
   usePdfViewerUiState,
-} from "../../viewer";
-import { useBook } from "../../contexts/BookContext";
+} from "..";
+import { useBook } from "../../../contexts/BookContext";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
   getPagePoint,
   HighlightRect,
   PdfHighlight,
-} from "./pdfUtils";
-import { drawStrokePath, VISUAL_SCALE } from "../../viewer/utils/pdf_viewer_utils";
+} from "../utils/pdfUtils";
+import { drawStrokePath, VISUAL_SCALE } from "../utils/pdf_viewer_utils";
 const warn = (msg: string, extra?: unknown) =>
   extra !== undefined ? console.warn(msg, extra) : console.warn(msg);
 // ✅ worker 설정 (v4 ESM)
@@ -386,8 +386,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const pageEl =
       (range.startContainer as HTMLElement | null)?.closest?.(".page") ||
       (range.endContainer as HTMLElement | null)?.closest?.(".page");
-    const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) || null : null;
-    if (!pageEl || !pageNumber) return null;
+    if (!(pageEl instanceof HTMLElement)) return null;
+    const pageNumber = Number(pageEl.dataset.pageNumber) || null;
+    if (!pageNumber) return null;
 
     const visualScale = getVisualScale();
     const rects = buildHighlightRectsFromSelection(range, pageEl, visualScale);

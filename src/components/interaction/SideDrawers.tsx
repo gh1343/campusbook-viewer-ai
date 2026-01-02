@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { generateExplanation } from "../../services/geminiService";
 import { GeneralNote, Highlight as HighlightType } from "../../../types";
-import { ContentRenderer } from "../viewer/ContentRenderer";
+import { ContentRenderer } from "../../features/viewer";
 import "../../css/side_drawers.css";
 interface PanelProps {
   isOpen: boolean;
@@ -978,7 +978,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                                     result.id
                                   );
                                 }
-                              } else if (idx !== -1) {
+                              } else {
                                 const idx = chapters.findIndex(
                                   (c) => c.id === result.chapterId
                                 );

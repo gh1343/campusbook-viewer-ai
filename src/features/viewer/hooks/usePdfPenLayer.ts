@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { PageCanvasEntry } from "../../components/viewer/pdfUtils";
+import { PageCanvasEntry } from "../utils/pdfUtils";
 
 type MutableRef<T> = { current: T };
 

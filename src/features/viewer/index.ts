@@ -1,8 +1,10 @@
 export { askAiAction } from "./actions/pdf_viewer_ui_actions";
 
+export { ContentRenderer } from "./components/ContentRenderer";
+export { ControlBar } from "./components/ControlBar";
 export { PdfSelectionMenu } from "./components/PdfSelectionMenu";
 export { PdfViewerOverlay } from "./components/PdfViewerOverlay";
-export { PdfViewer } from "../components/viewer/PdfViewer";
+export { PdfViewer } from "./components/PdfViewer";
 
 export { usePdfJsViewer } from "./hooks/usePdfJsViewer";
 export { usePdfPenLayer } from "./hooks/usePdfPenLayer";

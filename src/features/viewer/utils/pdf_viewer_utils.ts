@@ -1,4 +1,4 @@
-import { HighlightRect } from "../../components/viewer/pdfUtils";
+import { HighlightRect } from "./pdfUtils";
 
 export const VISUAL_SCALE = 1;
 

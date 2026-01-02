@@ -1,4 +1,4 @@
-import { PageCanvasEntry } from "../../components/viewer/pdfUtils";
+import { PageCanvasEntry } from "../utils/pdfUtils";
 
 interface MutableRef<T> {
   current: T;

@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Header } from "../components/layout/Header";
-import { ContentRenderer } from "../components/viewer/ContentRenderer";
-import { PdfViewer } from "../components/viewer/PdfViewer";
-import { ControlBar } from "../components/viewer/ControlBar";
+import { ContentRenderer, ControlBar, PdfViewer } from "../features/viewer";
 import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
 import { useBook } from "../contexts/BookContext";
 import "../css/split_container.css";
@@ -152,12 +150,10 @@ export const ReaderPage: React.FC = () => {
 
     // 상대/루트 경로면 base에 붙여서 GitHub Pages에서도 동작하도록 정규화
     const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-    const normalizedPath =
-      (raw && raw.replace(/^\/+/, "")) || "pdf/test4.pdf";
+    const normalizedPath = (raw && raw.replace(/^\/+/, "")) || "pdf/test4.pdf";
 
     return `${normalizedBase}${normalizedPath}`;
   })();
-  console.log(pdfUrl);
 
   return (
     <div>

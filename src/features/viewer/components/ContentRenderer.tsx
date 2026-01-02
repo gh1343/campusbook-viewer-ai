@@ -1,5 +1,5 @@
 import React, {useRef, useState, useEffect, useMemo} from 'react';
-import {useBook} from '../../contexts/BookContext';
+import {useBook} from '../../../contexts/BookContext';
 import {Highlighter, MessageCircleQuestion, StickyNote} from 'lucide-react';
 import {Point, Stroke, Chapter} from '../../../types';
 import html2canvas from 'html2canvas';

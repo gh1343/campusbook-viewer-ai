@@ -1,4 +1,4 @@
-import { HighlightRect } from "../../components/viewer/pdfUtils";
+import { HighlightRect } from "../utils/pdfUtils";
 
 export const mergeHighlightRects = (rects: HighlightRect[]) => {
   // 페이지별로만 합쳐서 사이드바 토글/리사이즈에도 상대 위치가 유지되도록 함

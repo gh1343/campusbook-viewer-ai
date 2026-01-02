@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { initPdfJsRuntime } from "../pdfjs/pdfjs_runtime";
-import { PageCanvasEntry } from "../../components/viewer/pdfUtils";
+import { PageCanvasEntry } from "../utils/pdfUtils";
 
 type MutableRef<T> = { current: T };
 
