@@ -4,6 +4,8 @@
   /* overflow: auto; */
   overflow: hidden;
   padding-top: 4rem;
+  height: 100vh;
+  min-height: 0;
   flex: 1 1 0%;
 }
 .left_side_wrap {
