@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useBook } from "../../contexts/BookContext";
 import {
   X,
@@ -316,6 +316,8 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   const contentEditableRef = useRef<HTMLDivElement>(null);
   const savedSelectionRef = useRef<Range | null>(null);
 
+  const aiTalkEndRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (
       editingNote &&
@@ -325,6 +327,13 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       contentEditableRef.current.innerHTML = editingNote.content || "";
     }
   }, [editingNote?.id]);
+
+  useEffect(() => {
+    if (activeToolTab !== "ai") return;
+    requestAnimationFrame(() => {
+      aiTalkEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+  }, [activeToolTab, aiChatHistory.length, isAiThinking]);
 
   const getCurrentContent = () =>
     contentEditableRef.current ? contentEditableRef.current.innerHTML : "";
@@ -561,6 +570,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                     </div>
                   </div>
                 )}
+                <div ref={aiTalkEndRef} />
               </div>
               <div className="ai_user">
                 <form onSubmit={handleAiSubmit} className="user_form">
