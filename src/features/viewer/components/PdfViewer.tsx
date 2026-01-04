@@ -26,8 +26,6 @@ import {
   PdfHighlight,
 } from "../utils/pdfUtils";
 import { drawStrokePath, VISUAL_SCALE } from "../utils/pdf_viewer_utils";
-const warn = (msg: string, extra?: unknown) =>
-  extra !== undefined ? console.warn(msg, extra) : console.warn(msg);
 // ✅ worker 설정 (v4 ESM)
 GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.mjs`;
 
@@ -93,7 +91,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
     return touchUA || window.innerWidth <= 1300;
   }, [ua]);
-  const MAX_CANVAS_PIXELS = useMemo(() => undefined, []);
+  const MAX_CANVAS_PIXELS = undefined;
   const pdfViewerRef = useRef<PDFViewer | null>(null);
 
   const {
@@ -133,22 +131,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   useEffect(() => {
     drawingModeRef.current = drawingMode;
-  }, [drawingMode]);
-  useEffect(() => {
     penColorRef.current = penColor;
-  }, [penColor]);
-  useEffect(() => {
     penWidthRef.current = penWidth;
-  }, [penWidth]);
-  useEffect(() => {
     penOpacityRef.current = penOpacity;
-  }, [penOpacity]);
-  useEffect(() => {
     chapterStrokesRef.current = chapterStrokes;
-  }, [chapterStrokes]);
-  useEffect(() => {
     showAnnotationsRef.current = showAnnotations;
-  }, [showAnnotations]);
+  }, [
+    drawingMode,
+    penColor,
+    penWidth,
+    penOpacity,
+    chapterStrokes,
+    showAnnotations,
+  ]);
 
   useEffect(() => {
     // Keep local overlay in sync with global highlights (e.g., sidebar delete)
@@ -254,14 +249,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
   };
 
-  const getCanvasMetrics = (pageEl: HTMLElement) => {
-    const rect = pageEl.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const visualScale = getVisualScale();
-    const width = rect.width / visualScale;
-    const height = rect.height / visualScale;
-    return { rect, dpr, visualScale, width, height };
-  };
+  const getPageCanvasMetrics = (pageEl: HTMLElement) =>
+    getCanvasMetrics(pageEl, getVisualScale);
 
   const penRuntime = useMemo(
     () =>
@@ -283,7 +272,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         getPagePoint,
         getPageElementFromEvent,
         getPageElementByNumber,
-        getCanvasMetrics,
+        getCanvasMetrics: getPageCanvasMetrics,
         drawStrokePath,
         addStroke,
         removeStroke,
@@ -315,6 +304,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       penRuntime.renderLiveCanvas();
     });
   };
+
   usePdfJsViewer({
     file,
     viewerContainerRef,
@@ -352,6 +342,47 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     scheduleRenderRefresh,
     setLayoutTick,
   });
+
+  useEffect(() => {
+    if (loading) return;
+    const viewer = pdfViewerRef.current;
+    const containerEl = viewerContainerRef.current;
+    const contentEl = viewerRef.current;
+    if (!viewer || !containerEl || !contentEl) return;
+
+    const frameId = requestAnimationFrame(() => {
+      if (!isMobileLike) {
+        if (viewer.currentScale < 1) viewer.currentScale = 1;
+        return;
+      }
+
+      const pageEl = contentEl.querySelector<HTMLElement>(".page");
+      if (!pageEl) return;
+
+      const { paddingLeft, paddingRight } = getComputedStyle(contentEl);
+      const availableWidth = Math.max(
+        0,
+        containerEl.clientWidth -
+          (parseFloat(paddingLeft) || 0) -
+          (parseFloat(paddingRight) || 0)
+      );
+      if (!availableWidth) return;
+
+      const currentScale = viewer.currentScale || 1;
+      const pageWidth = pageEl.getBoundingClientRect().width;
+      if (!pageWidth) return;
+
+      const nextScale = Math.min(
+        1,
+        (currentScale * availableWidth) / pageWidth
+      );
+      if (Math.abs(nextScale - currentScale) >= 0.01) {
+        viewer.currentScale = nextScale;
+      }
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [loading, layoutTick, isMobileLike]);
 
   // 사이드바가 열리면 단일 페이지, 닫히면 2페이지 스프레드(데스크톱)로 전환
   useEffect(() => {
