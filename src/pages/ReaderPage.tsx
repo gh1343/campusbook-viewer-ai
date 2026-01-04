@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Header } from "../components/layout/Header";
-import { ContentRenderer, ControlBar, PdfViewer } from "../features/viewer";
-import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
-import { useBook } from "../contexts/BookContext";
-import "../css/split_container.css";
+import React, {useState, useEffect, useRef, useCallback} from 'react';
+import {Header} from '../components/layout/Header';
+import {ContentRenderer, ControlBar, PdfViewer} from '../features/viewer';
+import {TocPanel, ToolsPanel} from '../components/interaction/SideDrawers';
+import {useBook} from '../contexts/BookContext';
+import '../css/split_container.css';
 
 export const ReaderPage: React.FC = () => {
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
   const [isTocOpen, setTocOpen] = useState(true);
   const [isNarrow, setIsNarrow] = useState(false);
-  const { isToolsOpen, setToolsOpen, registerPdfNavigator, setCurrentPdfPage } =
+  const {isToolsOpen, setToolsOpen, registerPdfNavigator, setCurrentPdfPage} =
     useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
@@ -62,8 +62,8 @@ export const ReaderPage: React.FC = () => {
     };
 
     applyLayout();
-    window.addEventListener("resize", applyLayout);
-    return () => window.removeEventListener("resize", applyLayout);
+    window.addEventListener('resize', applyLayout);
+    return () => window.removeEventListener('resize', applyLayout);
   }, [setToolsOpen]);
 
   // Enforce only one sidebar open at a time on narrow screens (tools has priority when opened elsewhere)
@@ -106,22 +106,22 @@ export const ReaderPage: React.FC = () => {
     const handleMouseUp = () => {
       setIsDraggingLeft(false);
       setIsDraggingRight(false);
-      document.body.style.cursor = "default";
-      document.body.style.userSelect = "auto";
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
     };
 
     if (isDraggingLeft || isDraggingRight) {
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
     }
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "default";
-      document.body.style.userSelect = "auto";
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
     };
   }, [isDraggingLeft, isDraggingRight]);
 
@@ -138,10 +138,10 @@ export const ReaderPage: React.FC = () => {
   };
   const pdfUrl = (() => {
     if (import.meta.env.DEV) {
-      return "/api/pdf/test4.pdf"; // local dev: proxy를 통해 GitHub에서 가져옴
+      return '/api/pdf/test4.pdf'; // local dev: proxy를 통해 GitHub에서 가져옴
     }
     const raw = import.meta.env.VITE_PDF_URL;
-    const base = import.meta.env.BASE_URL || "/";
+    const base = import.meta.env.BASE_URL || '/';
 
     // 절대 URL이면 그대로 사용
     if (raw && /^https?:\/\//i.test(raw)) {
@@ -149,8 +149,8 @@ export const ReaderPage: React.FC = () => {
     }
 
     // 상대/루트 경로면 base에 붙여서 GitHub Pages에서도 동작하도록 정규화
-    const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-    const normalizedPath = (raw && raw.replace(/^\/+/, "")) || "pdf/test4.pdf";
+    const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+    const normalizedPath = (raw && raw.replace(/^\/+/, '')) || 'pdf/test4.pdf';
 
     return `${normalizedBase}${normalizedPath}`;
   })();
@@ -162,28 +162,19 @@ export const ReaderPage: React.FC = () => {
       {/* Main Split Layout Container */}
       <div ref={containerRef} className="split_container">
         {/* 왼쪽 사이드바 */}
-        <div
-          className={`left_side_wrap ${!isTocOpen ? "off" : "on"}`}
+        <aside
+          className={`left_side_wrap ${!isTocOpen ? 'off' : 'on'}`}
           style={{
             width: isTocOpen
               ? window.innerWidth < 768
-                ? "0px"
+                ? '0px'
                 : `${leftWidth}px`
-              : "0px",
+              : '0px',
           }}
         >
           {/* Render Panel Content */}
-          <div className="left_side_inner">
-            <TocPanel isOpen={isTocOpen} onClose={() => setTocOpen(false)} />
-          </div>
-
-          {/* Resizer Handle (Desktop Only) */}
-          {isTocOpen && window.innerWidth >= 768 && (
-            <div className="" onMouseDown={() => setIsDraggingLeft(true)}>
-              <div className=""></div>
-            </div>
-          )}
-        </div>
+          <TocPanel isOpen={isTocOpen} onClose={() => setTocOpen(false)} />
+        </aside>
 
         {/* Center Panel: Reader & Controls */}
         <main className="content_container">
@@ -202,40 +193,28 @@ export const ReaderPage: React.FC = () => {
             <ControlBar
               pdfPageCount={pdfPageCount}
               pdfCurrentPage={pdfCurrentPage}
-              onPdfGoToPage={(page) => pdfGoToPageRef.current?.(page)}
+              onPdfGoToPage={page => pdfGoToPageRef.current?.(page)}
             />
           </div>
         </main>
 
         {/* Right Panel Area */}
-        <div
-          className={`right_panel_wrap ${!isToolsOpen ? "off" : "on"}`}
+        <aside
+          className={`right_panel_wrap ${!isToolsOpen ? 'off' : 'on'}`}
           style={{
             width: isToolsOpen
               ? window.innerWidth < 768
-                ? "0px"
+                ? '0px'
                 : `${rightWidth}px`
-              : "0px",
+              : '0px',
           }}
         >
-          {/* Resizer Handle */}
-          {isToolsOpen && window.innerWidth >= 768 && (
-            <div
-              className="separate"
-              onMouseDown={() => setIsDraggingRight(true)}
-            >
-              <div className=""></div>
-            </div>
-          )}
-
           {/* Render Panel Content */}
-          <div className="h-full w-full overflow-hidden">
-            <ToolsPanel
-              isOpen={isToolsOpen}
-              onClose={() => setToolsOpen(false)}
-            />
-          </div>
-        </div>
+          <ToolsPanel
+            isOpen={isToolsOpen}
+            onClose={() => setToolsOpen(false)}
+          />
+        </aside>
       </div>
     </div>
   );

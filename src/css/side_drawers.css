@@ -34,10 +34,8 @@
 }
 .chapter_list {
   overflow-y: auto;
-  /* max-height: 300px; */
-  max-height: calc(100dvh - 140px);
   padding: 0.5rem 0;
-  flex: 1 1 0%;
+  flex: 1 1 auto;
 }
 .chapter_list button {
   width: 100%;

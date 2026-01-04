@@ -10,6 +10,8 @@
 }
 .left_side_wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   border-right: 1px solid rgb(226 232 240);
   -webkit-user-select: none;
@@ -51,6 +53,8 @@
 /* 오른쪽 패널 */
 .right_panel_wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   border-left: 1px solid rgb(226 232 240);
   -webkit-user-select: none;
