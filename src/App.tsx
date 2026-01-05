@@ -8,7 +8,11 @@ const PersistentReader: React.FC = () => {
   const location = useLocation();
   const hideReader = location.pathname === "/report";
 
-  return <ReaderPage />;
+  return (
+    <div aria-hidden={hideReader} style={{ display: hideReader ? "none" : "block" }}>
+      <ReaderPage />
+    </div>
+  );
 };
 
 const AppRoutes: React.FC = () => {
