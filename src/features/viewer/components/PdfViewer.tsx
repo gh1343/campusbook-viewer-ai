@@ -86,6 +86,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       ("ontouchstart" in window || navigator.maxTouchPoints > 0),
     []
   );
+  const highlightScrollBehavior =
+    isMobileSafari || isTouchDevice ? "auto" : "smooth";
   const isMobileLike = useMemo(() => {
     if (typeof window === "undefined") return false;
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
@@ -211,9 +213,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     containerEl.scrollTo({
       top: nextTop,
       left: nextLeft,
-      behavior: "smooth",
+      behavior: highlightScrollBehavior,
     });
-  }, [activeHighlightId, pdfHighlights]);
+  }, [activeHighlightId, pdfHighlights, highlightScrollBehavior]);
 
   useEffect(() => {
     return () => {

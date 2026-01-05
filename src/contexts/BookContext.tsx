@@ -494,6 +494,11 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     setBookmarks(prev => prev.filter(b => b.id !== id));
   };
 
+  const clearHighlightFocus = () => {
+    // Prevent stale highlight auto-scroll from overriding explicit navigation.
+    setActiveHighlightId(null);
+  };
+
   const goToNextChapter = () => {
     if (currentChapterIndex < chapters.length - 1) {
       goToChapter(currentChapterIndex + 1);
@@ -508,6 +513,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   const goToChapter = (index: number) => {
     if (index >= 0 && index < chapters.length) {
+      clearHighlightFocus();
       setCurrentChapterIndex(index);
       const target = chapters[index];
       const targetPage = chapterPageMap[target.id];
@@ -786,6 +792,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   const goToPdfPage = (page: number) => {
     const safePage = Number.isFinite(page) ? Math.max(1, Math.round(page)) : 1;
+    clearHighlightFocus();
     setCurrentPdfPage(safePage);
     if (pdfNavigator) {
       pdfNavigator(safePage);
