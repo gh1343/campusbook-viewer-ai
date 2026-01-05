@@ -82,8 +82,13 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   const spreadViewPreferred = preferSpreadView ?? !isMobileLike;
 
   const INTERNAL_SCALE = 1; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
-  const handlePageRendered = () => {
+  let firstPageRendered = false;
+  const handlePageRendered = (evt?: { pageNumber?: number }) => {
     scheduleRenderRefresh();
+    if (!firstPageRendered && evt?.pageNumber === 1) {
+      firstPageRendered = true;
+      setLoading(false);
+    }
   };
 
   eventBus.on("pagesinit", () => {
@@ -164,7 +169,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       pdfViewer.setDocument(pdfDoc);
       linkService.setDocument(pdfDoc, null);
       onPagesCount?.(pdfDoc.numPages);
-      setLoading(false);
 
       extractPdfText(pdfDoc, {
         isMobileSafari,
