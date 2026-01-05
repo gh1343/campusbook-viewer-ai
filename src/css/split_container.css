@@ -1,10 +1,14 @@
+.layout_container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
 .split_container {
   position: relative;
   display: flex;
-  /* overflow: auto; */
   overflow: hidden;
-  padding-top: 4rem;
-  height: 100vh;
+  /* padding-top: 4rem; */
+  /* height: 100vh; */
   min-height: 0;
   flex: 1 1 0%;
 }
