@@ -152,7 +152,23 @@ export const ReaderPage: React.FC = () => {
     const normalizedBase = base.endsWith("/") ? base : `${base}/`;
     const normalizedPath = (raw && raw.replace(/^\/+/, "")) || "pdf/test4.pdf";
 
-    return `${normalizedBase}${normalizedPath}`;
+    const pagesUrl = `${normalizedBase}${normalizedPath}`;
+
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname || "";
+      const isGithubPages = host.toLowerCase().endsWith("github.io");
+      const owner = isGithubPages ? host.split(".")[0] : "";
+      const repo = normalizedBase.replace(/^\/+|\/+$/g, "");
+      if (isGithubPages && owner && repo) {
+        const branch = import.meta.env.VITE_GITHUB_BRANCH || "main";
+        const repoPath = normalizedPath.startsWith("public/")
+          ? normalizedPath
+          : `public/${normalizedPath}`;
+        return `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${repoPath}`;
+      }
+    }
+
+    return pagesUrl;
   })();
 
   return (
