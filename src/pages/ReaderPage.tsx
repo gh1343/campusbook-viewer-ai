@@ -137,20 +137,19 @@ export const ReaderPage: React.FC = () => {
     setTocOpen(!isTocOpen);
   };
   const pdfUrl = (() => {
-    if (import.meta.env.DEV) {
-      return "/api/pdf/test4.pdf"; // local dev: proxy를 통해 GitHub에서 가져옴
-    }
-    const raw = import.meta.env.VITE_PDF_URL;
+    const fallbackPdfUrl =
+      "https://e-alice-campusbook.s3.ap-northeast-2.amazonaws.com/resources/contents/prod/cms/book/20240923/CT-20240923150969799/source/CT-20240923150969799_source_1727071793874.pdf";
+    const raw = fallbackPdfUrl;
     const base = import.meta.env.BASE_URL || "/";
 
     // 절대 URL이면 그대로 사용
-    if (raw && /^https?:\/\//i.test(raw)) {
-      return raw;
+    if (fallbackPdfUrl && /^https?:\/\//i.test(fallbackPdfUrl)) {
+      return fallbackPdfUrl;
     }
 
     // 상대/루트 경로면 base에 붙여서 GitHub Pages에서도 동작하도록 정규화
     const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-    const normalizedPath = (raw && raw.replace(/^\/+/, "")) || "pdf/test4.pdf";
+    const normalizedPath = raw && raw.replace(/^\/+/, "");
 
     const pagesUrl = `${normalizedBase}${normalizedPath}`;
 
