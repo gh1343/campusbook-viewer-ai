@@ -29,6 +29,29 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  React.useEffect(() => {
+    if (typeof CSS !== "undefined" && CSS.supports("height: 100dvh")) {
+      return;
+    }
+
+    const updateAppHeight = () => {
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty(
+        "--app-height",
+        `${height}px`
+      );
+    };
+
+    updateAppHeight();
+    window.addEventListener("resize", updateAppHeight);
+    window.visualViewport?.addEventListener("resize", updateAppHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateAppHeight);
+      window.visualViewport?.removeEventListener("resize", updateAppHeight);
+    };
+  }, []);
+
   return (
     <HashRouter>
       <BookProvider>

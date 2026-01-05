@@ -23,7 +23,7 @@
 .pdf_viewer {
   position: relative;
   width: 100%;
-  height: calc(100vh - 160px);
+  height: calc(var(--app-height) - 160px);
   overflow: hidden;
   background: #ddd;
 }
