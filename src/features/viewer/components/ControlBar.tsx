@@ -6,12 +6,14 @@ interface ControlBarProps {
   pdfPageCount?: number;
   pdfCurrentPage?: number;
   onPdfGoToPage?: (page: number) => void;
+  pdfPageStep?: number;
 }
 
 export const ControlBar: React.FC<ControlBarProps> = ({
   pdfPageCount,
   pdfCurrentPage,
   onPdfGoToPage,
+  pdfPageStep,
 }) => {
   const {
     chapters,
@@ -26,6 +28,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
   const currentPageNumber = isPdfMode
     ? pdfCurrentPage || 1
     : currentChapterIndex + 1;
+  const pageStep = isPdfMode ? Math.max(1, pdfPageStep ?? 1) : 1;
   const currentIndexZeroBased = currentPageNumber - 1; // range 입력값
   const chapterLabel =
     chapters[currentChapterIndex]?.title || (isPdfMode ? "PDF" : "Chapter");
@@ -83,7 +86,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         <button
           onClick={() =>
             isPdfMode
-              ? onPdfGoToPage?.(Math.max(1, currentPageNumber - 1))
+              ? onPdfGoToPage?.(Math.max(1, currentPageNumber - pageStep))
               : goToPrevChapter()
           }
           disabled={
@@ -125,7 +128,9 @@ export const ControlBar: React.FC<ControlBarProps> = ({
         <button
           onClick={() =>
             isPdfMode
-              ? onPdfGoToPage?.(Math.min(totalPages, currentPageNumber + 1))
+              ? onPdfGoToPage?.(
+                  Math.min(totalPages, currentPageNumber + pageStep)
+                )
               : goToNextChapter()
           }
           disabled={

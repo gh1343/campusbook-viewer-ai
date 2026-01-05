@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { Header } from "../components/layout/Header";
 import { ContentRenderer, ControlBar, PdfViewer } from "../features/viewer";
 import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
@@ -16,6 +22,13 @@ export const ReaderPage: React.FC = () => {
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const pdfGoToPageRef = useRef<(page: number) => void>();
   const hasOpenSidebar = isTocOpen || isToolsOpen;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+  const isPdfMobileLike = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
+    return touchUA || window.innerWidth <= 1300;
+  }, [ua]);
+  const pdfPageStep = !hasOpenSidebar && !isPdfMobileLike ? 2 : 1;
 
   // Stable handlers to avoid rerunning PdfViewer effect
   const handlePdfPageChange = useCallback(
@@ -209,6 +222,7 @@ export const ReaderPage: React.FC = () => {
               pdfPageCount={pdfPageCount}
               pdfCurrentPage={pdfCurrentPage}
               onPdfGoToPage={(page) => pdfGoToPageRef.current?.(page)}
+              pdfPageStep={pdfPageStep}
             />
           </div>
         </main>
