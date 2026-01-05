@@ -27,6 +27,7 @@ import {
 import {generateExplanation} from '../services/geminiService';
 import {processPdf, findRelevantContext} from '../services/pdfRagService';
 import {synthesizeWithGemini} from '../services/ttsService';
+import {getRmsConfig, saveRmsProgress} from '../services/rmsService';
 import navTocRaw from '../../nav.xhtml?raw';
 
 const MOCK_CHAPTERS: Chapter[] = [
@@ -811,9 +812,28 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     []
   );
 
-  const saveProgress = () => {
-    console.log('Saving progress...');
-    alert('Progress Saved! (Simulated)');
+  const saveProgress = async () => {
+    const config = getRmsConfig();
+    if (!config) {
+      alert('RMS 설정이 필요합니다. (VITE_RMS_API_BASE, VITE_RMS_BOOK_CD)');
+      return;
+    }
+    try {
+      await saveRmsProgress({
+        apiBase: config.apiBase,
+        bookCd: config.bookCd,
+        memberCd: config.memberCd,
+        orderIgnore: config.orderIgnore,
+        pageOffset: config.pageOffset,
+        pageIndex: currentPdfPage,
+        viewMode,
+      });
+      alert('Progress Saved!');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Failed to save progress', err);
+      alert(`Progress Save Failed: ${message}`);
+    }
   };
 
   return (

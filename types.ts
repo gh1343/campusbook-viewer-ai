@@ -193,7 +193,7 @@ export interface BookContextType {
   incrementAiCount: () => void;
   updateReadingTime: () => void;
 
-  saveProgress: () => void;
+  saveProgress: () => Promise<void>;
 
   pdfTextPages: { page: number; text: string }[];
   setPdfTextPages: (pages: { page: number; text: string }[]) => void;
