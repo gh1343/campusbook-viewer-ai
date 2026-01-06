@@ -105,7 +105,17 @@ const parseProgressEntries = (raw: unknown) => {
   }
   if (typeof raw === "string" && raw.trim()) {
     const parsed = readJson<ProgressEntry[] | null>(raw, null);
-    return Array.isArray(parsed) ? parsed : null;
+    if (Array.isArray(parsed)) return parsed;
+    try {
+      if (typeof atob === "function") {
+        const decoded = atob(raw);
+        const decodedParsed = readJson<ProgressEntry[] | null>(decoded, null);
+        return Array.isArray(decodedParsed) ? decodedParsed : null;
+      }
+    } catch (err) {
+      return null;
+    }
+    return null;
   }
   return null;
 };
@@ -126,6 +136,13 @@ const readProgressFromRmsItem = async (item: any) => {
   } catch (err) {
     return null;
   }
+};
+
+const readProgressFromLocalStorage = (localStoragePath: string) => {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(getProgressKey(localStoragePath));
+  const parsed = parseProgressEntries(raw);
+  return parsed && parsed.length > 0 ? parsed : null;
 };
 
 const detectLocalStorageContext = () => {
@@ -334,8 +351,24 @@ export const fetchRmsProgressPage = async ({
   if (!Array.isArray(rmsList)) return null;
 
   const progressItem = rmsList.find((item: any) => item?.rmsTp === "RMS_PR");
-  const progressData = await readProgressFromRmsItem(progressItem);
+  let progressData = await readProgressFromRmsItem(progressItem);
+  if (!progressData || progressData.length === 0) {
+    const statusItem = rmsList.find((item: any) => item?.rmsTp === "RMS_ST");
+    const rawLastPages =
+      typeof statusItem?.lastPages === "string"
+        ? Number(statusItem.lastPages)
+        : statusItem?.lastPages;
+    if (Number.isFinite(rawLastPages)) {
+      return Math.max(1, Math.round(rawLastPages - pageOffset));
+    }
+    progressData = readProgressFromLocalStorage(localStoragePath);
+  }
   if (!progressData || progressData.length === 0) return null;
+
+  localStorage.setItem(
+    getProgressKey(localStoragePath),
+    JSON.stringify(progressData)
+  );
 
   const latest = progressData.reduce((best, entry) => {
     const bestTime = Number.isFinite(best.timestamp) ? best.timestamp : -1;
@@ -356,6 +389,8 @@ export const saveRmsProgress = async ({
   pageOffset,
   pageIndex,
   viewMode,
+  lastPages,
+  bookTotalPages,
 }: {
   apiBase: string;
   bookCd: string;
@@ -364,6 +399,8 @@ export const saveRmsProgress = async ({
   pageOffset: number;
   pageIndex: number;
   viewMode: string;
+  lastPages?: number;
+  bookTotalPages?: number;
 }) => {
   if (typeof window === "undefined") {
     throw new Error("RMS is only available in the browser.");
@@ -387,14 +424,34 @@ export const saveRmsProgress = async ({
     viewMode,
   });
 
+  const rmsList = [
+    {
+      rmsTp: "RMS_PR",
+      rmsData: JSON.stringify(progressData),
+    },
+  ];
+
+  const totalPagesValue = Number.isFinite(bookTotalPages)
+    ? Math.max(0, Math.round(bookTotalPages as number))
+    : 0;
+  if (totalPagesValue > 0) {
+    const lastPageValue = Number.isFinite(lastPages)
+      ? Math.round(lastPages as number)
+      : safePageIndex;
+    const normalizedLastPage = Math.max(
+      0,
+      Math.round(lastPageValue + pageOffset)
+    );
+    rmsList.push({
+      rmsTp: "RMS_ST",
+      lastPages: normalizedLastPage,
+      bookTotalPages: totalPagesValue,
+    });
+  }
+
   const reqData = {
     bookCd,
-    rmsList: [
-      {
-        rmsTp: "RMS_PR",
-        rmsData: JSON.stringify(progressData),
-      },
-    ],
+    rmsList,
   };
 
   const params = orderIgnore ? "?orderIgnore=Y" : "";

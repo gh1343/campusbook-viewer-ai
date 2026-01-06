@@ -365,6 +365,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     {page: number; text: string}[]
   >([]);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
+  const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [pdfNavigator, setPdfNavigator] = useState<
     ((page: number) => void) | null
   >(null);
@@ -859,6 +860,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         pageOffset: config.pageOffset,
         pageIndex: currentPdfPage,
         viewMode,
+        lastPages: currentPdfPage,
+        bookTotalPages: pdfTotalPages,
       });
       alert('Progress Saved!');
     } catch (err) {
@@ -949,6 +952,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         setPdfSearchHighlight,
         currentPdfPage,
         setCurrentPdfPage,
+        pdfTotalPages,
+        setPdfTotalPages,
       }}
     >
       {children}

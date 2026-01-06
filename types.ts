@@ -203,4 +203,6 @@ export interface BookContextType {
   setPdfSearchHighlight: (value: { page: number; term: string } | null) => void;
   currentPdfPage: number;
   setCurrentPdfPage: (page: number) => void;
+  pdfTotalPages: number;
+  setPdfTotalPages: (total: number) => void;
 }

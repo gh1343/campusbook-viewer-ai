@@ -16,8 +16,13 @@ export const ReaderPage: React.FC = () => {
   // Mobile default: Closed (Overlay)
   const [isTocOpen, setTocOpen] = useState(true);
   const [isNarrow, setIsNarrow] = useState(false);
-  const { isToolsOpen, setToolsOpen, registerPdfNavigator, setCurrentPdfPage } =
-    useBook();
+  const {
+    isToolsOpen,
+    setToolsOpen,
+    registerPdfNavigator,
+    setCurrentPdfPage,
+    setPdfTotalPages,
+  } = useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const pdfGoToPageRef = useRef<(page: number) => void>();
@@ -41,6 +46,7 @@ export const ReaderPage: React.FC = () => {
 
   const handlePdfPagesCount = useCallback((count: number) => {
     setPdfPageCount(count);
+    setPdfTotalPages(count);
   }, []);
 
   const handleRegisterGoToPage = useCallback(
