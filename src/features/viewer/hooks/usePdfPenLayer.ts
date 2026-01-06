@@ -49,17 +49,64 @@ export const usePdfPenLayer = ({
   }, [penRuntime, drawingMode, penColor, penWidth, penOpacity]);
 
   useEffect(() => {
-    const ro = new ResizeObserver(() => {
+    const SIZE_EPSILON = 2;
+    let lastViewerWidth = 0;
+    let lastViewerHeight = 0;
+    let lastContainerWidth = 0;
+    let lastContainerHeight = 0;
+
+    const ro = new ResizeObserver((entries) => {
+      let layoutChanged = false;
+      let refreshOnly = false;
+
+      entries.forEach((entry) => {
+        const width = Math.round(entry.contentRect.width);
+        const height = Math.round(entry.contentRect.height);
+        if (entry.target === viewerRef.current) {
+          const widthChanged =
+            Math.abs(width - lastViewerWidth) >= SIZE_EPSILON;
+          const heightChanged =
+            Math.abs(height - lastViewerHeight) >= SIZE_EPSILON;
+
+          if (widthChanged) layoutChanged = true;
+          // Height shifts (new pages appended) shouldn't force layoutTick updates.
+          if (heightChanged) refreshOnly = true;
+
+          if (widthChanged || heightChanged) {
+            lastViewerWidth = width;
+            lastViewerHeight = height;
+          }
+          return;
+        }
+
+        if (entry.target === viewerContainerRef.current) {
+          const widthChanged =
+            Math.abs(width - lastContainerWidth) >= SIZE_EPSILON;
+          const heightChanged =
+            Math.abs(height - lastContainerHeight) >= SIZE_EPSILON;
+          if (widthChanged) {
+            layoutChanged = true;
+          }
+          if (heightChanged) {
+            refreshOnly = true;
+          }
+          if (widthChanged || heightChanged) {
+            lastContainerWidth = width;
+            lastContainerHeight = height;
+          }
+        }
+      });
+
+      if (!layoutChanged && !refreshOnly) return;
       scheduleRenderRefresh();
-      setLayoutTick((t) => t + 1);
+      if (layoutChanged) {
+        setLayoutTick((t) => t + 1);
+      }
     });
     if (viewerRef.current) ro.observe(viewerRef.current);
     if (viewerContainerRef.current) ro.observe(viewerContainerRef.current);
-    const handleWinResize = () => setLayoutTick((t) => t + 1);
-    window.addEventListener("resize", handleWinResize);
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", handleWinResize);
     };
   }, [viewerRef, viewerContainerRef, scheduleRenderRefresh, setLayoutTick]);
 

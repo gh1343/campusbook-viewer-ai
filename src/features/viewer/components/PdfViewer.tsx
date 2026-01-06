@@ -1,5 +1,11 @@
 // src/features/viewer/components/PdfViewer.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { GlobalWorkerOptions, version as pdfjsVersion } from "pdfjs-dist";
 import { PDFViewer, SpreadMode } from "pdfjs-dist/web/pdf_viewer.mjs";
 import "pdfjs-dist/web/pdf_viewer.css";
@@ -296,7 +302,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     ]
   );
 
-  const scheduleRenderRefresh = () => {
+  const scheduleRenderRefresh = useCallback(() => {
     if (rafRefreshId.current !== null) return;
     rafRefreshId.current = requestAnimationFrame(() => {
       rafRefreshId.current = null;
@@ -305,7 +311,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       penRuntime.renderStaticCanvases();
       penRuntime.renderLiveCanvas();
     });
-  };
+  }, [penRuntime]);
 
   usePdfJsViewer({
     file,
