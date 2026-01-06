@@ -84,6 +84,50 @@ const getRmsAuthToken = () => {
   return raw.trim();
 };
 
+const buildRmsHeaders = () => {
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+  return headers;
+};
+
+const parseProgressEntries = (raw: unknown) => {
+  if (Array.isArray(raw)) {
+    return raw.filter(
+      (entry) => entry && typeof entry === "object"
+    ) as ProgressEntry[];
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const parsed = readJson<ProgressEntry[] | null>(raw, null);
+    return Array.isArray(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const readProgressFromRmsItem = async (item: any) => {
+  if (!item || typeof item !== "object") return null;
+  const parsed = parseProgressEntries(item.rmsData);
+  if (parsed && parsed.length > 0) return parsed;
+  if (typeof item.webPath !== "string" || !item.webPath.trim()) return null;
+  try {
+    const cacheBusted = item.webPath.includes("?")
+      ? `${item.webPath}&t=${Date.now()}`
+      : `${item.webPath}?t=${Date.now()}`;
+    const response = await fetch(cacheBusted);
+    const text = await response.text();
+    const next = parseProgressEntries(text);
+    return next && next.length > 0 ? next : null;
+  } catch (err) {
+    return null;
+  }
+};
+
 const detectLocalStorageContext = () => {
   if (typeof window === "undefined") return null;
   const prefixes = [
@@ -245,6 +289,65 @@ export const getRmsConfig = (): RmsConfig | null => {
   return { apiBase, bookCd, memberCd, orderIgnore, pageOffset };
 };
 
+export const fetchRmsProgressPage = async ({
+  apiBase,
+  bookCd,
+  memberCd,
+  orderIgnore,
+  pageOffset,
+}: RmsConfig) => {
+  if (typeof window === "undefined") return null;
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const localStoragePath = getLocalStoragePath(bookCd, memberCd);
+  const rmsVerList = ensureRmsVerList(localStoragePath);
+  const reqData = {
+    bookCd,
+    orderIgnore,
+    rmsList: rmsVerList,
+  };
+  const params = orderIgnore ? "?orderIgnore=Y" : "";
+  const response = await fetch(`${apiBase}/v3/rms/rmsData${params}`, {
+    method: "POST",
+    headers: buildRmsHeaders(),
+    body: JSON.stringify(reqData),
+  });
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch (err) {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      payload?.message ||
+      payload?.error ||
+      `RMS fetch failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  const rmsList = payload?.result?.rmsList;
+  if (!Array.isArray(rmsList)) return null;
+
+  const progressItem = rmsList.find((item: any) => item?.rmsTp === "RMS_PR");
+  const progressData = await readProgressFromRmsItem(progressItem);
+  if (!progressData || progressData.length === 0) return null;
+
+  const latest = progressData.reduce((best, entry) => {
+    const bestTime = Number.isFinite(best.timestamp) ? best.timestamp : -1;
+    const entryTime = Number.isFinite(entry.timestamp) ? entry.timestamp : -1;
+    return entryTime > bestTime ? entry : best;
+  }, progressData[0]);
+
+  const rawIndex = Number.isFinite(latest.idx) ? latest.idx : latest.level;
+  if (!Number.isFinite(rawIndex)) return null;
+  return Math.max(1, Math.round(rawIndex - pageOffset));
+};
+
 export const saveRmsProgress = async ({
   apiBase,
   bookCd,
@@ -295,18 +398,9 @@ export const saveRmsProgress = async ({
   };
 
   const params = orderIgnore ? "?orderIgnore=Y" : "";
-  const authToken = getRmsAuthToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json; charset=utf-8",
-  };
-  if (authToken) {
-    headers.Authorization = /^Bearer\s+/i.test(authToken)
-      ? authToken
-      : `Bearer ${authToken}`;
-  }
   const response = await fetch(`${apiBase}/v2/rms/rmsData${params}`, {
     method: "PUT",
-    headers,
+    headers: buildRmsHeaders(),
     body: JSON.stringify(reqData),
   });
 

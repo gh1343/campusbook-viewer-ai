@@ -27,7 +27,11 @@ import {
 import {generateExplanation} from '../services/geminiService';
 import {processPdf, findRelevantContext} from '../services/pdfRagService';
 import {synthesizeWithGemini} from '../services/ttsService';
-import {getRmsConfig, saveRmsProgress} from '../services/rmsService';
+import {
+  fetchRmsProgressPage,
+  getRmsConfig,
+  saveRmsProgress,
+} from '../services/rmsService';
 import navTocRaw from '../../nav.xhtml?raw';
 
 const MOCK_CHAPTERS: Chapter[] = [
@@ -213,6 +217,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
+  const rmsInitRef = useRef(false);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState(prev => ({...prev, ...config}));
@@ -811,6 +816,26 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     },
     [pendingPdfPage]
   );
+
+  useEffect(() => {
+    if (rmsInitRef.current) return;
+    const config = getRmsConfig();
+    if (!config) return;
+    rmsInitRef.current = true;
+
+    const loadRmsProgress = async () => {
+      try {
+        const savedPage = await fetchRmsProgressPage(config);
+        if (savedPage) {
+          goToPdfPage(savedPage);
+        }
+      } catch (err) {
+        console.error('Failed to load RMS progress', err);
+      }
+    };
+
+    loadRmsProgress();
+  }, [goToPdfPage]);
 
   const updatePdfTextPages = React.useCallback(
     (pages: {page: number; text: string}[]) => {
