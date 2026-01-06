@@ -222,9 +222,7 @@ const ensureRmsVerList = (localStoragePath: string) => {
   base.forEach((item) => {
     if (!item || typeof item.rmsTp !== "string") return;
     if (normalized.some((entry) => entry.rmsTp === item.rmsTp)) return;
-    const rmsTs = Number.isFinite(Number(item.rmsTs))
-      ? Number(item.rmsTs)
-      : 0;
+    const rmsTs = Number.isFinite(Number(item.rmsTs)) ? Number(item.rmsTs) : 0;
     normalized.push({ rmsTp: item.rmsTp, rmsTs });
   });
   localStorage.setItem(
@@ -307,14 +305,10 @@ export const getRmsConfig = (): RmsConfig | null => {
     localStorageContext?.memberCd ||
     "guest";
   const orderIgnoreRaw =
-    params.get("orderIgnore") ||
-    import.meta.env.VITE_RMS_ORDER_IGNORE ||
-    "";
+    params.get("orderIgnore") || import.meta.env.VITE_RMS_ORDER_IGNORE || "";
   const orderIgnore = orderIgnoreRaw.toUpperCase() === "Y";
   const pageOffsetRaw =
-    params.get("rmsPageOffset") ||
-    import.meta.env.VITE_RMS_PAGE_OFFSET ||
-    "0";
+    params.get("rmsPageOffset") || import.meta.env.VITE_RMS_PAGE_OFFSET || "0";
   const pageOffset = Number(pageOffsetRaw) || 0;
 
   if (!apiBase || !bookCd) return null;
@@ -335,13 +329,19 @@ export const fetchRmsProgressPage = async ({
 
   const localStoragePath = getLocalStoragePath(bookCd, memberCd);
   const rmsVerList = ensureRmsVerList(localStoragePath);
+  const rmsListForRequest = rmsVerList.map((item) => {
+    if (item.rmsTp === "RMS_PR" || item.rmsTp === "RMS_ST") {
+      return { ...item, rmsTs: 0 };
+    }
+    return item;
+  });
   const reqData = {
     bookCd,
     orderIgnore,
-    rmsList: rmsVerList,
+    rmsList: rmsListForRequest,
   };
   const params = orderIgnore ? "?orderIgnore=Y" : "";
-  const response = await fetch(`${apiBase}/v3/rms/rmsData${params}`, {
+  const response = await fetch(`${apiBase}/v2/rms/rmsData${params}`, {
     method: "POST",
     headers: buildRmsHeaders(),
     body: JSON.stringify(reqData),
