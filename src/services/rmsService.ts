@@ -72,6 +72,18 @@ const parseBookCdFromPath = () => {
   return match?.[1] || "";
 };
 
+const getRmsAuthToken = () => {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  const raw =
+    params.get("rmsToken") ||
+    params.get("rmsAuthToken") ||
+    import.meta.env.VITE_RMS_AUTH_TOKEN ||
+    sessionStorage.getItem("jwt") ||
+    "";
+  return raw.trim();
+};
+
 const detectLocalStorageContext = () => {
   if (typeof window === "undefined") return null;
   const prefixes = [
@@ -283,11 +295,18 @@ export const saveRmsProgress = async ({
   };
 
   const params = orderIgnore ? "?orderIgnore=Y" : "";
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
   const response = await fetch(`${apiBase}/v2/rms/rmsData${params}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-    },
+    headers,
     body: JSON.stringify(reqData),
   });
 
