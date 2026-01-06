@@ -41,6 +41,7 @@ const DEFAULT_RMS_VER_LIST: RmsVerItem[] = [
   { rmsTp: "RMS_LK", rmsTs: 0 },
   { rmsTp: "RMS_PR", rmsTs: 0 },
   { rmsTp: "RMS_MM", rmsTs: 0 },
+  { rmsTp: "RMS_ST", rmsTs: 0 },
 ];
 
 const readJson = <T>(raw: string | null, fallback: T): T => {
@@ -209,14 +210,28 @@ const ensureRmsVerList = (localStoragePath: string) => {
     localStorage.getItem(getRmsVerListKey(localStoragePath)),
     null
   );
-  if (Array.isArray(stored) && stored.length > 0) {
-    return stored;
-  }
+  const base = Array.isArray(stored) ? stored : [];
+  const normalized = DEFAULT_RMS_VER_LIST.map((entry) => {
+    const existing = base.find((item) => item?.rmsTp === entry.rmsTp);
+    const rmsTs =
+      existing && Number.isFinite(Number(existing.rmsTs))
+        ? Number(existing.rmsTs)
+        : entry.rmsTs;
+    return { rmsTp: entry.rmsTp, rmsTs };
+  });
+  base.forEach((item) => {
+    if (!item || typeof item.rmsTp !== "string") return;
+    if (normalized.some((entry) => entry.rmsTp === item.rmsTp)) return;
+    const rmsTs = Number.isFinite(Number(item.rmsTs))
+      ? Number(item.rmsTs)
+      : 0;
+    normalized.push({ rmsTp: item.rmsTp, rmsTs });
+  });
   localStorage.setItem(
     getRmsVerListKey(localStoragePath),
-    JSON.stringify(DEFAULT_RMS_VER_LIST)
+    JSON.stringify(normalized)
   );
-  return [...DEFAULT_RMS_VER_LIST];
+  return normalized;
 };
 
 const updateRmsVerList = (
@@ -478,6 +493,9 @@ export const saveRmsProgress = async ({
 
   if (payload?.result?.rmsTs) {
     updateRmsVerList(localStoragePath, "RMS_PR", payload.result.rmsTs);
+    if (totalPagesValue > 0) {
+      updateRmsVerList(localStoragePath, "RMS_ST", payload.result.rmsTs);
+    }
   }
 
   rmsStatusInitFalse(localStoragePath);
