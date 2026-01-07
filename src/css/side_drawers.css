@@ -325,3 +325,6 @@
   font-size: 0.875rem;
   color: rgb(51 65 85);
 }
+.highlight_txt {
+  color: oklch(44.6% 0.043 257.281);
+}
