@@ -329,12 +329,7 @@ export const fetchRmsProgressPage = async ({
 
   const localStoragePath = getLocalStoragePath(bookCd, memberCd);
   const rmsVerList = ensureRmsVerList(localStoragePath);
-  const rmsListForRequest = rmsVerList.map((item) => {
-    if (item.rmsTp === "RMS_PR" || item.rmsTp === "RMS_ST") {
-      return { ...item, rmsTs: 0 };
-    }
-    return item;
-  });
+  const rmsListForRequest = rmsVerList;
   const reqData = {
     bookCd,
     orderIgnore,
