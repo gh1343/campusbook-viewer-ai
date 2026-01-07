@@ -394,6 +394,26 @@ export const fetchRmsProgressPage = async ({
   return Math.max(1, Math.round(rawIndex - pageOffset));
 };
 
+export const loadLastProgressPageFromLocalStorage = ({
+  bookCd,
+  memberCd,
+  pageOffset,
+}: Pick<RmsConfig, "bookCd" | "memberCd" | "pageOffset">) => {
+  if (typeof window === "undefined") return null;
+  if (!bookCd || !memberCd) return null;
+
+  const localStoragePath = getLocalStoragePath(bookCd, memberCd);
+  const raw = localStorage.getItem(getProgressKey(localStoragePath));
+  const parsed = parseProgressEntries(raw);
+  if (!parsed || parsed.length === 0) return null;
+
+  const last = parsed[parsed.length - 1];
+  const rawIndex = Number.isFinite(last.idx) ? last.idx : last.level;
+  if (!Number.isFinite(rawIndex)) return null;
+
+  return Math.max(1, Math.round(rawIndex - pageOffset));
+};
+
 export const saveRmsProgress = async ({
   apiBase,
   bookCd,

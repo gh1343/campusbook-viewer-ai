@@ -30,6 +30,7 @@ import {synthesizeWithGemini} from '../services/ttsService';
 import {
   fetchRmsProgressPage,
   getRmsConfig,
+  loadLastProgressPageFromLocalStorage,
   saveRmsProgress,
 } from '../services/rmsService';
 import navTocRaw from '../../nav.xhtml?raw';
@@ -826,6 +827,16 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
     const loadRmsProgress = async () => {
       try {
+        const localSavedPage = loadLastProgressPageFromLocalStorage({
+          bookCd: config.bookCd,
+          memberCd: config.memberCd,
+          pageOffset: config.pageOffset,
+        });
+        if (localSavedPage) {
+          goToPdfPage(localSavedPage);
+          return;
+        }
+
         const savedPage = await fetchRmsProgressPage(config);
         if (savedPage) {
           goToPdfPage(savedPage);
