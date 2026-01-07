@@ -341,7 +341,7 @@ export const fetchRmsProgressPage = async ({
     rmsList: rmsListForRequest,
   };
   const params = orderIgnore ? "?orderIgnore=Y" : "";
-  const response = await fetch(`${apiBase}/v2/rms/rmsData${params}`, {
+  const response = await fetch(`${apiBase}/v3/rms/rmsData${params}`, {
     method: "POST",
     headers: buildRmsHeaders(),
     body: JSON.stringify(reqData),
@@ -362,7 +362,10 @@ export const fetchRmsProgressPage = async ({
     throw new Error(message);
   }
 
-  const rmsList = payload?.result?.rmsList;
+  const rmsList =
+    payload?.result?.rmsList ||
+    payload?.result?.rmsDataList ||
+    (Array.isArray(payload?.result) ? payload.result : null);
   if (!Array.isArray(rmsList)) return null;
 
   const progressItem = rmsList.find((item: any) => item?.rmsTp === "RMS_PR");
