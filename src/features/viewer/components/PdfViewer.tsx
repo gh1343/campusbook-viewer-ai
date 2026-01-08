@@ -43,6 +43,13 @@ interface PdfViewerProps {
   forceSinglePage?: boolean;
 }
 
+type PdfTextSpanInfo = {
+  el: HTMLElement;
+  rect: DOMRect;
+  text: string;
+  lineIndex: number;
+};
+
 export const PdfViewer: React.FC<PdfViewerProps> = ({
   file,
   onPageChange,
@@ -126,17 +133,30 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     visualScale: number;
   } | null>(null);
   const isPenSelectingRef = useRef(false);
-  const penSelectionStartRef = useRef<Range | null>(null);
   const penSelectionPageRef = useRef<HTMLElement | null>(null);
-  const penSelectionBoundariesRef = useRef<{
-    first: Text;
-    last: Text;
-  } | null>(null);
   const penSelectionPointerIdRef = useRef<number | null>(null);
   const penSelectionMoveRafRef = useRef<number | null>(null);
   const penSelectionLastPointRef = useRef<{ x: number; y: number } | null>(
     null
   );
+  const penSelectionStartPointRef = useRef<{ x: number; y: number } | null>(
+    null
+  );
+  const penSelectionSpansRef = useRef<PdfTextSpanInfo[] | null>(null);
+  const penSelectionSpanIndexRef = useRef<Map<HTMLElement, number> | null>(null);
+  const penSelectionStartIndexRef = useRef<number | null>(null);
+  const penSelectionStartOffsetRef = useRef<number | null>(null);
+  const penSelectionColumnBoundsRef = useRef<{ minLeft: number; maxRight: number } | null>(
+    null
+  );
+  const penSelectionDataRef = useRef<{
+    text: string;
+    rects: HighlightRect[];
+    bounds: { minLeft: number; maxRight: number; minTop: number; maxBottom: number };
+    pageEl: HTMLElement;
+    pageNumber: number;
+    visualScale: number;
+  } | null>(null);
   const lastSelectionSourceRef = useRef<"pen" | "native" | null>(null);
   const selectionFixInProgressRef = useRef(false);
 
@@ -507,84 +527,273 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return null;
   };
 
-  const normalizeNodeOffset = (node: Node, offset: number) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.nodeValue?.length ?? 0;
-      return Math.max(0, Math.min(offset, len));
-    }
-    return offset;
+  const getSpanElementFromRange = (range: Range | null) => {
+    if (!range) return null;
+    const node = range.startContainer;
+    const element = node instanceof Element ? node : node.parentElement;
+    const span = element?.closest("span[role='presentation']");
+    return span instanceof HTMLElement ? span : null;
   };
 
-  const buildRangeWithinPage = (
-    startRange: Range,
-    endRange: Range | null,
-    pageEl: HTMLElement,
-    boundariesOverride?: { first: Text; last: Text } | null
+  const getOffsetWithinSpan = (
+    spanEl: HTMLElement,
+    node: Node,
+    offset: number
   ) => {
-    const boundaries = boundariesOverride || getTextBoundaryNodes(pageEl);
-    if (!boundaries) return null;
+    if (!spanEl.contains(node)) return null;
+    const range = document.createRange();
+    range.setStart(spanEl, 0);
+    range.setEnd(node, offset);
+    return range.toString().length;
+  };
 
-    let startNode: Node = startRange.startContainer;
-    let startOffset = startRange.startOffset;
-    if (!pageEl.contains(startNode)) {
-      startNode = boundaries.first;
-      startOffset = 0;
-    }
-    startOffset = normalizeNodeOffset(startNode, startOffset);
+  const getPointDistanceToRect = (x: number, y: number, rect: DOMRect) => {
+    const dx =
+      x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
+    const dy =
+      y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+    return Math.hypot(dx, dy);
+  };
 
-    let endNode: Node = endRange ? endRange.startContainer : startNode;
-    let endOffset = endRange ? endRange.startOffset : startOffset;
-    if (!pageEl.contains(endNode)) {
-      const pos = pageEl.compareDocumentPosition(endNode);
-      if (pos & Node.DOCUMENT_POSITION_PRECEDING) {
-        endNode = boundaries.first;
-        endOffset = 0;
-      } else {
-        endNode = boundaries.last;
-        endOffset = boundaries.last.nodeValue?.length ?? 0;
+  const getNearestSpanIndex = (
+    x: number,
+    y: number,
+    spans: PdfTextSpanInfo[]
+  ) => {
+    if (spans.length === 0) return null;
+    let bestIndex = 0;
+    let bestDistance = getPointDistanceToRect(x, y, spans[0].rect);
+    for (let i = 1; i < spans.length; i++) {
+      const dist = getPointDistanceToRect(x, y, spans[i].rect);
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestIndex = i;
       }
     }
-    endOffset = normalizeNodeOffset(endNode, endOffset);
+    return bestIndex;
+  };
 
-    const range = document.createRange();
-    if (startNode === endNode) {
-      const start = Math.min(startOffset, endOffset);
-      const end = Math.max(startOffset, endOffset);
-      range.setStart(startNode, start);
-      range.setEnd(endNode, end);
-      return range;
-    }
+  const buildOrderedTextSpans = (pageEl: HTMLElement) => {
+    const textLayer = pageEl.querySelector(".textLayer");
+    if (!textLayer) return null;
+    const spanEls = Array.from(
+      textLayer.querySelectorAll("span[role='presentation']")
+    ) as HTMLElement[];
+    type SpanEntry = { el: HTMLElement; rect: DOMRect; text: string };
+    const entries: SpanEntry[] = spanEls
+      .map((el) => ({
+        el,
+        rect: el.getBoundingClientRect(),
+        text: el.textContent || "",
+      }))
+      .filter((entry) => entry.rect.width > 0 && entry.rect.height > 0);
 
-    const order = startNode.compareDocumentPosition(endNode);
-    if (order & Node.DOCUMENT_POSITION_FOLLOWING) {
-      range.setStart(startNode, startOffset);
-      range.setEnd(endNode, endOffset);
-    } else {
-      range.setStart(endNode, endOffset);
-      range.setEnd(startNode, startOffset);
+    if (entries.length === 0) return null;
+
+    const heights = entries.map((entry) => entry.rect.height).filter((h) => h > 0);
+    const medianHeight = getMedian(heights);
+    const lineGap = Math.max(4, medianHeight * 0.6);
+    const sorted = [...entries].sort((a, b) =>
+      a.rect.top === b.rect.top ? a.rect.left - b.rect.left : a.rect.top - b.rect.top
+    );
+
+    const lines: SpanEntry[][] = [];
+    let currentLine: SpanEntry[] = [];
+    let currentTop = sorted[0].rect.top;
+    sorted.forEach((entry) => {
+      if (Math.abs(entry.rect.top - currentTop) > lineGap) {
+        lines.push(currentLine);
+        currentLine = [entry];
+        currentTop = entry.rect.top;
+      } else {
+        currentLine.push(entry);
+      }
+    });
+    lines.push(currentLine);
+
+    const ordered: PdfTextSpanInfo[] = [];
+    lines.forEach((line, lineIndex) => {
+      line.sort((a, b) => a.rect.left - b.rect.left);
+      line.forEach((entry) => {
+        ordered.push({
+          el: entry.el,
+          rect: entry.rect,
+          text: entry.text,
+          lineIndex,
+        });
+      });
+    });
+
+    const indexMap = new Map<HTMLElement, number>();
+    ordered.forEach((entry, index) => indexMap.set(entry.el, index));
+    return { spans: ordered, indexMap, medianHeight };
+  };
+
+  const getColumnBoundsForStart = (
+    spans: PdfTextSpanInfo[],
+    startIndex: number,
+    startX: number,
+    medianHeight: number
+  ) => {
+    const startSpan = spans[startIndex];
+    if (!startSpan) return null;
+    const lineIndex = startSpan.lineIndex;
+    const lineSpans = spans
+      .filter((span) => span.lineIndex === lineIndex)
+      .sort((a, b) => a.rect.left - b.rect.left);
+    if (lineSpans.length === 0) return null;
+
+    const gapThreshold = Math.max(24, medianHeight * 2.5);
+    const segments: { minLeft: number; maxRight: number }[] = [];
+    let current = {
+      minLeft: lineSpans[0].rect.left,
+      maxRight: lineSpans[0].rect.right,
+    };
+
+    for (let i = 1; i < lineSpans.length; i++) {
+      const next = lineSpans[i].rect;
+      if (next.left - current.maxRight > gapThreshold) {
+        segments.push(current);
+        current = { minLeft: next.left, maxRight: next.right };
+      } else {
+        current.minLeft = Math.min(current.minLeft, next.left);
+        current.maxRight = Math.max(current.maxRight, next.right);
+      }
     }
-    return range;
+    segments.push(current);
+
+    const anchorX = Number.isFinite(startX)
+      ? startX
+      : startSpan.rect.left + startSpan.rect.width / 2;
+    const match =
+      segments.find(
+        (segment) =>
+          anchorX >= segment.minLeft - 2 && anchorX <= segment.maxRight + 2
+      ) ||
+      segments.find(
+        (segment) =>
+          startSpan.rect.left >= segment.minLeft - 2 &&
+          startSpan.rect.right <= segment.maxRight + 2
+      );
+
+    return match || segments[0];
+  };
+
+  const buildTextFromSpans = (
+    spans: PdfTextSpanInfo[],
+    firstOffset: number | null,
+    lastOffset: number | null
+  ) => {
+    let text = "";
+    let prevLine = spans[0]?.lineIndex ?? 0;
+    spans.forEach((span, index) => {
+      let part = span.text;
+      if (index === 0 && firstOffset !== null) {
+        part = part.slice(firstOffset);
+      }
+      if (index === spans.length - 1 && lastOffset !== null) {
+        part = part.slice(0, lastOffset);
+      }
+      if (!part) return;
+      if (index > 0 && span.lineIndex !== prevLine) {
+        text += "\n";
+      }
+      text += part;
+      prevLine = span.lineIndex;
+    });
+    return text.trim();
+  };
+
+  const buildHighlightRectsFromSpans = (
+    spans: PdfTextSpanInfo[],
+    pageEl: HTMLElement,
+    visualScale: number
+  ) => {
+    const TOP_OFFSET = 0.5;
+    const HEIGHT_PAD = 1;
+    const pageRect = pageEl.getBoundingClientRect();
+    const pageNumber = Number(pageEl.dataset.pageNumber);
+    return spans.map((span) => ({
+      left: (span.rect.left - pageRect.left) / visualScale,
+      top:
+        (span.rect.top - pageRect.top) / visualScale -
+        TOP_OFFSET / Math.max(visualScale, 0.0001),
+      width: span.rect.width / visualScale,
+      height: Math.max(span.rect.height / visualScale - HEIGHT_PAD, 1),
+      pageNumber,
+      pageWidth: pageRect.width / visualScale,
+      pageHeight: pageRect.height / visualScale,
+    }));
+  };
+
+  const getBoundsFromRects = (rects: DOMRect[]) =>
+    rects.reduce(
+      (acc, rect) => ({
+        minLeft: Math.min(acc.minLeft, rect.left),
+        maxRight: Math.max(acc.maxRight, rect.right),
+        minTop: Math.min(acc.minTop, rect.top),
+        maxBottom: Math.max(acc.maxBottom, rect.bottom),
+      }),
+      {
+        minLeft: rects[0].left,
+        maxRight: rects[0].right,
+        minTop: rects[0].top,
+        maxBottom: rects[0].bottom,
+      }
+    );
+
+  const buildPenSelectionData = (x: number, y: number) => {
+    const pageEl = penSelectionPageRef.current;
+    const spans = penSelectionSpansRef.current;
+    const indexMap = penSelectionSpanIndexRef.current;
+    const startIndex = penSelectionStartIndexRef.current;
+    const startOffset = penSelectionStartOffsetRef.current;
+
+    if (!pageEl || !spans || !indexMap || startIndex === null) return null;
+
+    const endRange = getCaretRangeFromPoint(x, y);
+    const endSpanEl = getSpanElementFromRange(endRange);
+    let endIndex =
+      endSpanEl && indexMap.has(endSpanEl) ? indexMap.get(endSpanEl) : undefined;
+    if (endIndex === undefined) {
+      endIndex = getNearestSpanIndex(x, y, spans);
+    }
+    if (endIndex === null || endIndex === undefined) return null;
+
+    const endOffset =
+      endSpanEl && endRange
+        ? getOffsetWithinSpan(endSpanEl, endRange.startContainer, endRange.startOffset)
+        : null;
+
+    const forward = startIndex <= endIndex;
+    const firstIndex = forward ? startIndex : endIndex;
+    const lastIndex = forward ? endIndex : startIndex;
+    const firstOffset = forward ? startOffset : endOffset;
+    const lastOffset = forward ? endOffset : startOffset;
+
+    const columnBounds = penSelectionColumnBoundsRef.current;
+    let selectedSpans = spans.slice(firstIndex, lastIndex + 1);
+    if (columnBounds) {
+      selectedSpans = selectedSpans.filter(
+        (span) =>
+          span.rect.right >= columnBounds.minLeft - 2 &&
+          span.rect.left <= columnBounds.maxRight + 2
+      );
+    }
+    if (selectedSpans.length === 0) return null;
+
+    const text = buildTextFromSpans(selectedSpans, firstOffset, lastOffset);
+    const visualScale = getVisualScale();
+    const rects = buildHighlightRectsFromSpans(selectedSpans, pageEl, visualScale);
+    const bounds = getBoundsFromRects(selectedSpans.map((span) => span.rect));
+    const pageNumber = Number(pageEl.dataset.pageNumber) || 0;
+    if (!pageNumber) return null;
+
+    return { text, rects, bounds, pageEl, pageNumber, visualScale };
   };
 
   const updatePenSelectionAt = (x: number, y: number) => {
-    const startRange = penSelectionStartRef.current;
-    const pageEl = penSelectionPageRef.current;
-    const boundaries = penSelectionBoundariesRef.current;
-    if (!startRange || !pageEl) return;
-
-    const endRange = getCaretRangeFromPoint(x, y);
-    const nextRange = buildRangeWithinPage(
-      startRange,
-      endRange,
-      pageEl,
-      boundaries
-    );
-    if (!nextRange) return;
-
-    const sel = window.getSelection();
-    if (!sel) return;
-    sel.removeAllRanges();
-    sel.addRange(nextRange);
+    penSelectionDataRef.current = buildPenSelectionData(x, y);
   };
 
   const getMedian = (values: number[]) => {
@@ -859,6 +1068,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       return;
     }
 
+    if (lastSelectionSourceRef.current === "pen") {
+      if (selection.show) return;
+      lastSelectionSourceRef.current = null;
+    }
+
     const sel = window.getSelection();
     if (
       !sel ||
@@ -981,9 +1195,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     penSelectionLastPointRef.current = null;
-    penSelectionStartRef.current = null;
     penSelectionPageRef.current = null;
-    penSelectionBoundariesRef.current = null;
+    penSelectionSpansRef.current = null;
+    penSelectionSpanIndexRef.current = null;
+    penSelectionStartIndexRef.current = null;
+    penSelectionStartOffsetRef.current = null;
+    penSelectionColumnBoundsRef.current = null;
+    penSelectionStartPointRef.current = null;
+    penSelectionDataRef.current = null;
     penSelectionPointerIdRef.current = null;
     isPenSelectingRef.current = false;
 
@@ -991,6 +1210,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (target.hasPointerCapture(e.pointerId)) {
       target.releasePointerCapture(e.pointerId);
     }
+    viewerContainerRef.current?.classList.remove("pdf_pen_selecting");
     return true;
   };
 
@@ -1003,7 +1223,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const textLayer = target.closest(".textLayer");
     if (!textLayer) return;
 
-    if (e.pointerType !== "pen") {
+    const isPenPointer =
+      e.pointerType === "pen" ||
+      (e.pointerType === "touch" &&
+        e.width > 0 &&
+        e.height > 0 &&
+        e.width <= 6 &&
+        e.height <= 6);
+    if (!isPenPointer) {
       lastSelectionSourceRef.current = "native";
       return;
     }
@@ -1012,22 +1239,53 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (!startRange) return;
     const pageEl = getClosestPageEl(startRange.startContainer);
     if (!pageEl) return;
-    const boundaries = getTextBoundaryNodes(pageEl);
-    if (!boundaries) return;
+    const spanInfo = buildOrderedTextSpans(pageEl);
+    if (!spanInfo) return;
+    const startSpanEl = getSpanElementFromRange(startRange);
+    let startIndex =
+      startSpanEl && spanInfo.indexMap.has(startSpanEl)
+        ? spanInfo.indexMap.get(startSpanEl)
+        : undefined;
+    if (startIndex === undefined) {
+      startIndex = getNearestSpanIndex(e.clientX, e.clientY, spanInfo.spans);
+    }
+    if (startIndex === null || startIndex === undefined) return;
+    const startOffset =
+      startSpanEl && startRange
+        ? getOffsetWithinSpan(
+            startSpanEl,
+            startRange.startContainer,
+            startRange.startOffset
+          )
+        : null;
+    const columnBounds = getColumnBoundsForStart(
+      spanInfo.spans,
+      startIndex,
+      e.clientX,
+      spanInfo.medianHeight
+    );
 
     e.preventDefault();
     selectionFixInProgressRef.current = false;
     lastSelectionSourceRef.current = "pen";
     isPenSelectingRef.current = true;
-    penSelectionStartRef.current = startRange.cloneRange();
     penSelectionPageRef.current = pageEl;
-    penSelectionBoundariesRef.current = boundaries;
+    penSelectionSpansRef.current = spanInfo.spans;
+    penSelectionSpanIndexRef.current = spanInfo.indexMap;
+    penSelectionStartIndexRef.current = startIndex;
+    penSelectionStartOffsetRef.current = startOffset;
+    penSelectionColumnBoundsRef.current = columnBounds;
     penSelectionPointerIdRef.current = e.pointerId;
     penSelectionLastPointRef.current = { x: e.clientX, y: e.clientY };
+    penSelectionStartPointRef.current = { x: e.clientX, y: e.clientY };
+    penSelectionDataRef.current = null;
+    selectionCacheRef.current = null;
 
     window.getSelection()?.removeAllRanges();
+    viewerContainerRef.current?.classList.add("pdf_pen_selecting");
     e.currentTarget.setPointerCapture(e.pointerId);
     updatePenSelectionAt(e.clientX, e.clientY);
+    setSelection((prev) => ({ ...prev, show: false }));
   };
 
   const handleContainerPointerMove = (
@@ -1038,6 +1296,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     e.preventDefault();
     penSelectionLastPointRef.current = { x: e.clientX, y: e.clientY };
+    window.getSelection()?.removeAllRanges();
 
     if (penSelectionMoveRafRef.current !== null) return;
     penSelectionMoveRafRef.current = requestAnimationFrame(() => {
@@ -1048,15 +1307,76 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
   };
 
+  const finalizePenSelection = () => {
+    const startPoint = penSelectionStartPointRef.current;
+    const lastPoint = penSelectionLastPointRef.current || startPoint;
+    if (startPoint && lastPoint) {
+      const distance = Math.hypot(
+        lastPoint.x - startPoint.x,
+        lastPoint.y - startPoint.y
+      );
+      if (distance < 3) {
+        setSelection((prev) => ({ ...prev, show: false }));
+        selectionCacheRef.current = null;
+        lastSelectionSourceRef.current = null;
+        return;
+      }
+    }
+
+    if (lastPoint) {
+      updatePenSelectionAt(lastPoint.x, lastPoint.y);
+    }
+
+    const data = penSelectionDataRef.current;
+    if (!data || !data.text.trim()) {
+      setSelection((prev) => ({ ...prev, show: false }));
+      selectionCacheRef.current = null;
+      lastSelectionSourceRef.current = null;
+      return;
+    }
+
+    const menuWidth = 210;
+    const margin = 10;
+    const top = isTouchDevice ? data.bounds.maxBottom + margin : data.bounds.minTop - 56;
+    const left = data.bounds.minLeft + (data.bounds.maxRight - data.bounds.minLeft) / 2 - menuWidth / 2;
+    const clampedTop = top < margin ? data.bounds.maxBottom + margin : top;
+    const clampedLeft = Math.min(
+      Math.max(left, margin),
+      window.innerWidth - menuWidth - margin
+    );
+
+    selectionCacheRef.current = {
+      range: null,
+      pageEl: data.pageEl,
+      pageNumber: data.pageNumber,
+      rects: data.rects,
+      text: data.text,
+      visualScale: data.visualScale,
+    };
+    window.getSelection()?.removeAllRanges();
+    lastSelectionSourceRef.current = "pen";
+    setSelection({
+      text: data.text,
+      top: clampedTop,
+      left: clampedLeft,
+      show: true,
+    });
+  };
+
   const handleContainerPointerUp = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
     if (isPenSelectingRef.current) {
-      e.preventDefault();
-      if (endPenSelection(e)) {
-        scheduleSelectionCheck();
+      if (
+        penSelectionPointerIdRef.current !== null &&
+        penSelectionPointerIdRef.current !== e.pointerId
+      ) {
         return;
       }
+      e.preventDefault();
+      finalizePenSelection();
+      endPenSelection(e);
+      return;
     }
     if (drawingMode !== "idle") return;
     scheduleSelectionCheck();
@@ -1070,6 +1390,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     endPenSelection(e);
     window.getSelection()?.removeAllRanges();
     lastSelectionSourceRef.current = null;
+    selectionCacheRef.current = null;
+    setSelection((prev) => ({ ...prev, show: false }));
   };
 
   useEffect(() => {
