@@ -125,6 +125,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     text: string;
     visualScale: number;
   } | null>(null);
+  const selectionFixInProgressRef = useRef(false);
 
   const [pdfHighlights, setPdfHighlights] = useState<PdfHighlight[]>([]);
   const rafRefreshId = useRef<number | null>(null);
@@ -475,6 +476,181 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return true;
   };
 
+  const getCaretRangeFromPoint = (x: number, y: number) => {
+    const docAny = document as any;
+    if (typeof docAny.caretRangeFromPoint === "function") {
+      return docAny.caretRangeFromPoint(x, y) as Range | null;
+    }
+    if (typeof docAny.caretPositionFromPoint === "function") {
+      const pos = docAny.caretPositionFromPoint(x, y) as
+        | { offsetNode: Node; offset: number }
+        | null;
+      if (!pos) return null;
+      const range = document.createRange();
+      range.setStart(pos.offsetNode, pos.offset);
+      range.collapse(true);
+      return range;
+    }
+    return null;
+  };
+
+  const getMedian = (values: number[]) => {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  };
+
+  const buildRectClusters = (rects: DOMRect[]) => {
+    if (rects.length === 0) return [];
+    const heights = rects.map((r) => r.height).filter((h) => h > 0);
+    const medianHeight = getMedian(heights);
+    const gapThreshold = Math.max(80, medianHeight * 6);
+    const sorted = [...rects].sort((a, b) =>
+      a.top === b.top ? a.left - b.left : a.top - b.top
+    );
+
+    const clusters: {
+      rects: DOMRect[];
+      minTop: number;
+      maxBottom: number;
+      minLeft: number;
+      maxRight: number;
+    }[] = [];
+    let current: DOMRect[] = [sorted[0]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = current[current.length - 1];
+      const next = sorted[i];
+      if (next.top - prev.bottom > gapThreshold) {
+        const bounds = current.reduce(
+          (acc, r) => ({
+            minTop: Math.min(acc.minTop, r.top),
+            maxBottom: Math.max(acc.maxBottom, r.bottom),
+            minLeft: Math.min(acc.minLeft, r.left),
+            maxRight: Math.max(acc.maxRight, r.right),
+          }),
+          {
+            minTop: current[0].top,
+            maxBottom: current[0].bottom,
+            minLeft: current[0].left,
+            maxRight: current[0].right,
+          }
+        );
+        clusters.push({ rects: current, ...bounds });
+        current = [next];
+      } else {
+        current.push(next);
+      }
+    }
+
+    const lastBounds = current.reduce(
+      (acc, r) => ({
+        minTop: Math.min(acc.minTop, r.top),
+        maxBottom: Math.max(acc.maxBottom, r.bottom),
+        minLeft: Math.min(acc.minLeft, r.left),
+        maxRight: Math.max(acc.maxRight, r.right),
+      }),
+      {
+        minTop: current[0].top,
+        maxBottom: current[0].bottom,
+        minLeft: current[0].left,
+        maxRight: current[0].right,
+      }
+    );
+    clusters.push({ rects: current, ...lastBounds });
+    return clusters;
+  };
+
+  const getRectPoint = (rect: DOMRect, isEnd: boolean) => {
+    const xPad = Math.min(4, Math.max(1, rect.width * 0.1));
+    const x = isEnd ? rect.right - xPad : rect.left + xPad;
+    const y = rect.top + rect.height / 2;
+    return { x, y };
+  };
+
+  const clampSelectionWithinPage = (sel: Selection, pageEl: HTMLElement) => {
+    if (sel.rangeCount === 0) return false;
+    const range = sel.getRangeAt(0);
+    const rects = Array.from(range.getClientRects()).filter(
+      (r) => r.width > 0 && r.height > 0
+    );
+    if (rects.length < 2) return false;
+
+    const clusters = buildRectClusters(rects);
+    if (clusters.length <= 1) return false;
+
+    const forward = isSelectionForward(sel);
+    const anchorRect = forward ? rects[0] : rects[rects.length - 1];
+    const anchorPoint = {
+      x: anchorRect.left + anchorRect.width / 2,
+      y: anchorRect.top + anchorRect.height / 2,
+    };
+    const anchorCluster =
+      clusters.find(
+        (c) =>
+          anchorPoint.x >= c.minLeft - 2 &&
+          anchorPoint.x <= c.maxRight + 2 &&
+          anchorPoint.y >= c.minTop - 2 &&
+          anchorPoint.y <= c.maxBottom + 2
+      ) ||
+      clusters.find(
+        (c) =>
+          anchorPoint.y >= c.minTop - 2 &&
+          anchorPoint.y <= c.maxBottom + 2
+      );
+
+    if (!anchorCluster || anchorCluster.rects.length === rects.length) {
+      return false;
+    }
+
+    const ordered = [...anchorCluster.rects].sort((a, b) =>
+      a.top === b.top ? a.left - b.left : a.top - b.top
+    );
+    const startRect = ordered[0];
+    const endRect = ordered[ordered.length - 1];
+    const startPoint = getRectPoint(startRect, false);
+    const endPoint = getRectPoint(endRect, true);
+
+    const startRange = getCaretRangeFromPoint(startPoint.x, startPoint.y);
+    const endRange = getCaretRangeFromPoint(endPoint.x, endPoint.y);
+    if (!startRange || !endRange) return false;
+    if (
+      !pageEl.contains(startRange.startContainer) ||
+      !pageEl.contains(endRange.startContainer)
+    ) {
+      return false;
+    }
+
+    const newRange = document.createRange();
+    const startNode = startRange.startContainer;
+    const endNode = endRange.startContainer;
+    const startOffset = startRange.startOffset;
+    const endOffset = endRange.startOffset;
+
+    if (startNode === endNode) {
+      const start = Math.min(startOffset, endOffset);
+      const end = Math.max(startOffset, endOffset);
+      newRange.setStart(startNode, start);
+      newRange.setEnd(endNode, end);
+    } else {
+      const order = startNode.compareDocumentPosition(endNode);
+      if (order & Node.DOCUMENT_POSITION_FOLLOWING) {
+        newRange.setStart(startNode, startOffset);
+        newRange.setEnd(endNode, endOffset);
+      } else {
+        newRange.setStart(endNode, endOffset);
+        newRange.setEnd(startNode, startOffset);
+      }
+    }
+
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    return true;
+  };
+
   const getPageElFromRange = (range: Range) =>
     getClosestPageEl(range.startContainer) ||
     getClosestPageEl(range.endContainer);
@@ -573,6 +749,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       !viewerContainerRef.current ||
       sel.rangeCount === 0
     ) {
+      selectionFixInProgressRef.current = false;
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
@@ -581,6 +758,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       viewerContainerRef.current.contains(sel.anchorNode as Node) &&
       viewerContainerRef.current.contains(sel.focusNode as Node);
     if (!isInsideAnchor) {
+      selectionFixInProgressRef.current = false;
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
@@ -588,6 +766,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const anchorPageEl = getClosestPageEl(sel.anchorNode);
     const focusPageEl = getClosestPageEl(sel.focusNode);
     if (!anchorPageEl || !focusPageEl) {
+      selectionFixInProgressRef.current = false;
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
@@ -597,6 +776,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       if (!clamped) {
         setSelection((prev) => ({ ...prev, show: false }));
         return;
+      }
+    }
+
+    if (isTouchDevice) {
+      if (selectionFixInProgressRef.current) {
+        selectionFixInProgressRef.current = false;
+      } else {
+        const adjusted = clampSelectionWithinPage(sel, anchorPageEl);
+        if (adjusted) {
+          selectionFixInProgressRef.current = true;
+          return;
+        }
       }
     }
 
