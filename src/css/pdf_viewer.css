@@ -17,8 +17,8 @@
 }
 
 .pdf_viewer_container .textLayer span.markedContent {
-  user-select: none;
-  -webkit-user-select: text !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .test {
