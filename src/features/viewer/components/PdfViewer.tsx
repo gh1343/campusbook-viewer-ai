@@ -125,6 +125,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     text: string;
     visualScale: number;
   } | null>(null);
+  const isPenSelectingRef = useRef(false);
+  const penSelectionStartRef = useRef<Range | null>(null);
+  const penSelectionPageRef = useRef<HTMLElement | null>(null);
+  const penSelectionBoundariesRef = useRef<{
+    first: Text;
+    last: Text;
+  } | null>(null);
+  const penSelectionPointerIdRef = useRef<number | null>(null);
+  const penSelectionMoveRafRef = useRef<number | null>(null);
+  const penSelectionLastPointRef = useRef<{ x: number; y: number } | null>(
+    null
+  );
+  const lastSelectionSourceRef = useRef<"pen" | "native" | null>(null);
   const selectionFixInProgressRef = useRef(false);
 
   const [pdfHighlights, setPdfHighlights] = useState<PdfHighlight[]>([]);
@@ -494,6 +507,86 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return null;
   };
 
+  const normalizeNodeOffset = (node: Node, offset: number) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.nodeValue?.length ?? 0;
+      return Math.max(0, Math.min(offset, len));
+    }
+    return offset;
+  };
+
+  const buildRangeWithinPage = (
+    startRange: Range,
+    endRange: Range | null,
+    pageEl: HTMLElement,
+    boundariesOverride?: { first: Text; last: Text } | null
+  ) => {
+    const boundaries = boundariesOverride || getTextBoundaryNodes(pageEl);
+    if (!boundaries) return null;
+
+    let startNode: Node = startRange.startContainer;
+    let startOffset = startRange.startOffset;
+    if (!pageEl.contains(startNode)) {
+      startNode = boundaries.first;
+      startOffset = 0;
+    }
+    startOffset = normalizeNodeOffset(startNode, startOffset);
+
+    let endNode: Node = endRange ? endRange.startContainer : startNode;
+    let endOffset = endRange ? endRange.startOffset : startOffset;
+    if (!pageEl.contains(endNode)) {
+      const pos = pageEl.compareDocumentPosition(endNode);
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) {
+        endNode = boundaries.first;
+        endOffset = 0;
+      } else {
+        endNode = boundaries.last;
+        endOffset = boundaries.last.nodeValue?.length ?? 0;
+      }
+    }
+    endOffset = normalizeNodeOffset(endNode, endOffset);
+
+    const range = document.createRange();
+    if (startNode === endNode) {
+      const start = Math.min(startOffset, endOffset);
+      const end = Math.max(startOffset, endOffset);
+      range.setStart(startNode, start);
+      range.setEnd(endNode, end);
+      return range;
+    }
+
+    const order = startNode.compareDocumentPosition(endNode);
+    if (order & Node.DOCUMENT_POSITION_FOLLOWING) {
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
+    } else {
+      range.setStart(endNode, endOffset);
+      range.setEnd(startNode, startOffset);
+    }
+    return range;
+  };
+
+  const updatePenSelectionAt = (x: number, y: number) => {
+    const startRange = penSelectionStartRef.current;
+    const pageEl = penSelectionPageRef.current;
+    const boundaries = penSelectionBoundariesRef.current;
+    if (!startRange || !pageEl) return;
+
+    const endRange = getCaretRangeFromPoint(x, y);
+    const nextRange = buildRangeWithinPage(
+      startRange,
+      endRange,
+      pageEl,
+      boundaries
+    );
+    if (!nextRange) return;
+
+    const sel = window.getSelection();
+    if (!sel) return;
+    sel.removeAllRanges();
+    sel.addRange(nextRange);
+  };
+
   const getMedian = (values: number[]) => {
     if (values.length === 0) return 0;
     const sorted = [...values].sort((a, b) => a - b);
@@ -775,6 +868,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       sel.rangeCount === 0
     ) {
       selectionFixInProgressRef.current = false;
+      lastSelectionSourceRef.current = null;
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
@@ -784,6 +878,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       viewerContainerRef.current.contains(sel.focusNode as Node);
     if (!isInsideAnchor) {
       selectionFixInProgressRef.current = false;
+      lastSelectionSourceRef.current = null;
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
@@ -792,6 +887,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const focusPageEl = getClosestPageEl(sel.focusNode);
     if (!anchorPageEl || !focusPageEl) {
       selectionFixInProgressRef.current = false;
+      lastSelectionSourceRef.current = null;
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
@@ -804,7 +900,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       }
     }
 
-    if (isTouchDevice) {
+    if (isTouchDevice && lastSelectionSourceRef.current !== "pen") {
       if (selectionFixInProgressRef.current) {
         selectionFixInProgressRef.current = false;
       } else {
@@ -870,13 +966,117 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     delays.forEach((d) => setTimeout(checkPdfSelection, d));
   };
 
-  const handleContainerPointerUp = () => {
+  const endPenSelection = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPenSelectingRef.current) return false;
+    if (
+      penSelectionPointerIdRef.current !== null &&
+      penSelectionPointerIdRef.current !== e.pointerId
+    ) {
+      return false;
+    }
+
+    if (penSelectionMoveRafRef.current !== null) {
+      cancelAnimationFrame(penSelectionMoveRafRef.current);
+      penSelectionMoveRafRef.current = null;
+    }
+
+    penSelectionLastPointRef.current = null;
+    penSelectionStartRef.current = null;
+    penSelectionPageRef.current = null;
+    penSelectionBoundariesRef.current = null;
+    penSelectionPointerIdRef.current = null;
+    isPenSelectingRef.current = false;
+
+    const target = e.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    return true;
+  };
+
+  const handleContainerPointerDown = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (drawingMode !== "idle") return;
+
+    const target = e.target as HTMLElement;
+    const textLayer = target.closest(".textLayer");
+    if (!textLayer) return;
+
+    if (e.pointerType !== "pen") {
+      lastSelectionSourceRef.current = "native";
+      return;
+    }
+
+    const startRange = getCaretRangeFromPoint(e.clientX, e.clientY);
+    if (!startRange) return;
+    const pageEl = getClosestPageEl(startRange.startContainer);
+    if (!pageEl) return;
+    const boundaries = getTextBoundaryNodes(pageEl);
+    if (!boundaries) return;
+
+    e.preventDefault();
+    selectionFixInProgressRef.current = false;
+    lastSelectionSourceRef.current = "pen";
+    isPenSelectingRef.current = true;
+    penSelectionStartRef.current = startRange.cloneRange();
+    penSelectionPageRef.current = pageEl;
+    penSelectionBoundariesRef.current = boundaries;
+    penSelectionPointerIdRef.current = e.pointerId;
+    penSelectionLastPointRef.current = { x: e.clientX, y: e.clientY };
+
+    window.getSelection()?.removeAllRanges();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    updatePenSelectionAt(e.clientX, e.clientY);
+  };
+
+  const handleContainerPointerMove = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (!isPenSelectingRef.current) return;
+    if (penSelectionPointerIdRef.current !== e.pointerId) return;
+
+    e.preventDefault();
+    penSelectionLastPointRef.current = { x: e.clientX, y: e.clientY };
+
+    if (penSelectionMoveRafRef.current !== null) return;
+    penSelectionMoveRafRef.current = requestAnimationFrame(() => {
+      penSelectionMoveRafRef.current = null;
+      const point = penSelectionLastPointRef.current;
+      if (!point) return;
+      updatePenSelectionAt(point.x, point.y);
+    });
+  };
+
+  const handleContainerPointerUp = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (isPenSelectingRef.current) {
+      e.preventDefault();
+      if (endPenSelection(e)) {
+        scheduleSelectionCheck();
+        return;
+      }
+    }
     if (drawingMode !== "idle") return;
     scheduleSelectionCheck();
   };
 
+  const handleContainerPointerCancel = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (!isPenSelectingRef.current) return;
+    e.preventDefault();
+    endPenSelection(e);
+    window.getSelection()?.removeAllRanges();
+    lastSelectionSourceRef.current = null;
+  };
+
   useEffect(() => {
-    const onSelectionChange = () => scheduleSelectionCheck();
+    const onSelectionChange = () => {
+      if (isPenSelectingRef.current) return;
+      scheduleSelectionCheck();
+    };
     const onTouchEnd = () => scheduleSelectionCheck();
     document.addEventListener("selectionchange", onSelectionChange);
     document.addEventListener("touchend", onTouchEnd);
@@ -922,10 +1122,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setSelection((prev) => ({ ...prev, show: false }));
     selectionCacheRef.current = null;
     window.getSelection()?.removeAllRanges();
+    lastSelectionSourceRef.current = null;
   };
 
   const cancelSelection = () => {
     window.getSelection()?.removeAllRanges();
+    lastSelectionSourceRef.current = null;
     setSelection((prev) => ({ ...prev, show: false }));
   };
 
@@ -937,6 +1139,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
     if (success) {
       window.getSelection()?.removeAllRanges();
+      lastSelectionSourceRef.current = null;
     }
   };
 
@@ -962,7 +1165,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         <div
           ref={viewerContainerRef}
           className="pdf_viewer_container"
+          onPointerDown={handleContainerPointerDown}
+          onPointerMove={handleContainerPointerMove}
           onPointerUp={handleContainerPointerUp}
+          onPointerCancel={handleContainerPointerCancel}
           onContextMenu={(e) => e.preventDefault()}
         >
           <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
