@@ -16,6 +16,11 @@
   margin-top: -0.2em;
 }
 
+.pdf_viewer_container .textLayer br {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 .pdf_viewer_container .textLayer span.markedContent {
   user-select: none !important;
   -webkit-user-select: none !important;
