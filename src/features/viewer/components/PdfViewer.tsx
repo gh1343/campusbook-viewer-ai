@@ -415,6 +415,66 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return pageEl instanceof HTMLElement ? pageEl : null;
   };
 
+  const isSelectionForward = (sel: Selection) => {
+    if (!sel.anchorNode || !sel.focusNode) return true;
+    if (sel.anchorNode === sel.focusNode) {
+      return sel.anchorOffset <= sel.focusOffset;
+    }
+    const pos = sel.anchorNode.compareDocumentPosition(sel.focusNode);
+    return Boolean(pos & Node.DOCUMENT_POSITION_FOLLOWING);
+  };
+
+  const getTextBoundaryNodes = (pageEl: HTMLElement) => {
+    const textLayer = pageEl.querySelector(".textLayer");
+    if (!textLayer) return null;
+
+    const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    let current = walker.nextNode();
+    while (current) {
+      const textNode = current as Text;
+      if (textNode.nodeValue && textNode.nodeValue.length > 0) {
+        nodes.push(textNode);
+      }
+      current = walker.nextNode();
+    }
+
+    if (nodes.length === 0) return null;
+    return { first: nodes[0], last: nodes[nodes.length - 1] };
+  };
+
+  const clampSelectionToPage = (sel: Selection, pageEl: HTMLElement) => {
+    if (sel.rangeCount === 0) return false;
+    const boundaries = getTextBoundaryNodes(pageEl);
+    if (!boundaries) return false;
+
+    const range = sel.getRangeAt(0);
+    const forward = isSelectionForward(sel);
+    const newRange = document.createRange();
+
+    if (forward) {
+      if (pageEl.contains(range.startContainer)) {
+        newRange.setStart(range.startContainer, range.startOffset);
+      } else {
+        newRange.setStart(boundaries.first, 0);
+      }
+      const endLen = boundaries.last.nodeValue?.length ?? 0;
+      newRange.setEnd(boundaries.last, endLen);
+    } else {
+      newRange.setStart(boundaries.first, 0);
+      if (pageEl.contains(range.endContainer)) {
+        newRange.setEnd(range.endContainer, range.endOffset);
+      } else {
+        const endLen = boundaries.last.nodeValue?.length ?? 0;
+        newRange.setEnd(boundaries.last, endLen);
+      }
+    }
+
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    return true;
+  };
+
   const getPageElFromRange = (range: Range) =>
     getClosestPageEl(range.startContainer) ||
     getClosestPageEl(range.endContainer);
@@ -523,6 +583,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (!isInsideAnchor) {
       setSelection((prev) => ({ ...prev, show: false }));
       return;
+    }
+
+    const anchorPageEl = getClosestPageEl(sel.anchorNode);
+    const focusPageEl = getClosestPageEl(sel.focusNode);
+    if (!anchorPageEl || !focusPageEl) {
+      setSelection((prev) => ({ ...prev, show: false }));
+      return;
+    }
+
+    if (anchorPageEl !== focusPageEl) {
+      const clamped = clampSelectionToPage(sel, anchorPageEl);
+      if (!clamped) {
+        setSelection((prev) => ({ ...prev, show: false }));
+        return;
+      }
     }
 
     const range = sel.getRangeAt(0);
