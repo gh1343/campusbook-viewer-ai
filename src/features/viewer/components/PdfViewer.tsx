@@ -507,10 +507,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (rects.length === 0) return [];
     const heights = rects.map((r) => r.height).filter((h) => h > 0);
     const medianHeight = getMedian(heights);
-    const gapThreshold = Math.max(80, medianHeight * 6);
-    const sorted = [...rects].sort((a, b) =>
-      a.top === b.top ? a.left - b.left : a.top - b.top
-    );
+    const vGap = Math.max(8, medianHeight * 0.75);
+    const hGap = Math.max(12, medianHeight * 1.5);
 
     const clusters: {
       rects: DOMRect[];
@@ -519,49 +517,85 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       minLeft: number;
       maxRight: number;
     }[] = [];
-    let current: DOMRect[] = [sorted[0]];
+    const visited = new Array(rects.length).fill(false);
 
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = current[current.length - 1];
-      const next = sorted[i];
-      if (next.top - prev.bottom > gapThreshold) {
-        const bounds = current.reduce(
-          (acc, r) => ({
-            minTop: Math.min(acc.minTop, r.top),
-            maxBottom: Math.max(acc.maxBottom, r.bottom),
-            minLeft: Math.min(acc.minLeft, r.left),
-            maxRight: Math.max(acc.maxRight, r.right),
-          }),
-          {
-            minTop: current[0].top,
-            maxBottom: current[0].bottom,
-            minLeft: current[0].left,
-            maxRight: current[0].right,
+    const isAdjacent = (a: DOMRect, b: DOMRect) => {
+      const verticalClose = a.top <= b.bottom + vGap && a.bottom + vGap >= b.top;
+      const horizontalClose =
+        a.left <= b.right + hGap && a.right + hGap >= b.left;
+      return verticalClose && horizontalClose;
+    };
+
+    for (let i = 0; i < rects.length; i++) {
+      if (visited[i]) continue;
+      const stack = [i];
+      const group: DOMRect[] = [];
+      visited[i] = true;
+
+      while (stack.length > 0) {
+        const idx = stack.pop() as number;
+        const base = rects[idx];
+        group.push(base);
+        for (let j = 0; j < rects.length; j++) {
+          if (visited[j]) continue;
+          if (isAdjacent(base, rects[j])) {
+            visited[j] = true;
+            stack.push(j);
           }
-        );
-        clusters.push({ rects: current, ...bounds });
-        current = [next];
-      } else {
-        current.push(next);
+        }
+      }
+
+      const bounds = group.reduce(
+        (acc, r) => ({
+          minTop: Math.min(acc.minTop, r.top),
+          maxBottom: Math.max(acc.maxBottom, r.bottom),
+          minLeft: Math.min(acc.minLeft, r.left),
+          maxRight: Math.max(acc.maxRight, r.right),
+        }),
+        {
+          minTop: group[0].top,
+          maxBottom: group[0].bottom,
+          minLeft: group[0].left,
+          maxRight: group[0].right,
+        }
+      );
+      clusters.push({ rects: group, ...bounds });
+    }
+    return clusters;
+  };
+
+  const getSelectionAnchorPoint = (sel: Selection, rects: DOMRect[]) => {
+    if (sel.anchorNode) {
+      const anchorRange = document.createRange();
+      anchorRange.setStart(sel.anchorNode, sel.anchorOffset);
+      anchorRange.collapse(true);
+      const rect =
+        anchorRange.getClientRects()[0] || anchorRange.getBoundingClientRect();
+      if (rect && (rect.width > 0 || rect.height > 0)) {
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       }
     }
+    const fallback = rects[0];
+    return { x: fallback.left + fallback.width / 2, y: fallback.top + fallback.height / 2 };
+  };
 
-    const lastBounds = current.reduce(
-      (acc, r) => ({
-        minTop: Math.min(acc.minTop, r.top),
-        maxBottom: Math.max(acc.maxBottom, r.bottom),
-        minLeft: Math.min(acc.minLeft, r.left),
-        maxRight: Math.max(acc.maxRight, r.right),
-      }),
-      {
-        minTop: current[0].top,
-        maxBottom: current[0].bottom,
-        minLeft: current[0].left,
-        maxRight: current[0].right,
-      }
-    );
-    clusters.push({ rects: current, ...lastBounds });
-    return clusters;
+  const getPointDistanceToCluster = (
+    point: { x: number; y: number },
+    cluster: { minTop: number; maxBottom: number; minLeft: number; maxRight: number }
+  ) => {
+    const dx =
+      point.x < cluster.minLeft
+        ? cluster.minLeft - point.x
+        : point.x > cluster.maxRight
+          ? point.x - cluster.maxRight
+          : 0;
+    const dy =
+      point.y < cluster.minTop
+        ? cluster.minTop - point.y
+        : point.y > cluster.maxBottom
+          ? point.y - cluster.maxBottom
+          : 0;
+    return Math.hypot(dx, dy);
   };
 
   const getRectPoint = (rect: DOMRect, isEnd: boolean) => {
@@ -582,25 +616,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const clusters = buildRectClusters(rects);
     if (clusters.length <= 1) return false;
 
-    const forward = isSelectionForward(sel);
-    const anchorRect = forward ? rects[0] : rects[rects.length - 1];
-    const anchorPoint = {
-      x: anchorRect.left + anchorRect.width / 2,
-      y: anchorRect.top + anchorRect.height / 2,
-    };
-    const anchorCluster =
-      clusters.find(
-        (c) =>
-          anchorPoint.x >= c.minLeft - 2 &&
-          anchorPoint.x <= c.maxRight + 2 &&
-          anchorPoint.y >= c.minTop - 2 &&
-          anchorPoint.y <= c.maxBottom + 2
-      ) ||
-      clusters.find(
-        (c) =>
-          anchorPoint.y >= c.minTop - 2 &&
-          anchorPoint.y <= c.maxBottom + 2
-      );
+    const anchorPoint = getSelectionAnchorPoint(sel, rects);
+    let anchorCluster = clusters[0];
+    let minDistance = getPointDistanceToCluster(anchorPoint, anchorCluster);
+    for (let i = 1; i < clusters.length; i++) {
+      const dist = getPointDistanceToCluster(anchorPoint, clusters[i]);
+      if (dist < minDistance) {
+        minDistance = dist;
+        anchorCluster = clusters[i];
+      }
+    }
 
     if (!anchorCluster || anchorCluster.rects.length === rects.length) {
       return false;
