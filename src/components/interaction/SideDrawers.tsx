@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { GoogleGenAI } from "@google/genai";
 import { useBook } from "../../contexts/BookContext";
 import {
   X,
@@ -28,7 +29,7 @@ import {
   Search,
   Filter,
 } from "lucide-react";
-import { generateExplanation } from "../../services/geminiService";
+import { findRelevantChunks } from "../../services/pdfRagService";
 import { GeneralNote, Highlight as HighlightType } from "../../../types";
 import { ContentRenderer } from "../../features/viewer";
 import "../../css/side_drawers.css";
@@ -64,165 +65,6 @@ const HighlightMatch = ({ text, query }: { text: string; query: string }) => {
       )}
     </span>
   );
-};
-
-type PdfTextPage = { page: number; text: string };
-type PdfContextStatus = "ok" | "no_text" | "no_match";
-type PdfContextResult = {
-  context: string;
-  pages: number[];
-  status: PdfContextStatus;
-};
-
-const normalizePdfSearchText = (value: string) =>
-  value.toLowerCase().replace(/[^0-9a-zA-Z가-힣]/g, "");
-
-const stripTrailingParticles = (term: string) => {
-  if (term.length < 3) return term;
-  const suffixes = [
-    "에대하여",
-    "에대해",
-    "에대한",
-    "이라는",
-    "이란",
-    "라는",
-    "란",
-    "이라고",
-    "라고",
-    "으로써",
-    "으로서",
-    "에서",
-    "에게",
-    "부터",
-    "까지",
-    "으로",
-    "보다",
-    "처럼",
-    "마다",
-    "조차",
-    "밖에",
-    "이나",
-    "든지",
-    "라도",
-    "께서",
-    "께",
-    "와",
-    "과",
-    "의",
-    "을",
-    "를",
-    "은",
-    "는",
-    "이",
-    "가",
-    "에",
-    "도",
-    "만",
-    "로",
-  ];
-  for (const suffix of suffixes) {
-    if (term.endsWith(suffix) && term.length > suffix.length + 1) {
-      return term.slice(0, -suffix.length);
-    }
-  }
-  return term;
-};
-
-const normalizePdfQueryTerms = (value: string) => {
-  const cleaned = value
-    .toLowerCase()
-    .replace(/[^0-9a-zA-Z가-힣\s]/g, " ");
-  const terms = cleaned
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 2);
-  const normalized = new Set<string>();
-  terms.forEach((term) => {
-    normalized.add(term);
-    const trimmed = stripTrailingParticles(term);
-    if (trimmed.length >= 2) normalized.add(trimmed);
-  });
-  return Array.from(normalized);
-};
-
-const collapseWhitespace = (value: string) =>
-  value.replace(/\s+/g, " ").trim();
-
-const buildPdfCitationLine = (pages: number[]) => {
-  if (pages.length === 0) return "";
-  const pageLabel = pages.map((page) => `${page}페이지`).join(", ");
-  return `\n\n(출처: ${pageLabel})`;
-};
-
-const hasPdfCitation = (value: string) =>
-  /\(출처:\s*[^)]+\)/.test(value) || /참조 페이지:\s*p\.\d/i.test(value);
-
-const buildPdfContextForQuestion = (
-  question: string,
-  pdfTextPages: PdfTextPage[],
-  currentPdfPage: number
-): PdfContextResult => {
-  const pagesWithText = pdfTextPages
-    .map((page) => ({
-      page: page.page,
-      text: collapseWhitespace(page.text || ""),
-      lowerText: collapseWhitespace(page.text || "").toLowerCase(),
-      normalizedText: normalizePdfSearchText(page.text || ""),
-    }))
-    .filter((page) => page.text.length > 0);
-
-  if (pagesWithText.length === 0) {
-    return { context: "", pages: [], status: "no_text" };
-  }
-
-  const terms = normalizePdfQueryTerms(question);
-  const normalizedTerms = terms.map((term) => ({
-    raw: term,
-    normalized: normalizePdfSearchText(term),
-  }));
-  const scoredPages = pagesWithText.map((page) => {
-    let score = 0;
-    normalizedTerms.forEach((term) => {
-      if (!term.raw && !term.normalized) return;
-      const hasMatch =
-        (term.raw && page.lowerText.includes(term.raw)) ||
-        (term.normalized && page.normalizedText.includes(term.normalized));
-      if (hasMatch) score += 1;
-    });
-    return { ...page, score };
-  });
-
-  const matchedPages = scoredPages
-    .filter((page) => page.score > 0)
-    .sort((a, b) => b.score - a.score || a.page - b.page)
-    .slice(0, 3);
-
-  if (matchedPages.length === 0) {
-    if (terms.length === 0) {
-      const currentPage = pagesWithText.find(
-        (page) => page.page === currentPdfPage
-      );
-      if (!currentPage) {
-        return { context: "", pages: [], status: "no_match" };
-      }
-      return {
-        context: `[p.${currentPage.page}] ${currentPage.text.slice(0, 1200)}`,
-        pages: [currentPage.page],
-        status: "ok",
-      };
-    }
-    return { context: "", pages: [], status: "no_match" };
-  }
-
-  const context = matchedPages
-    .map((page) => `[Page ${page.page}] ${page.text.slice(0, 1200)}`)
-    .join("\n\n");
-
-  return {
-    context,
-    pages: matchedPages.map((page) => page.page),
-    status: "ok",
-  };
 };
 
 const PanelWrapper: React.FC<PanelProps> = ({
@@ -394,6 +236,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     removeHighlight,
     updateHighlight,
     currentChapter,
+    ragChunks,
     incrementAiCount,
     generalNotes,
     addGeneralNote,
@@ -406,6 +249,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     chapters,
     aiChatHistory,
     addChatMessage,
+    stats,
     activeToolTab,
     setActiveToolTab,
     setCaptureMode,
@@ -510,43 +354,125 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       setCapturedImage(null);
     }
   }, [capturedImage, setCapturedImage]);
+
+  const parseCitedPages = (text: string) => {
+    const pages: number[] = [];
+    const patterns = [
+      /p\.?\s?(\d+)/gi,
+      /(\d+)\s?페이지/g,
+      /참조\s?페이지:?\s?([\d,\s]+)/gi,
+    ];
+
+    patterns.forEach((pattern) => {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        if (match[1].includes(",") || match[1].includes(" ")) {
+          const nums = match[1]
+            .split(/[,\s]+/)
+            .map((value) => parseInt(value.trim(), 10))
+            .filter((value) => !Number.isNaN(value));
+          pages.push(...nums);
+        } else {
+          const value = parseInt(match[1], 10);
+          if (!Number.isNaN(value)) pages.push(value);
+        }
+      }
+    });
+
+    return Array.from(new Set(pages)).filter((value) => value > 0);
+  };
+
   const handleAiSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!aiInput.trim()) return;
-    const userMsg = aiInput;
-    addChatMessage("user", userMsg);
+    if (stats.aiInteractionCount >= 20) {
+      addChatMessage("model", "오늘의 AI 사용량(20턴)을 모두 소진하셨습니다.");
+      return;
+    }
+    if (!aiInput.trim() || isAiThinking) return;
+
+    const userQuery = aiInput;
     setAiInput("");
+    addChatMessage("user", userQuery);
     setIsAiThinking(true);
-    incrementAiCount();
     try {
-      const { context, pages, status } = buildPdfContextForQuestion(
-        userMsg,
-        pdfTextPages,
-        currentPdfPage
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+      const relevantChunks = findRelevantChunks(userQuery, ragChunks);
+      const fallbackContext = currentChapter.content
+        .replace(/<[^>]*>?/gm, " ")
+        .substring(0, 3000);
+      const contextString =
+        relevantChunks.length > 0
+          ? relevantChunks
+              .map(
+                (chunk) =>
+                  `[학습 자료 Page ${chunk.pageNumber}]: ${chunk.text}`
+              )
+              .join("\n\n")
+          : fallbackContext;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: {
+          parts: [
+            {
+              text: `
+[CampusBook Academic Tutor]
+당신은 질문의 의도를 분석하고 교재 기반의 학술적 인과관계를 설명하는 전문 AI 튜터입니다.
+
+[분석 명령]
+- 사용자의 질문: "${userQuery}"
+- 질문에 담긴 핵심 개념과 파생될 수 있는 기전을 교재 맥락에서 찾아 답변하세요.
+- 만약 질문이 복합적이라면(A가 B에 미치는 영향 등), 교재 내의 사실들을 논리적으로 연결하여 설명하세요.
+
+[필수 규칙]
+1. 답변 끝에 반드시 "참조 페이지: p.n" 형식으로 실제 근거 페이지를 명시하세요.
+2. 교재 텍스트에 기반한 추론임을 명확히 하세요.
+
+[도서 맥락 데이터]
+${contextString}
+            `.trim(),
+            },
+          ],
+        },
+        config: {
+          temperature: 0.15,
+          systemInstruction:
+            "당신은 도서 데이터를 기반으로 고도화된 학술 분석을 수행하는 AI 튜터입니다.",
+        },
+      });
+
+      const aiResult = response.text || "답변을 생성할 수 없습니다.";
+      const citedPagesFromAi = parseCitedPages(aiResult);
+      const actualBookPages = new Set(
+        ragChunks
+          .map((chunk) => chunk.pageNumber)
+          .filter((page): page is number => typeof page === "number")
       );
+      const verifiedCitedPages = citedPagesFromAi.filter((page) =>
+        actualBookPages.has(page)
+      );
+      const fallbackPages = relevantChunks
+        .map((chunk) => chunk.pageNumber)
+        .filter((page): page is number => typeof page === "number");
+      const finalPages = Array.from(
+        new Set([...verifiedCitedPages, ...fallbackPages])
+      ).sort((a, b) => a - b);
 
-      if (status === "no_text") {
-        addChatMessage(
-          "model",
-          "PDF 텍스트를 아직 불러오지 못했어요. 잠시 후 다시 질문해 주세요."
-        );
-        return;
+      let finalMessage = aiResult;
+      if (!/참조\s?페이지/i.test(aiResult) && finalPages.length > 0) {
+        const pageLabel = finalPages.map((page) => `p.${page}`).join(", ");
+        finalMessage = `${aiResult}\n\n참조 페이지: ${pageLabel}`;
       }
 
-      if (status === "no_match") {
-        addChatMessage(
-          "model",
-          "해당 내용은 현재 도서에서 찾을 수 없습니다."
-        );
-        return;
-      }
-
-      const explanation = await generateExplanation(userMsg, context);
-      const referenceLine =
-        !hasPdfCitation(explanation) && pages.length > 0
-          ? buildPdfCitationLine(pages)
-          : "";
-      addChatMessage("model", `${explanation}${referenceLine}`);
+      addChatMessage("model", finalMessage);
+      incrementAiCount();
+    } catch (error) {
+      console.error("Academic QA Error:", error);
+      addChatMessage(
+        "model",
+        "학술 분석 엔진 연결 중 일시적인 오류가 발생했습니다."
+      );
     } finally {
       setIsAiThinking(false);
     }

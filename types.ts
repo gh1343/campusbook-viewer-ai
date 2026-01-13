@@ -100,6 +100,7 @@ export interface TTSConfig {
 
 export interface BookContextType {
   chapters: Chapter[];
+  ragChunks: RagChunk[];
   referenceDocument: Chapter | null;
 
   currentChapterIndex: number;

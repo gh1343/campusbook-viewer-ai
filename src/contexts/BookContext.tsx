@@ -25,7 +25,7 @@ import {
   TTSConfig,
 } from '../../types';
 import {generateExplanation} from '../services/geminiService';
-import {processPdf, findRelevantContext} from '../services/pdfRagService';
+import {processPdf, findRelevantChunks} from '../services/pdfRagService';
 import {synthesizeWithGemini} from '../services/ttsService';
 import {
   fetchRmsProgressPage,
@@ -706,12 +706,14 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     const userPrompt = `Explain: "${text}"`;
     addChatMessage('user', userPrompt);
     incrementAiCount();
-    let context = currentChapter.content.substring(0, 2000);
-    if (ragChunks.length > 0) {
-      const relevantText = findRelevantContext(text, ragChunks);
-      if (relevantText) context = relevantText;
-    }
-    const explanation = await generateExplanation(text, context);
+    const relevantChunks = findRelevantChunks(text, ragChunks);
+    const contextString = relevantChunks
+      .map(chunk => `[Page ${chunk.pageNumber}]: ${chunk.text}`)
+      .join('\n\n');
+    const explanation = await generateExplanation(
+      text,
+      contextString || currentChapter.content.substring(0, 3000)
+    );
     addChatMessage('model', explanation);
   };
 
@@ -886,6 +888,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     <BookContext.Provider
       value={{
         chapters,
+        ragChunks,
         referenceDocument,
         currentChapterIndex,
         currentChapter,
