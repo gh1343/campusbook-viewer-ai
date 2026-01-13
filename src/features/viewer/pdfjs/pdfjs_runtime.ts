@@ -1,4 +1,4 @@
-import { getDocument } from "pdfjs-dist";
+import { getDocument, version as pdfjsVersion } from "pdfjs-dist";
 import { Dispatch, SetStateAction } from "react";
 import {
   EventBus,
@@ -11,6 +11,10 @@ import { extractPdfText } from "./pdf_text_extract";
 
 type MutableRef<T> = { current: T };
 type Setter<T> = Dispatch<SetStateAction<T>>;
+
+const PDFJS_ASSET_BASE = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}`;
+const CMAP_URL = `${PDFJS_ASSET_BASE}/cmaps/`;
+const STANDARD_FONT_DATA_URL = `${PDFJS_ASSET_BASE}/standard_fonts/`;
 
 interface PdfJsRuntimeOptions {
   file: string;
@@ -135,7 +139,12 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   linkService.setViewer(pdfViewer);
 
   let cancelled = false;
-  let loadingTask = getDocument(file);
+  let loadingTask = getDocument({
+    url: file,
+    cMapUrl: CMAP_URL,
+    cMapPacked: true,
+    standardFontDataUrl: STANDARD_FONT_DATA_URL,
+  });
   loadingTask.onProgress = ({ loaded = 0, total = 0 }) => {
     if (cancelled) return;
     if (!total) {

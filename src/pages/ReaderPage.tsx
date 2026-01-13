@@ -157,7 +157,7 @@ export const ReaderPage: React.FC = () => {
   };
   const pdfUrl = (() => {
     const fallbackPdfUrl =
-      "https://d19t5saodanwfx.cloudfront.net/resources/contents/prod/cms/book/20240923/CT-20240923150969799/source/CT-20240923150969799_source_1727071793874.pdf";
+      "https://d19t5saodanwfx.cloudfront.net/resources/contents/prod/cms/book/20250318/CT-20250318150313534/source/CT-20250318150313534_source_1742281150590.pdf";
     const raw = fallbackPdfUrl;
     const base = import.meta.env.BASE_URL || "/";
 
