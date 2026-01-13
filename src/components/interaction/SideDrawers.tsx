@@ -28,7 +28,7 @@ import {
   Search,
   Filter,
 } from "lucide-react";
-import { answerPdfQuestion } from "../../services/geminiService";
+import { generateExplanation } from "../../services/geminiService";
 import { GeneralNote, Highlight as HighlightType } from "../../../types";
 import { ContentRenderer } from "../../features/viewer";
 import "../../css/side_drawers.css";
@@ -155,7 +155,7 @@ const buildPdfCitationLine = (pages: number[]) => {
 };
 
 const hasPdfCitation = (value: string) =>
-  /\(출처:\s*[^)]+\)/.test(value);
+  /\(출처:\s*[^)]+\)/.test(value) || /참조 페이지:\s*p\.\d/i.test(value);
 
 const buildPdfContextForQuestion = (
   question: string,
@@ -541,7 +541,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         return;
       }
 
-      const explanation = await answerPdfQuestion(userMsg, context);
+      const explanation = await generateExplanation(userMsg, context);
       const referenceLine =
         !hasPdfCitation(explanation) && pages.length > 0
           ? buildPdfCitationLine(pages)
