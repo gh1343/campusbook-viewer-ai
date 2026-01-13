@@ -28,7 +28,7 @@ import {
   Search,
   Filter,
 } from "lucide-react";
-import { generateExplanation } from "../../services/geminiService";
+import { answerPdfQuestion } from "../../services/geminiService";
 import { GeneralNote, Highlight as HighlightType } from "../../../types";
 import { ContentRenderer } from "../../features/viewer";
 import "../../css/side_drawers.css";
@@ -64,6 +64,165 @@ const HighlightMatch = ({ text, query }: { text: string; query: string }) => {
       )}
     </span>
   );
+};
+
+type PdfTextPage = { page: number; text: string };
+type PdfContextStatus = "ok" | "no_text" | "no_match";
+type PdfContextResult = {
+  context: string;
+  pages: number[];
+  status: PdfContextStatus;
+};
+
+const normalizePdfSearchText = (value: string) =>
+  value.toLowerCase().replace(/[^0-9a-zA-Z가-힣]/g, "");
+
+const stripTrailingParticles = (term: string) => {
+  if (term.length < 3) return term;
+  const suffixes = [
+    "에대하여",
+    "에대해",
+    "에대한",
+    "이라는",
+    "이란",
+    "라는",
+    "란",
+    "이라고",
+    "라고",
+    "으로써",
+    "으로서",
+    "에서",
+    "에게",
+    "부터",
+    "까지",
+    "으로",
+    "보다",
+    "처럼",
+    "마다",
+    "조차",
+    "밖에",
+    "이나",
+    "든지",
+    "라도",
+    "께서",
+    "께",
+    "와",
+    "과",
+    "의",
+    "을",
+    "를",
+    "은",
+    "는",
+    "이",
+    "가",
+    "에",
+    "도",
+    "만",
+    "로",
+  ];
+  for (const suffix of suffixes) {
+    if (term.endsWith(suffix) && term.length > suffix.length + 1) {
+      return term.slice(0, -suffix.length);
+    }
+  }
+  return term;
+};
+
+const normalizePdfQueryTerms = (value: string) => {
+  const cleaned = value
+    .toLowerCase()
+    .replace(/[^0-9a-zA-Z가-힣\s]/g, " ");
+  const terms = cleaned
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 2);
+  const normalized = new Set<string>();
+  terms.forEach((term) => {
+    normalized.add(term);
+    const trimmed = stripTrailingParticles(term);
+    if (trimmed.length >= 2) normalized.add(trimmed);
+  });
+  return Array.from(normalized);
+};
+
+const collapseWhitespace = (value: string) =>
+  value.replace(/\s+/g, " ").trim();
+
+const buildPdfCitationLine = (pages: number[]) => {
+  if (pages.length === 0) return "";
+  const pageLabel = pages.map((page) => `${page}페이지`).join(", ");
+  return `\n\n(출처: ${pageLabel})`;
+};
+
+const hasPdfCitation = (value: string) =>
+  /\(출처:\s*[^)]+\)/.test(value);
+
+const buildPdfContextForQuestion = (
+  question: string,
+  pdfTextPages: PdfTextPage[],
+  currentPdfPage: number
+): PdfContextResult => {
+  const pagesWithText = pdfTextPages
+    .map((page) => ({
+      page: page.page,
+      text: collapseWhitespace(page.text || ""),
+      lowerText: collapseWhitespace(page.text || "").toLowerCase(),
+      normalizedText: normalizePdfSearchText(page.text || ""),
+    }))
+    .filter((page) => page.text.length > 0);
+
+  if (pagesWithText.length === 0) {
+    return { context: "", pages: [], status: "no_text" };
+  }
+
+  const terms = normalizePdfQueryTerms(question);
+  const normalizedTerms = terms.map((term) => ({
+    raw: term,
+    normalized: normalizePdfSearchText(term),
+  }));
+  const scoredPages = pagesWithText.map((page) => {
+    let score = 0;
+    normalizedTerms.forEach((term) => {
+      if (!term.raw && !term.normalized) return;
+      const hasMatch =
+        (term.raw && page.lowerText.includes(term.raw)) ||
+        (term.normalized && page.normalizedText.includes(term.normalized));
+      if (hasMatch) score += 1;
+    });
+    return { ...page, score };
+  });
+
+  const matchedPages = scoredPages
+    .filter((page) => page.score > 0)
+    .sort((a, b) => b.score - a.score || a.page - b.page)
+    .slice(0, 3);
+
+  if (matchedPages.length === 0) {
+    if (terms.length === 0) {
+      const currentPage = pagesWithText.find(
+        (page) => page.page === currentPdfPage
+      );
+      if (!currentPage) {
+        return { context: "", pages: [], status: "no_match" };
+      }
+      return {
+        context: `[p.${currentPage.page}] ${currentPage.text.slice(0, 1200)}`,
+        pages: [currentPage.page],
+        status: "ok",
+      };
+    }
+    return { context: "", pages: [], status: "no_match" };
+  }
+
+  const context = matchedPages
+    .map((page) => `[Page ${page.page}] ${page.text.slice(0, 1200)}`)
+    .join("\n\n");
+
+  return {
+    context,
+    pages: matchedPages.map((page) => page.page),
+    status: "ok",
+  };
 };
 
 const PanelWrapper: React.FC<PanelProps> = ({
@@ -257,6 +416,8 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     searchQuery,
     setSearchQuery,
     performSearch,
+    pdfTextPages,
+    currentPdfPage,
     goToPdfPage,
     pdfSearchHighlight,
     setPdfSearchHighlight,
@@ -357,12 +518,38 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     setAiInput("");
     setIsAiThinking(true);
     incrementAiCount();
-    const explanation = await generateExplanation(
-      userMsg,
-      currentChapter.content.substring(0, 1000)
-    );
-    addChatMessage("model", explanation);
-    setIsAiThinking(false);
+    try {
+      const { context, pages, status } = buildPdfContextForQuestion(
+        userMsg,
+        pdfTextPages,
+        currentPdfPage
+      );
+
+      if (status === "no_text") {
+        addChatMessage(
+          "model",
+          "PDF 텍스트를 아직 불러오지 못했어요. 잠시 후 다시 질문해 주세요."
+        );
+        return;
+      }
+
+      if (status === "no_match") {
+        addChatMessage(
+          "model",
+          "해당 내용은 현재 도서에서 찾을 수 없습니다."
+        );
+        return;
+      }
+
+      const explanation = await answerPdfQuestion(userMsg, context);
+      const referenceLine =
+        !hasPdfCitation(explanation) && pages.length > 0
+          ? buildPdfCitationLine(pages)
+          : "";
+      addChatMessage("model", `${explanation}${referenceLine}`);
+    } finally {
+      setIsAiThinking(false);
+    }
   };
   const handleSaveNote = () => {
     if (editingNote) {

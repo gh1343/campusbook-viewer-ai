@@ -30,6 +30,49 @@ export const generateExplanation = async (text: string, context?: string): Promi
   }
 };
 
+export const answerPdfQuestion = async (
+  question: string,
+  context: string
+): Promise<string> => {
+  if (!apiKey) return "API Key is missing.";
+
+  try {
+    const prompt = `
+[System Instruction]
+당신은 'CampusBook'의 전문 학습 튜터입니다. 
+반드시 제공된 [도서 맥락]의 정보만을 바탕으로 사용자의 질문에 답변하세요.
+
+[답변 규칙]
+1. 답변 내용의 근거가 된 페이지 번호를 반드시 답변 끝에 "(출처: n페이지)" 형태로 명시하세요.
+2. 여러 페이지를 참고했다면 "(출처: n페이지, m페이지)"와 같이 나열하세요.
+3. [도서 맥락]에 답이 없다면, 외부 지식을 쓰지 말고 "해당 내용은 현재 도서에서 찾을 수 없습니다"라고 정직하게 답하세요.
+4. 학생에게 설명하듯 친절하고 명확한 한국어로 답변하세요.
+5. 답변은 핵심 위주로 3~5문장 내외로 구성하세요.
+
+[도서 맥락]
+${context || "정보 없음"}
+
+[사용자 질문]
+"${question}"
+    `.trim();
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+      config: {
+        temperature: 0.1,
+        topP: 0.95,
+        systemInstruction:
+          "당신은 도서의 내용을 정확하게 분석하여 답변하고 출처를 밝히는 정직한 AI 튜터입니다.",
+      },
+    });
+    return response.text || "Could not generate response.";
+  } catch (error) {
+    console.error("AI Error:", error);
+    return "Error connecting to AI service.";
+  }
+};
+
 export const summarizeChapter = async (chapterContent: string): Promise<string> => {
   if (!apiKey) return "API Key is missing.";
 
