@@ -12,6 +12,15 @@ export default defineConfig(({ mode }) => {
       "process.env.API_KEY": JSON.stringify(env.GEMINI_API_KEY),
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
     },
+    server: {
+      proxy: {
+        "/pdf_proxy": {
+          target: "https://d19t5saodanwfx.cloudfront.net",
+          changeOrigin: true,
+          rewrite: (proxy_path) => proxy_path.replace(/^\/pdf_proxy/, ""),
+        },
+      },
+    },
     resolve: { alias: { "@": path.resolve(__dirname, ".") } },
   };
 });
