@@ -676,10 +676,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setSelection((prev) => ({ ...prev, show: false }));
     selectionCacheRef.current = null;
     window.getSelection()?.removeAllRanges();
-    setToolsOpen(true);
-    setActiveToolTab("notes");
-    focusHighlight(id);
     if (options?.requestNoteEdit) {
+      setToolsOpen(true);
+      setActiveToolTab("notes");
+      focusHighlight(id);
       requestHighlightNoteEdit(id);
     }
   };
