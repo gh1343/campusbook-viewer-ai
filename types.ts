@@ -12,7 +12,7 @@ export interface RagChunk {
 
 export interface SearchResult {
   id: string;
-  type: "chapter" | "highlight" | "note" | "pdf";
+  type: "chapter" | "highlight" | "note" | "book";
   title: string;
   contentSnippet: string;
   chapterId?: string;
@@ -102,12 +102,14 @@ export interface BookContextType {
   chapters: Chapter[];
   ragChunks: RagChunk[];
   referenceDocument: Chapter | null;
+  bookTitle: string;
 
   currentChapterIndex: number;
   currentChapter: Chapter;
   goToNextChapter: () => void;
   goToPrevChapter: () => void;
   goToChapter: (index: number) => void;
+  getChapterTitleByPage: (page: number) => string;
   uploadBook: (file: File) => Promise<void>;
   isProcessing: boolean;
 
@@ -134,7 +136,10 @@ export interface BookContextType {
     targetChapterId?: string,
     pageNumber?: number
   ) => string;
-  updateHighlight: (id: string, data: Partial<Highlight> & { note?: string }) => void;
+  updateHighlight: (
+    id: string,
+    data: Partial<Highlight> & { note?: string }
+  ) => void;
   removeHighlight: (id: string) => void;
   activeHighlightId: string | null;
   focusHighlight: (id: string) => void;

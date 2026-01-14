@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
   useRef,
-} from 'react';
+} from "react";
 import {
   Chapter,
   Highlight,
@@ -23,22 +23,22 @@ import {
   ViewMode,
   PdfBookmark,
   TTSConfig,
-} from '../../types';
-import {generateExplanation} from '../services/geminiService';
-import {processPdf, findRelevantChunks} from '../services/pdfRagService';
-import {synthesizeWithGemini} from '../services/ttsService';
+} from "../../types";
+import { generateExplanation } from "../services/geminiService";
+import { processPdf, findRelevantChunks } from "../services/pdfRagService";
+import { synthesizeWithGemini } from "../services/ttsService";
 import {
   fetchRmsProgressPage,
   getRmsConfig,
   loadLastProgressPageFromLocalStorage,
   saveRmsProgress,
-} from '../services/rmsService';
-import navTocRaw from '../../nav.xhtml?raw';
+} from "../services/rmsService";
+import navTocRaw from "../../nav.xhtml?raw";
 
 const MOCK_CHAPTERS: Chapter[] = [
   {
-    id: 'ch1',
-    title: 'Chapter 1: The Dawn of AI',
+    id: "ch1",
+    title: "Chapter 1: The Dawn of AI",
     content: `
       <h2>1.1 Introduction to Artificial Intelligence</h2>
       <p>Artificial Intelligence (AI) is intelligence demonstrated by machines, as opposed to the natural intelligence displayed by humans or animals. Leading AI textbooks define the field as the study of "intelligent agents": any system that perceives its environment and takes actions that maximize its chances of achieving its goals.</p>
@@ -48,8 +48,8 @@ const MOCK_CHAPTERS: Chapter[] = [
     `,
   },
   {
-    id: 'ch2',
-    title: 'Chapter 2: Machine Learning Basics',
+    id: "ch2",
+    title: "Chapter 2: Machine Learning Basics",
     content: `
       <h2>2.1 What is Machine Learning?</h2>
       <p>Machine Learning (ML) is a subset of artificial intelligence that focuses on building systems that learn, or improve performance, based on the data they consume. Artificial Intelligence is a broad term that refers to systems or machines that mimic human intelligence. Machine Learning is how they achieve that intelligence.</p>
@@ -59,8 +59,8 @@ const MOCK_CHAPTERS: Chapter[] = [
     `,
   },
   {
-    id: 'ch3',
-    title: 'Chapter 3: Ethics in Technology',
+    id: "ch3",
+    title: "Chapter 3: Ethics in Technology",
     content: `
       <h2>3.1 The Importance of Ethics</h2>
       <p>As technology becomes more integrated into our daily lives, the ethical implications of its use become increasingly important. Issues such as privacy, bias in algorithms, and the displacement of jobs are central discussions in the tech world today.</p>
@@ -71,36 +71,46 @@ const MOCK_CHAPTERS: Chapter[] = [
 
 const normalizeForMatch = (value: string) =>
   value
-    .replace(/\s+/g, '')
-    .replace(/[^0-9A-Za-z가-힣]/g, '')
+    .replace(/\s+/g, "")
+    .replace(/[^0-9A-Za-z가-힣]/g, "")
     .toLowerCase();
 
 const parseNavChapters = (
   raw: string
-): {chapters: Chapter[]; pageMap: Record<string, number>} => {
-  if (typeof window === 'undefined') return {chapters: [], pageMap: {}};
+): {
+  chapters: Chapter[];
+  pageMap: Record<string, number>;
+  bookTitle: string;
+} => {
+  if (typeof window === "undefined")
+    return { chapters: [], pageMap: {}, bookTitle: "" };
   try {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(raw, 'application/xhtml+xml');
+    const doc = parser.parseFromString(raw, "application/xhtml+xml");
+    const titleNode =
+      doc.querySelector("head > title") || doc.querySelector("title");
+    const h1Node = doc.querySelector("h1");
+    const bookTitle = (titleNode?.textContent || h1Node?.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim();
     const nav =
-      doc.querySelector('nav#toc') || doc.querySelector('nav[epub\\:type="toc"]');
-    if (!nav) return {chapters: [], pageMap: {}};
+      doc.querySelector("nav#toc") ||
+      doc.querySelector('nav[epub\\:type="toc"]');
+    if (!nav) return { chapters: [], pageMap: {}, bookTitle };
 
     const usedIds = new Set<string>();
-    const anchors = Array.from(nav.querySelectorAll('a'));
+    const anchors = Array.from(nav.querySelectorAll("a"));
     const pageMap: Record<string, number> = {};
 
     const chapters = anchors
       .map((anchor, index) => {
-        const title = (anchor.textContent || '')
-          .replace(/\s+/g, ' ')
-          .trim();
+        const title = (anchor.textContent || "").replace(/\s+/g, " ").trim();
         if (!title) return null;
 
-        const href = anchor.getAttribute('href') || `toc-${index + 1}`;
+        const href = anchor.getAttribute("href") || `toc-${index + 1}`;
         const rawId = href;
         const baseId =
-          rawId.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') ||
+          rawId.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") ||
           `toc-${index + 1}`;
 
         let id = baseId;
@@ -110,7 +120,8 @@ const parseNavChapters = (
         }
         usedIds.add(id);
 
-        const pageMatch = href.match(/p0*([0-9]+)_/i) || href.match(/p0*([0-9]+)/i);
+        const pageMatch =
+          href.match(/p0*([0-9]+)_/i) || href.match(/p0*([0-9]+)/i);
         if (pageMatch && pageMatch[1]) {
           const pageNum = parseInt(pageMatch[1], 10);
           if (Number.isFinite(pageNum)) {
@@ -121,47 +132,50 @@ const parseNavChapters = (
         return {
           id,
           title,
-          content: '',
+          content: "",
         } as Chapter;
       })
       .filter(Boolean) as Chapter[];
 
-    return {chapters, pageMap};
+    return { chapters, pageMap, bookTitle };
   } catch (err) {
-    console.error('Failed to parse nav.xhtml', err);
-    return {chapters: [], pageMap: {}};
+    console.error("Failed to parse nav.xhtml", err);
+    return { chapters: [], pageMap: {}, bookTitle: "" };
   }
 };
 
 const BookContext = createContext<BookContextType | undefined>(undefined);
 
-export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
+export const BookProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [chapters, setChapters] = useState<Chapter[]>(MOCK_CHAPTERS);
   const [referenceDocument, setReferenceDocument] = useState<Chapter | null>(
     null
   );
+  const [bookTitle, setBookTitle] = useState("");
   const [ragChunks, setRagChunks] = useState<RagChunk[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
-  const [fontSize, setFontSize] = useState<FontSize>('medium');
-  const [theme, setTheme] = useState<Theme>('light');
-  const [viewMode, setViewMode] = useState<ViewMode>('single');
+  const [fontSize, setFontSize] = useState<FontSize>("medium");
+  const [theme, setTheme] = useState<Theme>("light");
+  const [viewMode, setViewMode] = useState<ViewMode>("single");
 
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [bookmarks, setBookmarks] = useState<PdfBookmark[]>(() => {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === "undefined") return [];
     try {
-      const raw = localStorage.getItem('pdfBookmarks');
+      const raw = localStorage.getItem("pdfBookmarks");
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         return parsed
-          .map(item => {
-            if (item && typeof item === 'object' && 'page' in item) {
+          .map((item) => {
+            if (item && typeof item === "object" && "page" in item) {
               return item as PdfBookmark;
             }
-            if (typeof item === 'number') {
+            if (typeof item === "number") {
               return {
                 id: `migrated-${item}`,
                 page: item,
@@ -174,7 +188,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
           .filter(Boolean) as PdfBookmark[];
       }
     } catch (e) {
-      console.error('Failed to parse stored pdfBookmarks', e);
+      console.error("Failed to parse stored pdfBookmarks", e);
     }
     return [];
   });
@@ -183,8 +197,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     null
   );
 
-  const [drawingMode, setDrawingMode] = useState<DrawingMode>('idle');
-  const [penColor, setPenColor] = useState<DrawingColor>('#ef4444');
+  const [drawingMode, setDrawingMode] = useState<DrawingMode>("idle");
+  const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
   const [penWidth, setPenWidth] = useState<number>(3);
   const [penOpacity, setPenOpacity] = useState<number>(1.0);
   const [chapterStrokes, setChapterStrokes] = useState<
@@ -198,9 +212,9 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const [aiChatHistory, setAiChatHistory] = useState<ChatMessage[]>([]);
   const [isToolsOpen, setToolsOpen] = useState(true);
   const [activeToolTab, setActiveToolTab] = useState<
-    'ai' | 'notes' | 'notebook' | 'reference' | 'search'
-  >('ai');
-  const [searchQuery, setSearchQuery] = useState('');
+    "ai" | "notes" | "notebook" | "reference" | "search"
+  >("ai");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // --- TTS (stub implementation for UI controls) ---
   const [isTtsPlaying, setIsTtsPlaying] = useState(false);
@@ -208,7 +222,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     number | null
   >(null);
   const [ttsConfig, setTtsConfigState] = useState<TTSConfig>({
-    voice: 'Kore',
+    voice: "Kore",
     speed: 1.0,
     continuous: true,
   });
@@ -221,7 +235,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const rmsInitRef = useRef(false);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
-    setTtsConfigState(prev => ({...prev, ...config}));
+    setTtsConfigState((prev) => ({ ...prev, ...config }));
   };
 
   const splitIntoSentences = (text: string): string[] => {
@@ -229,14 +243,18 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     if (!trimmed) return [];
     const matches = trimmed.match(/[^.!?]+[.!?]?/g);
     if (matches && matches.length > 0) {
-      return matches.map(s => s.trim()).filter(Boolean);
+      return matches.map((s) => s.trim()).filter(Boolean);
     }
     // fallback: single chunk
     return [trimmed];
   };
 
   const extractPlainText = (raw: string) =>
-    raw.replace(/<script[^>]*>.*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    raw
+      .replace(/<script[^>]*>.*?<\/script>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
   const buildSentences = () => {
     if (pdfTextPages.length > 0) {
@@ -245,8 +263,8 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       const sentences: string[] = [];
       let defaultStartIndex = 0;
 
-      sorted.forEach(p => {
-        const plain = extractPlainText(p.text || '');
+      sorted.forEach((p) => {
+        const plain = extractPlainText(p.text || "");
         const pageSentences = splitIntoSentences(plain);
         if (p.page < targetPage) {
           defaultStartIndex += pageSentences.length;
@@ -264,7 +282,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const cleanupTtsAudio = () => {
     if (ttsAudioRef.current) {
       ttsAudioRef.current.pause();
-      ttsAudioRef.current.src = '';
+      ttsAudioRef.current.src = "";
       ttsAudioRef.current = null;
     }
     if (ttsObjectUrlRef.current) {
@@ -277,7 +295,11 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     if (ttsGeneratingRef.current) return;
 
     // 재생 일시정지 상태라면 이어서 재생
-    if (ttsAudioRef.current && ttsAudioRef.current.paused && !ttsAudioRef.current.ended) {
+    if (
+      ttsAudioRef.current &&
+      ttsAudioRef.current.paused &&
+      !ttsAudioRef.current.ended
+    ) {
       await ttsAudioRef.current.play().catch(() => {});
       setIsTtsPlaying(true);
       return;
@@ -287,19 +309,21 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
     const { sentences, defaultStartIndex } = buildSentences();
     if (sentences.length === 0) {
-      alert('읽을 텍스트가 없습니다.');
+      alert("읽을 텍스트가 없습니다.");
       return;
     }
 
     const beginIdx =
-      typeof startIndex === 'number' && startIndex >= 0 && startIndex < sentences.length
+      typeof startIndex === "number" &&
+      startIndex >= 0 &&
+      startIndex < sentences.length
         ? startIndex
         : Math.min(defaultStartIndex, sentences.length - 1);
 
     const MAX_CHARS = 8000;
-    const textToRead = sentences.slice(beginIdx).join(' ').slice(0, MAX_CHARS);
+    const textToRead = sentences.slice(beginIdx).join(" ").slice(0, MAX_CHARS);
     if (!textToRead) {
-      alert('읽을 텍스트가 없습니다.');
+      alert("읽을 텍스트가 없습니다.");
       return;
     }
 
@@ -328,13 +352,13 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         cleanupTtsAudio();
       };
 
-      await audio.play().catch(err => {
-        console.error('Audio playback failed', err);
+      await audio.play().catch((err) => {
+        console.error("Audio playback failed", err);
         setIsTtsPlaying(false);
       });
     } catch (err) {
-      console.error('Gemini TTS failed', err);
-      alert('TTS 생성 중 오류가 발생했습니다.');
+      console.error("Gemini TTS failed", err);
+      alert("TTS 생성 중 오류가 발생했습니다.");
       setIsTtsPlaying(false);
       setCurrentTtsSegmentIndex(null);
     } finally {
@@ -363,7 +387,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     highlightCount: 0,
   });
   const [pdfTextPages, setPdfTextPages] = useState<
-    {page: number; text: string}[]
+    { page: number; text: string }[]
   >([]);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
@@ -371,9 +395,10 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     ((page: number) => void) | null
   >(null);
   const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
-  const [pdfSearchHighlight, setPdfSearchHighlight] = useState<
-    {page: number; term: string} | null
-  >(null);
+  const [pdfSearchHighlight, setPdfSearchHighlight] = useState<{
+    page: number;
+    term: string;
+  } | null>(null);
 
   const currentChapter = chapters[currentChapterIndex];
 
@@ -385,7 +410,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === "visible") {
         updateReadingTime();
       }
     }, 5000);
@@ -393,7 +418,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   }, []);
 
   useEffect(() => {
-    setStats(prev => ({
+    setStats((prev) => ({
       ...prev,
       chapterVisits: {
         ...prev.chapterVisits,
@@ -404,32 +429,39 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   useEffect(() => {
     try {
-      localStorage.setItem('pdfBookmarks', JSON.stringify(bookmarks));
+      localStorage.setItem("pdfBookmarks", JSON.stringify(bookmarks));
     } catch (e) {
-      console.error('Failed to persist pdfBookmarks', e);
+      console.error("Failed to persist pdfBookmarks", e);
     }
   }, [bookmarks]);
 
   // nav.xhtml을 chapters로 반영
   useEffect(() => {
     if (!navTocRaw) return;
-    const {chapters: parsedChapters, pageMap} = parseNavChapters(navTocRaw);
+    const {
+      chapters: parsedChapters,
+      pageMap,
+      bookTitle: parsedBookTitle,
+    } = parseNavChapters(navTocRaw);
     if (parsedChapters.length > 0) {
       setChapters(parsedChapters);
       setChapterPageMap(pageMap);
       setCurrentChapterIndex(0);
     }
+    if (parsedBookTitle) {
+      setBookTitle(parsedBookTitle);
+    }
   }, []);
 
   const updateReadingTime = () => {
-    setStats(prev => ({
+    setStats((prev) => ({
       ...prev,
       totalReadingTime: prev.totalReadingTime + 5,
     }));
   };
 
   const incrementAiCount = () => {
-    setStats(prev => ({
+    setStats((prev) => ({
       ...prev,
       aiInteractionCount: prev.aiInteractionCount + 1,
     }));
@@ -465,6 +497,17 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     [chapters, chapterPageMap]
   );
 
+  const getChapterTitleByPage = React.useCallback(
+    (page: number) => {
+      if (!page) return "";
+      const idx = findChapterIndexForPage(page);
+      if (idx === -1) return "";
+      const title = chapters[idx]?.title?.trim();
+      return title || `Chapter ${idx + 1}`;
+    },
+    [chapters, findChapterIndexForPage]
+  );
+
   useEffect(() => {
     const idx = findChapterIndexForPage(currentPdfPage);
     if (idx !== -1 && idx !== currentChapterIndex) {
@@ -473,20 +516,20 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   }, [currentPdfPage, findChapterIndexForPage, currentChapterIndex]);
 
   const toggleTheme = () => {
-    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
-    if (theme === 'light') {
-      document.documentElement.classList.add('dark');
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    if (theme === "light") {
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove("dark");
     }
   };
 
-  const toggleAnnotations = () => setShowAnnotations(prev => !prev);
+  const toggleAnnotations = () => setShowAnnotations((prev) => !prev);
 
   const addPdfBookmark = (page: number, label?: string) => {
     if (!page || page < 1) return;
-    setBookmarks(prev => {
-      if (prev.some(b => b.page === page)) return prev;
+    setBookmarks((prev) => {
+      if (prev.some((b) => b.page === page)) return prev;
       const bookmark: PdfBookmark = {
         id: Date.now().toString(),
         page,
@@ -498,7 +541,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   };
 
   const removePdfBookmark = (id: string) => {
-    setBookmarks(prev => prev.filter(b => b.id !== id));
+    setBookmarks((prev) => prev.filter((b) => b.id !== id));
   };
 
   const clearHighlightFocus = () => {
@@ -536,9 +579,12 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       const data = await processPdf(file);
 
       if (data.chapters.length > 0) {
+        const nextBookTitle =
+          data.chapters[0]?.title || file.name.replace(/\.pdf$/i, "");
         // 1) 메인 뷰어에 들어갈 챕터를 PDF에서 가져오기
         setChapters(data.chapters);
         setCurrentChapterIndex(0);
+        setBookTitle(nextBookTitle);
 
         // 2) RAG(검색/AI)용 청크도 이 PDF 기준으로 세팅
         setRagChunks(data.chunks);
@@ -548,15 +594,15 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
         // 4) 툴 패널 열고 AI 탭 or 원하는 탭으로 이동
         setToolsOpen(true);
-        setActiveToolTab('ai'); // 혹은 'notes' / 'search' 등으로 변경 가능
+        setActiveToolTab("ai"); // 혹은 'notes' / 'search' 등으로 변경 가능
 
         alert(`"${file.name}"을(를) 메인 책으로 로드했습니다.`);
       } else {
-        alert('Processed PDF but found no readable content.');
+        alert("Processed PDF but found no readable content.");
       }
     } catch (error) {
-      console.error('PDF Load Failed', error);
-      alert('Failed to load PDF. Please ensure it is a valid PDF file.');
+      console.error("PDF Load Failed", error);
+      alert("Failed to load PDF. Please ensure it is a valid PDF file.");
     } finally {
       setIsProcessing(false);
     }
@@ -573,27 +619,27 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       id: Date.now().toString(),
       chapterId: chapterId,
       text,
-      color: 'yellow',
+      color: "yellow",
       pageNumber,
       note,
       createdAt: Date.now(),
     };
-    setHighlights(prev => [newHighlight, ...prev]);
-    setStats(prev => ({...prev, highlightCount: prev.highlightCount + 1}));
+    setHighlights((prev) => [newHighlight, ...prev]);
+    setStats((prev) => ({ ...prev, highlightCount: prev.highlightCount + 1 }));
     return newHighlight.id;
   };
 
   const updateHighlight = (
     id: string,
-    data: Partial<Highlight> & {note?: string}
+    data: Partial<Highlight> & { note?: string }
   ) => {
-    setHighlights(prev =>
-      prev.map(hl => (hl.id === id ? {...hl, ...data} : hl))
+    setHighlights((prev) =>
+      prev.map((hl) => (hl.id === id ? { ...hl, ...data } : hl))
     );
   };
 
   const removeHighlight = (id: string) => {
-    setHighlights(prev => prev.filter(h => h.id !== id));
+    setHighlights((prev) => prev.filter((h) => h.id !== id));
   };
 
   const focusHighlight = (id: string) => {
@@ -604,22 +650,22 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 
   const goToHighlight = (hlOrId: Highlight | string) => {
     const hl =
-      typeof hlOrId === 'string'
-        ? highlights.find(h => h.id === hlOrId)
+      typeof hlOrId === "string"
+        ? highlights.find((h) => h.id === hlOrId)
         : hlOrId;
     if (!hl) return;
 
     // Try to fill missing pageNumber for reference-doc
-    if (hl.chapterId === 'reference-doc' && !hl.pageNumber) {
+    if (hl.chapterId === "reference-doc" && !hl.pageNumber) {
       if (currentPdfPage) {
-        updateHighlight(hl.id, {pageNumber: currentPdfPage});
+        updateHighlight(hl.id, { pageNumber: currentPdfPage });
       }
     }
 
-    if (hl.chapterId === 'reference-doc' && hl.pageNumber) {
+    if (hl.chapterId === "reference-doc" && hl.pageNumber) {
       goToPdfPage(hl.pageNumber);
     } else {
-      const idx = chapters.findIndex(c => c.id === hl.chapterId);
+      const idx = chapters.findIndex((c) => c.id === hl.chapterId);
       if (idx >= 0) {
         goToChapter(idx);
       }
@@ -628,16 +674,16 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   };
 
   const addStroke = (chapterId: string, stroke: Stroke) => {
-    setChapterStrokes(prev => ({
+    setChapterStrokes((prev) => ({
       ...prev,
       [chapterId]: [...(prev[chapterId] || []), stroke],
     }));
   };
 
   const removeStroke = (chapterId: string, strokeId: string) => {
-    setChapterStrokes(prev => ({
+    setChapterStrokes((prev) => ({
       ...prev,
-      [chapterId]: (prev[chapterId] || []).filter(s => s.id !== strokeId),
+      [chapterId]: (prev[chapterId] || []).filter((s) => s.id !== strokeId),
     }));
   };
 
@@ -648,73 +694,75 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const addGeneralNote = (title: string, content: string) => {
     const newNote: GeneralNote = {
       id: Date.now().toString(),
-      title: title || 'Untitled Note',
+      title: title || "Untitled Note",
       content: content,
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    setGeneralNotes(prev => [newNote, ...prev]);
+    setGeneralNotes((prev) => [newNote, ...prev]);
   };
 
   const updateGeneralNote = (id: string, title: string, content: string) => {
-    setGeneralNotes(prev =>
-      prev.map(note =>
-        note.id === id ? {...note, title, content, updatedAt: Date.now()} : note
+    setGeneralNotes((prev) =>
+      prev.map((note) =>
+        note.id === id
+          ? { ...note, title, content, updatedAt: Date.now() }
+          : note
       )
     );
   };
 
   const removeGeneralNote = (id: string) => {
-    setGeneralNotes(prev => prev.filter(n => n.id !== id));
+    setGeneralNotes((prev) => prev.filter((n) => n.id !== id));
   };
 
   const exportNoteAsMarkdown = (note: GeneralNote) => {
-    let md = note.content.replace(/<[^>]+>/g, '');
+    let md = note.content.replace(/<[^>]+>/g, "");
     const blob = new Blob([`# ${note.title}\n\n${md}`], {
-      type: 'text/markdown',
+      type: "text/markdown",
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `${note.title.replace(/\s+/g, '_')}.md`;
+    a.download = `${note.title.replace(/\s+/g, "_")}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const importNotes = async (file: File) => {
     const text = await file.text();
-    let title = file.name.replace('.md', '').replace('.json', '');
-    let content = text.replace(/\n/g, '<br>');
+    let title = file.name.replace(".md", "").replace(".json", "");
+    let content = text.replace(/\n/g, "<br>");
     addGeneralNote(title, content);
   };
 
-  const addChatMessage = (role: 'user' | 'model', text: string) => {
+  const addChatMessage = (role: "user" | "model", text: string) => {
     const newMessage: ChatMessage = {
       id: Date.now().toString(),
       role,
       text,
       timestamp: Date.now(),
     };
-    setAiChatHistory(prev => [...prev, newMessage]);
+    setAiChatHistory((prev) => [...prev, newMessage]);
   };
 
   const triggerSmartExplain = async (text: string) => {
     setToolsOpen(true);
-    setActiveToolTab('ai');
+    setActiveToolTab("ai");
     const userPrompt = `Explain: "${text}"`;
-    addChatMessage('user', userPrompt);
+    addChatMessage("user", userPrompt);
     incrementAiCount();
     const relevantChunks = findRelevantChunks(text, ragChunks);
     const contextString = relevantChunks
-      .map(chunk => `[Page ${chunk.pageNumber}]: ${chunk.text}`)
-      .join('\n\n');
+      .map((chunk) => `[Page ${chunk.pageNumber}]: ${chunk.text}`)
+      .join("\n\n");
     const explanation = await generateExplanation(
       text,
       contextString || currentChapter.content.substring(0, 3000)
     );
-    addChatMessage('model', explanation);
+    addChatMessage("model", explanation);
   };
 
   const performSearch = (query: string): SearchResult[] => {
@@ -723,20 +771,20 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
     const results: SearchResult[] = [];
     const lowerQuery = query.toLowerCase();
 
-    chapters.forEach(chapter => {
-      const plainText = chapter.content.replace(/<[^>]+>/g, ' ');
+    chapters.forEach((chapter) => {
+      const plainText = chapter.content.replace(/<[^>]+>/g, " ");
       const index = plainText.toLowerCase().indexOf(lowerQuery);
       if (index !== -1) {
         const start = Math.max(0, index - 40);
         const end = Math.min(plainText.length, index + 40 + query.length);
         const snippet =
-          (start > 0 ? '...' : '') +
+          (start > 0 ? "..." : "") +
           plainText.substring(start, end) +
-          (end < plainText.length ? '...' : '');
+          (end < plainText.length ? "..." : "");
 
         results.push({
           id: `ch-${chapter.id}-${index}`,
-          type: 'chapter',
+          type: "chapter",
           title: chapter.title,
           contentSnippet: snippet,
           chapterId: chapter.id,
@@ -745,15 +793,15 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       }
     });
 
-    highlights.forEach(hl => {
+    highlights.forEach((hl) => {
       if (
         hl.text.toLowerCase().includes(lowerQuery) ||
         (hl.note && hl.note.toLowerCase().includes(lowerQuery))
       ) {
         results.push({
           id: `hl-${hl.id}`,
-          type: 'highlight',
-          title: 'Highlight',
+          type: "highlight",
+          title: "Highlight",
           contentSnippet: hl.note ? `${hl.text} - ${hl.note}` : hl.text,
           chapterId: hl.chapterId,
           pageNumber: hl.pageNumber,
@@ -761,34 +809,34 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
       }
     });
 
-    generalNotes.forEach(note => {
-      const plainContent = note.content.replace(/<[^>]+>/g, ' ');
+    generalNotes.forEach((note) => {
+      const plainContent = note.content.replace(/<[^>]+>/g, " ");
       if (
         note.title.toLowerCase().includes(lowerQuery) ||
         plainContent.toLowerCase().includes(lowerQuery)
       ) {
         results.push({
           id: `note-${note.id}`,
-          type: 'note',
+          type: "note",
           title: note.title,
-          contentSnippet: plainContent.substring(0, 80) + '...',
+          contentSnippet: plainContent.substring(0, 80) + "...",
           chapterId: note.chapterId,
         });
       }
     });
 
-    pdfTextPages.forEach(p => {
+    pdfTextPages.forEach((p) => {
       const idx = p.text.toLowerCase().indexOf(lowerQuery);
       if (idx !== -1) {
         const start = Math.max(0, idx - 40);
         const end = Math.min(p.text.length, idx + 40 + query.length);
         const snippet =
-          (start > 0 ? '...' : '') +
+          (start > 0 ? "..." : "") +
           p.text.substring(start, end) +
-          (end < p.text.length ? '...' : '');
+          (end < p.text.length ? "..." : "");
         results.push({
-          id: `pdf-${p.page}-${idx}`,
-          type: 'pdf',
+          id: `book-${p.page}-${idx}`,
+          type: "book",
           title: `p.${p.page}`,
           contentSnippet: snippet,
           pageNumber: p.page,
@@ -844,7 +892,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
           goToPdfPage(savedPage);
         }
       } catch (err) {
-        console.error('Failed to load RMS progress', err);
+        console.error("Failed to load RMS progress", err);
       }
     };
 
@@ -852,7 +900,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   }, [goToPdfPage]);
 
   const updatePdfTextPages = React.useCallback(
-    (pages: {page: number; text: string}[]) => {
+    (pages: { page: number; text: string }[]) => {
       setPdfTextPages(pages);
     },
     []
@@ -861,7 +909,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
   const saveProgress = async () => {
     const config = getRmsConfig();
     if (!config) {
-      alert('RMS 설정이 필요합니다. (VITE_RMS_API_BASE, VITE_RMS_BOOK_CD)');
+      alert("RMS 설정이 필요합니다. (VITE_RMS_API_BASE, VITE_RMS_BOOK_CD)");
       return;
     }
     try {
@@ -876,10 +924,10 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         lastPages: currentPdfPage,
         bookTotalPages: pdfTotalPages,
       });
-      alert('Progress Saved!');
+      alert("Progress Saved!");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('Failed to save progress', err);
+      console.error("Failed to save progress", err);
       alert(`Progress Save Failed: ${message}`);
     }
   };
@@ -890,11 +938,13 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
         chapters,
         ragChunks,
         referenceDocument,
+        bookTitle,
         currentChapterIndex,
         currentChapter,
         goToNextChapter,
         goToPrevChapter,
         goToChapter,
+        getChapterTitleByPage,
         uploadBook,
         isProcessing,
         fontSize,
@@ -978,7 +1028,7 @@ export const BookProvider: React.FC<{children: ReactNode}> = ({children}) => {
 export const useBook = () => {
   const context = useContext(BookContext);
   if (context === undefined) {
-    throw new Error('useBook must be used within a BookProvider');
+    throw new Error("useBook must be used within a BookProvider");
   }
   return context;
 };

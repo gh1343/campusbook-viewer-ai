@@ -267,6 +267,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     pdfSearchHighlight,
     setPdfSearchHighlight,
     goToHighlight,
+    getChapterTitleByPage,
   } = useBook();
 
   const [aiInput, setAiInput] = useState("");
@@ -329,6 +330,18 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     updateHighlight(id, { note: highlightText });
     setEditingHighlightId(null);
     setHighlightText("");
+  };
+
+  const getHighlightChapterLabel = (hl: HighlightType) => {
+    if (hl.chapterId === "reference-doc") {
+      if (!hl.pageNumber) return "Reference PDF";
+      const title = getChapterTitleByPage(hl.pageNumber);
+      return title || "Reference PDF";
+    }
+    const chapterIndex = chapters.findIndex((c) => c.id === hl.chapterId);
+    if (chapterIndex === -1) return "Chapter";
+    const chapterTitle = chapters[chapterIndex]?.title?.trim();
+    return chapterTitle || `Chapter ${chapterIndex + 1}`;
   };
 
   // Filtered Lists for Memos and Notebook
@@ -577,10 +590,6 @@ ${contextString}
   };
   const searchResults =
     activeToolTab === "search" ? performSearch(searchQuery) : [];
-  const referenceTitle =
-    referenceDocument?.title?.trim() ||
-    chapters[0]?.title?.trim() ||
-    "Reference PDF";
 
   return (
     <PanelWrapper isOpen={isOpen} onClose={onClose} side="right">
@@ -720,17 +729,16 @@ ${contextString}
                       : ""
                   }`}
                 >
-                  <div className="flex justify-between mb-2 text-xs text-slate-400">
-                    <span>
-                      {hl.chapterId === "reference-doc"
-                        ? `${referenceTitle}${
-                            hl.pageNumber ? ` - P. ${hl.pageNumber}` : ""
-                          }`
-                        : `Chapter ${
-                            chapters.findIndex((c) => c.id === hl.chapterId) + 1
-                          }`}
-                    </span>
-                    <div className="flex gap-2">
+                  <div className="highlight_meta_row mb-2 text-xs text-slate-400">
+                    <div className="highlight_meta_group">
+                      <span className="highlight_chapter_label">
+                        {getHighlightChapterLabel(hl)}
+                      </span>
+                      <span className="highlight_page_label">
+                        {hl.pageNumber ? `P. ${hl.pageNumber}` : ""}
+                      </span>
+                    </div>
+                    <div className="highlight_actions">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -753,7 +761,7 @@ ${contextString}
                   </div>
 
                   {/* Use HighlightMatch component for text body */}
-                  <p className="highlight_txt text-sm italic border-l-2 border-amber-400 pl-2 text-slate-600">
+                  <p className="highlight_txt highlight_body_clamp text-sm italic border-l-2 border-amber-400 pl-2 text-slate-600">
                     "<HighlightMatch text={hl.text} query={localFilter} />"
                   </p>
 
@@ -1059,7 +1067,7 @@ ${contextString}
                             setEditingNote(note);
                             setActiveToolTab("notebook");
                           }
-                        } else if (result.type === "pdf") {
+                        } else if (result.type === "book") {
                           if (result.pageNumber) {
                             goToPdfPage(result.pageNumber);
                             setPdfSearchHighlight({
@@ -1103,7 +1111,7 @@ ${contextString}
                               ? "bg-blue-100 text-blue-600"
                               : result.type === "highlight"
                               ? "bg-yellow-100 text-yellow-600"
-                              : result.type === "pdf"
+                              : result.type === "book"
                               ? "bg-indigo-100 text-indigo-600"
                               : "bg-green-100 text-green-600"
                           }`}
