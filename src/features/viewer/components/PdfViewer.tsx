@@ -35,6 +35,17 @@ import { drawStrokePath, VISUAL_SCALE } from "../utils/pdf_viewer_utils";
 // ✅ worker 설정 (v4 ESM)
 GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.mjs`;
 
+const getJsonBytes = (value: unknown) => {
+  const text = JSON.stringify(value);
+  if (typeof TextEncoder === "undefined") return text.length;
+  return new TextEncoder().encode(text).length;
+};
+
+const bytesToMb = (bytes: number) =>
+  Number((bytes / (1024 * 1024)).toFixed(4));
+
+const enable_debug_log = false;
+
 interface PdfViewerProps {
   file: string; // 일단 string URL 기준으로만 사용
   onPageChange?: (page: number) => void;
@@ -83,6 +94,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setToolsOpen,
     setActiveToolTab,
     requestHighlightNoteEdit,
+    getChapterTitleByPage,
   } = useBook();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
@@ -631,7 +643,36 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pageNumber
     );
     const mergedRects = mergeHighlightRects(rects);
-    setPdfHighlights((prev) => [...prev, { id, rects: mergedRects }]);
+    const rectBytes = getJsonBytes(mergedRects);
+    const chapterLabel = pageNumber
+      ? getChapterTitleByPage(pageNumber) || "Reference PDF"
+      : "Reference PDF";
+    const listInfo = {
+      chapterLabel,
+      pageNumber,
+      text: activeText,
+    };
+    const listBytes = getJsonBytes(listInfo);
+    const combinedBytes = rectBytes + listBytes;
+    setPdfHighlights((prev) => {
+      const next = [...prev, { id, rects: mergedRects }];
+      const totalBytes = getJsonBytes(next);
+      if (enable_debug_log) {
+        console.log("[highlight/pdf/size]", {
+          pageNumber,
+          rectCount: mergedRects.length,
+          rectBytes,
+          rectMb: bytesToMb(rectBytes),
+          listBytes,
+          listMb: bytesToMb(listBytes),
+          combinedBytes,
+          combinedMb: bytesToMb(combinedBytes),
+          totalBytes,
+          totalMb: bytesToMb(totalBytes),
+        });
+      }
+      return next;
+    });
     setSelection((prev) => ({ ...prev, show: false }));
     selectionCacheRef.current = null;
     window.getSelection()?.removeAllRanges();

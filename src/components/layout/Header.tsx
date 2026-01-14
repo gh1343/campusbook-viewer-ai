@@ -9,6 +9,7 @@ import {
   Eraser,
   LogOut,
   Save,
+  FileDown,
   Eye,
   Settings2,
   X,
@@ -70,6 +71,11 @@ export const Header: React.FC<HeaderProps> = ({
     ttsConfig,
     setTtsConfig,
     setActiveToolTab,
+    highlights,
+    chapterStrokes,
+    chapters,
+    bookTitle,
+    getChapterTitleByPage,
   } = useBook();
 
   const location = useLocation();
@@ -112,6 +118,91 @@ export const Header: React.FC<HeaderProps> = ({
     } else {
       addPdfBookmark(currentPdfPage, `p.${currentPdfPage}`);
     }
+  };
+
+  const getHighlightChapterLabel = (
+    chapterId?: string,
+    pageNumber?: number
+  ) => {
+    if (chapterId === "reference-doc" || chapterId === "pdf-main") {
+      if (!pageNumber) return "Reference PDF";
+      const title = getChapterTitleByPage(pageNumber);
+      return title || "Reference PDF";
+    }
+    const chapterIndex = chapters.findIndex((c) => c.id === chapterId);
+    if (chapterIndex === -1) return "Chapter";
+    const chapterTitle = chapters[chapterIndex]?.title?.trim();
+    return chapterTitle || `Chapter ${chapterIndex + 1}`;
+  };
+
+  const downloadTextFile = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const buildHighlightExport = () => {
+    const items = highlights.map((hl) => ({
+      id: hl.id,
+      chapterId: hl.chapterId,
+      chapterLabel: getHighlightChapterLabel(hl.chapterId, hl.pageNumber),
+      pageNumber: hl.pageNumber ?? null,
+      text: hl.text,
+      note: hl.note || "",
+      color: hl.color,
+      createdAt: hl.createdAt,
+    }));
+    return {
+      exportedAt: new Date().toISOString(),
+      bookTitle,
+      totalCount: items.length,
+      highlights: items,
+    };
+  };
+
+  const buildStrokeExport = () => {
+    const items = Object.entries(chapterStrokes).map(
+      ([chapterId, strokes]) => ({
+        chapterId,
+        chapterLabel: getHighlightChapterLabel(chapterId),
+        totalCount: strokes.length,
+        strokes: strokes.map((stroke) => ({
+          id: stroke.id,
+          pageNumber: stroke.pageNumber ?? null,
+          anchorIndex:
+            stroke.anchorIndex === undefined ? null : stroke.anchorIndex,
+          color: stroke.color,
+          width: stroke.width,
+          opacity: stroke.opacity,
+          isEraser: stroke.isEraser || false,
+          points: stroke.points,
+        })),
+      })
+    );
+    const totalCount = items.reduce((sum, item) => sum + item.totalCount, 0);
+    return {
+      exportedAt: new Date().toISOString(),
+      bookTitle,
+      totalCount,
+      chapters: items,
+    };
+  };
+
+  const handleExportData = () => {
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .replace("T", "_");
+    const highlightData = buildHighlightExport();
+    const strokeData = buildStrokeExport();
+    downloadTextFile(`highlights_${stamp}.txt`, JSON.stringify(highlightData));
+    downloadTextFile(`strokes_${stamp}.txt`, JSON.stringify(strokeData));
   };
 
   const cycleFontSize = (dir: "up" | "down") => {
@@ -530,6 +621,13 @@ export const Header: React.FC<HeaderProps> = ({
             <button onClick={saveProgress} className="save_btn">
               <Save size={20} />
             </button>
+            {/* <button
+              onClick={handleExportData}
+              className="export_btn"
+              title="Export highlight & stroke data"
+            >
+              <FileDown size={20} />
+            </button> */}
             {/* {showSysMenu && (
               <div className="more_list">
                 <button onClick={handleUploadClick} className="">

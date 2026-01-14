@@ -75,6 +75,17 @@ const normalizeForMatch = (value: string) =>
     .replace(/[^0-9A-Za-z가-힣]/g, "")
     .toLowerCase();
 
+const getJsonBytes = (value: unknown) => {
+  const text = JSON.stringify(value);
+  if (typeof TextEncoder === "undefined") return text.length;
+  return new TextEncoder().encode(text).length;
+};
+
+const bytesToMb = (bytes: number) =>
+  Number((bytes / (1024 * 1024)).toFixed(4));
+
+const enable_debug_log = false;
+
 const parseNavChapters = (
   raw: string
 ): {
@@ -627,7 +638,46 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       note,
       createdAt: Date.now(),
     };
-    setHighlights((prev) => [newHighlight, ...prev]);
+    const itemBytes = getJsonBytes(newHighlight);
+    const chapterLabel = (() => {
+      if (newHighlight.chapterId === "reference-doc") {
+        if (!newHighlight.pageNumber) return "Reference PDF";
+        const title = getChapterTitleByPage(newHighlight.pageNumber);
+        return title || "Reference PDF";
+      }
+      const chapterIndex = chapters.findIndex(
+        (c) => c.id === newHighlight.chapterId
+      );
+      if (chapterIndex === -1) return "Chapter";
+      const chapterTitle = chapters[chapterIndex]?.title?.trim();
+      return chapterTitle || `Chapter ${chapterIndex + 1}`;
+    })();
+    const listInfo = {
+      chapterLabel,
+      pageNumber: newHighlight.pageNumber ?? null,
+      text: newHighlight.text,
+    };
+    const listBytes = getJsonBytes(listInfo);
+    const combinedBytes = itemBytes + listBytes;
+    setHighlights((prev) => {
+      const next = [newHighlight, ...prev];
+      const totalBytes = getJsonBytes(next);
+      if (enable_debug_log) {
+        console.log("[highlight/size]", {
+          chapterId: newHighlight.chapterId,
+          pageNumber: newHighlight.pageNumber,
+          itemBytes,
+          itemMb: bytesToMb(itemBytes),
+          listBytes,
+          listMb: bytesToMb(listBytes),
+          combinedBytes,
+          combinedMb: bytesToMb(combinedBytes),
+          totalBytes,
+          totalMb: bytesToMb(totalBytes),
+        });
+      }
+      return next;
+    });
     setStats((prev) => ({ ...prev, highlightCount: prev.highlightCount + 1 }));
     return newHighlight.id;
   };
@@ -685,10 +735,26 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const addStroke = (chapterId: string, stroke: Stroke) => {
-    setChapterStrokes((prev) => ({
-      ...prev,
-      [chapterId]: [...(prev[chapterId] || []), stroke],
-    }));
+    const itemBytes = getJsonBytes(stroke);
+    setChapterStrokes((prev) => {
+      const nextList = [...(prev[chapterId] || []), stroke];
+      const next = { ...prev, [chapterId]: nextList };
+      const chapterBytes = getJsonBytes(nextList);
+      const totalBytes = getJsonBytes(next);
+      if (enable_debug_log) {
+        console.log("[stroke/size]", {
+          chapterId,
+          pageNumber: stroke.pageNumber,
+          itemBytes,
+          itemMb: bytesToMb(itemBytes),
+          chapterBytes,
+          chapterMb: bytesToMb(chapterBytes),
+          totalBytes,
+          totalMb: bytesToMb(totalBytes),
+        });
+      }
+      return next;
+    });
   };
 
   const removeStroke = (chapterId: string, strokeId: string) => {
