@@ -233,6 +233,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 }) => {
   const {
     highlights,
+    activeHighlightId,
     removeHighlight,
     updateHighlight,
     currentChapter,
@@ -281,6 +282,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
   const contentEditableRef = useRef<HTMLDivElement>(null);
   const savedSelectionRef = useRef<Range | null>(null);
+  const highlightItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const aiTalkEndRef = useRef<HTMLDivElement>(null);
 
@@ -341,6 +343,16 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       note.title.toLowerCase().includes(localFilter.toLowerCase()) ||
       note.content.toLowerCase().includes(localFilter.toLowerCase())
   );
+
+  useEffect(() => {
+    if (activeToolTab !== "notes" || !activeHighlightId) return;
+    const target = highlightItemRefs.current[activeHighlightId];
+    if (!target) return;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      target.focus();
+    });
+  }, [activeToolTab, activeHighlightId, filteredHighlights.length]);
 
   useEffect(() => {
     if (capturedImage && editingNote) {
@@ -698,7 +710,15 @@ ${contextString}
                 <div
                   key={hl.id}
                   onClick={() => goToHighlight(hl)}
-                  className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-300 transition-all"
+                  ref={(el) => {
+                    highlightItemRefs.current[hl.id] = el;
+                  }}
+                  tabIndex={-1}
+                  className={`p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-300 transition-all ${
+                    activeHighlightId === hl.id
+                      ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-white dark:ring-offset-slate-800"
+                      : ""
+                  }`}
                 >
                   <div className="flex justify-between mb-2 text-xs text-slate-400">
                     <span>

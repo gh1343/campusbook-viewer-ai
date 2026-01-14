@@ -68,6 +68,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     addHighlight,
     highlights,
     activeHighlightId,
+    focusHighlight,
     triggerSmartExplain,
     setPdfTextPages,
     pdfSearchHighlight,
@@ -79,6 +80,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     addStroke,
     removeStroke,
     showAnnotations,
+    setToolsOpen,
+    setActiveToolTab,
   } = useBook();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
@@ -631,6 +634,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setSelection((prev) => ({ ...prev, show: false }));
     selectionCacheRef.current = null;
     window.getSelection()?.removeAllRanges();
+    setToolsOpen(true);
+    setActiveToolTab("notes");
+    focusHighlight(id);
   };
 
   const cancelSelection = () => {
