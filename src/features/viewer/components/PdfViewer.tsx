@@ -82,6 +82,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     showAnnotations,
     setToolsOpen,
     setActiveToolTab,
+    requestHighlightNoteEdit,
   } = useBook();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
@@ -598,7 +599,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     };
   }, []);
 
-  const applyHighlight = () => {
+  const applyHighlight = (options?: { requestNoteEdit?: boolean }) => {
     const snapshot = getSelectionSnapshot();
     const activeText = snapshot?.text || selection.text;
     const pageNumber = snapshot?.pageNumber ?? null;
@@ -637,6 +638,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setToolsOpen(true);
     setActiveToolTab("notes");
     focusHighlight(id);
+    if (options?.requestNoteEdit) {
+      requestHighlightNoteEdit(id);
+    }
+  };
+
+  const handleMemo = () => {
+    applyHighlight({ requestNoteEdit: true });
   };
 
   const cancelSelection = () => {
@@ -735,6 +743,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         onHighlight={applyHighlight}
         onCopy={handleCopySelection}
         onAskAi={handleAskAi}
+        onMemo={handleMemo}
         onCancel={cancelSelection}
       />
     </div>

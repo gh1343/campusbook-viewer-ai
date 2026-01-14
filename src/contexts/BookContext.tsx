@@ -196,6 +196,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
     null
   );
+  const [pendingHighlightEditId, setPendingHighlightEditId] = useState<
+    string | null
+  >(null);
 
   const [drawingMode, setDrawingMode] = useState<DrawingMode>("idle");
   const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
@@ -648,6 +651,14 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     setTimeout(() => setActiveHighlightId(null), 2000);
   };
 
+  const requestHighlightNoteEdit = (id: string) => {
+    setPendingHighlightEditId(id);
+  };
+
+  const clearHighlightNoteEditRequest = () => {
+    setPendingHighlightEditId(null);
+  };
+
   const goToHighlight = (hlOrId: Highlight | string) => {
     const hl =
       typeof hlOrId === "string"
@@ -964,6 +975,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         removeHighlight,
         activeHighlightId,
         focusHighlight,
+        pendingHighlightEditId,
+        requestHighlightNoteEdit,
+        clearHighlightNoteEditRequest,
         drawingMode,
         setDrawingMode,
         penColor,

@@ -143,6 +143,9 @@ export interface BookContextType {
   removeHighlight: (id: string) => void;
   activeHighlightId: string | null;
   focusHighlight: (id: string) => void;
+  pendingHighlightEditId: string | null;
+  requestHighlightNoteEdit: (id: string) => void;
+  clearHighlightNoteEditRequest: () => void;
   goToHighlight: (hl: Highlight | string) => void;
 
   drawingMode: DrawingMode;

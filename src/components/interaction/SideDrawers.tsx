@@ -268,6 +268,8 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     setPdfSearchHighlight,
     goToHighlight,
     getChapterTitleByPage,
+    pendingHighlightEditId,
+    clearHighlightNoteEditRequest,
   } = useBook();
 
   const [aiInput, setAiInput] = useState("");
@@ -366,6 +368,24 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       target.focus();
     });
   }, [activeToolTab, activeHighlightId, filteredHighlights.length]);
+
+  useEffect(() => {
+    if (!pendingHighlightEditId) return;
+    const target = highlights.find((hl) => hl.id === pendingHighlightEditId);
+    if (!target) return;
+    if (activeToolTab !== "notes") {
+      setActiveToolTab("notes");
+    }
+    setEditingHighlightId(target.id);
+    setHighlightText(target.note || "");
+    clearHighlightNoteEditRequest();
+  }, [
+    pendingHighlightEditId,
+    highlights,
+    activeToolTab,
+    setActiveToolTab,
+    clearHighlightNoteEditRequest,
+  ]);
 
   useEffect(() => {
     if (capturedImage && editingNote) {
