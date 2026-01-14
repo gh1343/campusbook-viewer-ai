@@ -121,7 +121,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             />
             <span className="slash">/ {totalPages}</span>
           </form>
-          <span className="chapter_name">{chapterLabel}</span>
+          <span className="chapter_name">성인간호학2 - {chapterLabel}</span>
         </div>
 
         {/* Next Button */}
