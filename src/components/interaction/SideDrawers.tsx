@@ -405,8 +405,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         relevantChunks.length > 0
           ? relevantChunks
               .map(
-                (chunk) =>
-                  `[학습 자료 Page ${chunk.pageNumber}]: ${chunk.text}`
+                (chunk) => `[학습 자료 Page ${chunk.pageNumber}]: ${chunk.text}`
               )
               .join("\n\n")
           : fallbackContext;
@@ -566,6 +565,10 @@ ${contextString}
   };
   const searchResults =
     activeToolTab === "search" ? performSearch(searchQuery) : [];
+  const referenceTitle =
+    referenceDocument?.title?.trim() ||
+    chapters[0]?.title?.trim() ||
+    "Reference PDF";
 
   return (
     <PanelWrapper isOpen={isOpen} onClose={onClose} side="right">
@@ -591,7 +594,7 @@ ${contextString}
         >
           <Book size={14} />
         </button>
-        <button
+        {/* <button
           onClick={() => handleTabChange("reference")}
           className={`reference ${
             activeToolTab === "reference" ? "on" : "off"
@@ -599,7 +602,7 @@ ${contextString}
           title="Reference PDF"
         >
           <FileText size={14} />
-        </button>
+        </button> */}
         <button
           onClick={() => handleTabChange("search")}
           className={`search ${activeToolTab === "search" ? "on" : "off"}`}
@@ -700,7 +703,9 @@ ${contextString}
                   <div className="flex justify-between mb-2 text-xs text-slate-400">
                     <span>
                       {hl.chapterId === "reference-doc"
-                        ? "Reference PDF"
+                        ? `${referenceTitle}${
+                            hl.pageNumber ? ` - P. ${hl.pageNumber}` : ""
+                          }`
                         : `Chapter ${
                             chapters.findIndex((c) => c.id === hl.chapterId) + 1
                           }`}

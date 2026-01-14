@@ -241,6 +241,9 @@
 .toggle_ai_notes.off:hover {
   background-color: rgb(241 245 249);
 }
+.save_btn {
+  padding: 0.5rem;
+}
 .more {
   padding: 0.5rem;
   border-radius: 0.5rem;

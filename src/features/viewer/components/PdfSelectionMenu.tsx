@@ -10,6 +10,7 @@ interface PdfSelectionMenuProps {
   onHighlight: () => void;
   onCopy: () => void;
   onAskAi: () => void;
+  onMemo: () => void;
   onCancel: () => void;
 }
 
@@ -21,6 +22,7 @@ export const PdfSelectionMenu: React.FC<PdfSelectionMenuProps> = ({
   onHighlight,
   onCopy,
   onAskAi,
+  onMemo,
   onCancel,
 }) => {
   if (!visible) return null;
@@ -39,10 +41,11 @@ export const PdfSelectionMenu: React.FC<PdfSelectionMenuProps> = ({
         </span>
       )}
       <button onClick={onHighlight}>Highlight</button>
-      <div className="pdf_selection_menu_copy_block">
+      {/* <div className="pdf_selection_menu_copy_block">
         <button onClick={onCopy}>Copy</button>
-      </div>
+      </div> */}
       <button onClick={onAskAi}>AI</button>
+      <button onClick={onMemo}>Memo</button>
       <button onClick={onCancel}>Cancel</button>
     </div>
   );
