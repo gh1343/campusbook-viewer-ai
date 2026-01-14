@@ -229,8 +229,10 @@
 }
 .text_area .ai_talk {
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   min-height: 0;
-  /* max-height: 300px; */
   overflow: auto;
   padding: 1rem;
 }

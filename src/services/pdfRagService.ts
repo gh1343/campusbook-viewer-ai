@@ -9,6 +9,10 @@ interface ParsedBook {
   chunks: RagChunk[];
 }
 
+/**
+ * PDF 프로세싱: 최적화된 중첩 청킹 전략 적용
+ * 정보의 연속성을 보장하기 위해 페이지 경계에서 문맥을 깊게 공유합니다.
+ */
 export const processPdf = async (file: File): Promise<ParsedBook> => {
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -31,6 +35,23 @@ export const processPdf = async (file: File): Promise<ParsedBook> => {
           text: pageText,
           pageNumber: i,
         });
+
+        if (i > 1 && chunks.length >= 2) {
+          const prevChunk = chunks.find(
+            c => c.pageNumber === i - 1 && !c.id.includes('overlap')
+          );
+          if (prevChunk) {
+            const overlapText =
+              prevChunk.text.slice(-500) +
+              ' [PAGE_BOUNDARY] ' +
+              pageText.slice(0, 500);
+            chunks.push({
+              id: `chunk-overlap-${i - 1}-${i}`,
+              text: overlapText,
+              pageNumber: i,
+            });
+          }
+        }
       }
 
       const paragraphs = pageText.split(/\s{2,}/);
@@ -62,10 +83,8 @@ export const processPdf = async (file: File): Promise<ParsedBook> => {
 };
 
 /**
- * 대학교재 특화 하이브리드 검색 로직
- * 1. 질문 의도 파악을 위한 키워드 정규화
- * 2. 슬라이딩 윈도우를 통한 문맥 보존
- * 3. 학술 용어 가중치 적용
+ * 하이브리드 검색 및 근접도 기반 Re-ranking
+ * 복합 질문(여러 키워드의 관계) 해결을 위해 키워드 간 거리를 계산하여 점수화합니다.
  */
 export const findRelevantChunks = (
   query: string,
@@ -73,20 +92,19 @@ export const findRelevantChunks = (
 ): RagChunk[] => {
   if (!query || !chunks || chunks.length === 0) return [];
 
-  // 1. 키워드 추출 (불필요한 조사 제거 및 전문 용어 보존)
-  const academicStopWords = [
-    '설명해줘',
-    '분석해줘',
+  const stopWords = [
+    '설명',
+    '분석',
+    '관계',
+    '영향',
+    '기전',
+    '메커니즘',
     '알려줘',
-    '무엇인가',
-    '비교해봐',
-    '영향은',
-    '관계는',
-    '대해서',
-    '관련하여',
+    '어떻게',
+    '왜',
   ];
   let processedQuery = query;
-  academicStopWords.forEach(sw => {
+  stopWords.forEach(sw => {
     processedQuery = processedQuery.replace(new RegExp(sw, 'g'), ' ');
   });
 
@@ -96,65 +114,61 @@ export const findRelevantChunks = (
     .split(/\s+/)
     .filter(k => k.length >= 2);
 
-  if (keywords.length === 0) return [chunks[0]];
+  if (keywords.length === 0) return chunks.slice(0, 3);
 
-  // 2. 가중치 스코어링
   const scored = chunks.map(chunk => {
     let score = 0;
     const content = chunk.text.toLowerCase();
+    const keywordPositions: {kw: string; pos: number}[] = [];
 
     keywords.forEach(keyword => {
-      // 완전 일치 (강력한 가중치)
-      if (content.includes(keyword)) {
+      let pos = content.indexOf(keyword);
+      if (pos !== -1) {
         score += 1000;
-        const freq = content.split(keyword).length - 1;
-        score += freq * 100;
-      }
-
-      // 영문 전문 용어 포함 시 추가 가중치
-      if (/[a-zA-Z]{3,}/.test(keyword) && content.includes(keyword)) {
-        score += 500;
-      }
-
-      // 키워드 근접성 점수 (복합 질의의 경우 키워드들이 뭉쳐있는 곳이 정답일 확률이 높음)
-      const keywordPositions = keywords
-        .map(k => content.indexOf(k))
-        .filter(p => p !== -1);
-      if (keywordPositions.length > 1) {
-        const spread =
-          Math.max(...keywordPositions) - Math.min(...keywordPositions);
-        if (spread < 500) score += 300; // 500자 이내에 키워드들이 모여있으면 가산점
+        while (pos !== -1) {
+          keywordPositions.push({kw: keyword, pos});
+          score += 100;
+          pos = content.indexOf(keyword, pos + 1);
+        }
       }
     });
+
+    if (keywordPositions.length > 1) {
+      keywordPositions.sort((a, b) => a.pos - b.pos);
+      for (let i = 0; i < keywordPositions.length - 1; i++) {
+        const dist = keywordPositions[i + 1].pos - keywordPositions[i].pos;
+        if (dist < 300) {
+          score += 3000 * (1 - dist / 300);
+        }
+      }
+      const uniqueKws = new Set(keywordPositions.map(k => k.kw));
+      score += Math.pow(uniqueKws.size, 3) * 500;
+    }
 
     return {...chunk, score};
   });
 
-  // 3. 상위 결과 추출 및 슬라이딩 윈도우 적용
   const topHits = scored
-    .filter(c => c.score > 0)
     .sort((a, b) => (b.score || 0) - (a.score || 0))
-    .slice(0, 3); // 가장 관련성 높은 3개 지점 선정
+    .slice(0, 2);
 
-  if (topHits.length === 0) return [chunks[0]];
-
-  // 4. 문맥 보존을 위해 선택된 각 지점의 앞뒤 페이지를 포함한 윈도우 구성
-  const contextWindows: RagChunk[] = [];
+  const finalContext: RagChunk[] = [];
   const seenPages = new Set<number>();
 
   topHits.forEach(hit => {
-    const pageNum = hit.pageNumber!;
-    // 앞/현재/뒤 페이지 묶음 (총 3페이지 분량의 컨텍스트 제공)
-    for (let p = pageNum - 1; p <= pageNum + 1; p++) {
-      if (p > 0 && !seenPages.has(p)) {
-        const neighboringChunk = chunks.find(c => c.pageNumber === p);
-        if (neighboringChunk) {
-          contextWindows.push(neighboringChunk);
+    const pNum = hit.pageNumber!;
+    for (let p = pNum; p <= pNum + 1; p++) {
+      if (!seenPages.has(p)) {
+        const pageData = chunks.find(
+          c => c.pageNumber === p && !c.id.includes('overlap')
+        );
+        if (pageData) {
+          finalContext.push(pageData);
           seenPages.add(p);
         }
       }
     }
   });
 
-  return contextWindows.sort((a, b) => a.pageNumber! - b.pageNumber!);
+  return finalContext.sort((a, b) => a.pageNumber! - b.pageNumber!);
 };
