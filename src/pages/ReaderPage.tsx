@@ -155,21 +155,45 @@ export const ReaderPage: React.FC = () => {
     }
     setTocOpen(!isTocOpen);
   };
+  const runtimeConfig = (() => {
+    if (typeof window === "undefined") return null;
+    const raw = (window as any).__RMS_CONFIG__;
+    if (!raw || typeof raw !== "object") return null;
+    return raw as {
+      pdfUrl?: string;
+      pdfPath?: string;
+      pdfProxyOrigin?: string;
+      pdfProxyPrefix?: string;
+    };
+  })();
   const pdfUrl = (() => {
-    const pdfProxyPrefix = "/pdf_proxy";
-    const pdfProxyOrigin = "https://d19t5saodanwfx.cloudfront.net";
+    const pdfProxyPrefix =
+      (typeof runtimeConfig?.pdfProxyPrefix === "string" &&
+        runtimeConfig.pdfProxyPrefix.trim()) ||
+      "/pdf_proxy";
+    const pdfProxyOrigin =
+      (typeof runtimeConfig?.pdfProxyOrigin === "string" &&
+        runtimeConfig.pdfProxyOrigin.trim()) ||
+      import.meta.env.VITE_PDF_PROXY_ORIGIN ||
+      "https://d19t5saodanwfx.cloudfront.net";
+    const runtimePdfUrl =
+      (typeof runtimeConfig?.pdfUrl === "string" &&
+        runtimeConfig.pdfUrl.trim()) ||
+      (typeof runtimeConfig?.pdfPath === "string" &&
+        runtimeConfig.pdfPath.trim()) ||
+      "";
     const fallbackPdfUrl =
       "https://d19t5saodanwfx.cloudfront.net/resources/contents/prod/cms/book/20250318/CT-20250318150313534/source/CT-20250318150313534_source_1742281150590.pdf";
-    const raw = fallbackPdfUrl;
+    const raw = runtimePdfUrl || fallbackPdfUrl;
     const base = import.meta.env.BASE_URL || "/";
 
     // 절대 URL이면 그대로 사용
-    if (fallbackPdfUrl && /^https?:\/\//i.test(fallbackPdfUrl)) {
-      if (import.meta.env.DEV && fallbackPdfUrl.startsWith(pdfProxyOrigin)) {
-        const parsed = new URL(fallbackPdfUrl);
+    if (raw && /^https?:\/\//i.test(raw)) {
+      if (import.meta.env.DEV && raw.startsWith(pdfProxyOrigin)) {
+        const parsed = new URL(raw);
         return `${pdfProxyPrefix}${parsed.pathname}${parsed.search}${parsed.hash}`;
       }
-      return fallbackPdfUrl;
+      return raw;
     }
 
     // 상대/루트 경로면 base에 붙여서 GitHub Pages에서도 동작하도록 정규화

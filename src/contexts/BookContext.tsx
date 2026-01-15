@@ -38,18 +38,84 @@ const NAV_TOC_PATH =
 const NAV_TOC_ORIGIN =
   import.meta.env.VITE_PDF_PROXY_ORIGIN ||
   "https://d19t5saodanwfx.cloudfront.net";
-const resolveNavTocUrl = () => {
-  const base = NAV_TOC_ORIGIN.replace(/\/+$/, "");
-  const rawUrl = `${base}${NAV_TOC_PATH}`;
-  if (import.meta.env.DEV) {
-    try {
+
+type RuntimeViewerConfig = {
+  navTocUrl?: string;
+  navTocPath?: string;
+  epubPath?: string;
+  webPath?: string;
+  pdfProxyOrigin?: string;
+  contentOrigin?: string;
+};
+
+const readRuntimeViewerConfig = (): RuntimeViewerConfig | null => {
+  if (typeof window === "undefined") return null;
+  const raw = (window as any).__RMS_CONFIG__;
+  if (!raw || typeof raw !== "object") return null;
+  return raw as RuntimeViewerConfig;
+};
+
+const buildNavTocFromRuntime = (runtime: RuntimeViewerConfig | null) => {
+  if (!runtime) return "";
+
+  const directUrl =
+    typeof runtime.navTocUrl === "string" ? runtime.navTocUrl.trim() : "";
+  if (directUrl) return directUrl;
+
+  const navPath =
+    typeof runtime.navTocPath === "string" ? runtime.navTocPath.trim() : "";
+  if (navPath) {
+    const origin =
+      (typeof runtime.contentOrigin === "string" &&
+        runtime.contentOrigin.trim()) ||
+      (typeof runtime.pdfProxyOrigin === "string" &&
+        runtime.pdfProxyOrigin.trim()) ||
+      NAV_TOC_ORIGIN;
+    const base = origin.replace(/\/+$/, "");
+    const normalizedPath = navPath.startsWith("/") ? navPath : `/${navPath}`;
+    return `${base}${normalizedPath}`;
+  }
+
+  const epubPath =
+    typeof runtime.epubPath === "string" ? runtime.epubPath.trim() : "";
+  if (epubPath) {
+    return `${epubPath.replace(/\/+$/, "")}/nav.xhtml`;
+  }
+
+  const webPath =
+    typeof runtime.webPath === "string" ? runtime.webPath.trim() : "";
+  if (webPath) {
+    return `${webPath.replace(/\/+$/, "")}/OEBPS/nav.xhtml`;
+  }
+
+  return "";
+};
+
+const applyDevProxy = (rawUrl: string, proxyOrigin: string) => {
+  if (!import.meta.env.DEV) return rawUrl;
+  if (!/^https?:\/\//i.test(rawUrl)) return rawUrl;
+  try {
+    const normalizedProxy = proxyOrigin.replace(/\/+$/, "");
+    if (normalizedProxy && rawUrl.startsWith(normalizedProxy)) {
       const parsed = new URL(rawUrl);
       return `/pdf_proxy${parsed.pathname}${parsed.search}${parsed.hash}`;
-    } catch (err) {
-      return rawUrl;
     }
+    return rawUrl;
+  } catch (err) {
+    return rawUrl;
   }
-  return rawUrl;
+};
+
+const resolveNavTocUrl = () => {
+  const runtime = readRuntimeViewerConfig();
+  const runtimeUrl = buildNavTocFromRuntime(runtime);
+  const base = NAV_TOC_ORIGIN.replace(/\/+$/, "");
+  const rawUrl = runtimeUrl || `${base}${NAV_TOC_PATH}`;
+  const proxyOrigin =
+    (typeof runtime?.pdfProxyOrigin === "string" &&
+      runtime.pdfProxyOrigin.trim()) ||
+    NAV_TOC_ORIGIN;
+  return applyDevProxy(rawUrl, proxyOrigin);
 };
 
 const MOCK_CHAPTERS: Chapter[] = [

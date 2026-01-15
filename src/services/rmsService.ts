@@ -65,6 +65,45 @@ const normalizeApiBase = (value: string) => {
   return withoutTrailing.replace(/\/v2$/i, "");
 };
 
+const readRuntimeRmsConfig = () => {
+  if (typeof window === "undefined") return null;
+  const raw = (window as any).__RMS_CONFIG__;
+  if (!raw || typeof raw !== "object") return null;
+  return raw as {
+    apiBase?: string;
+    bookCd?: string;
+    memberCd?: string;
+    orderIgnore?: boolean | string | number;
+    pageOffset?: number | string;
+    authToken?: string;
+    rmsAuthToken?: string;
+  };
+};
+
+const parseOrderIgnoreValue = (value: unknown) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toUpperCase();
+    return (
+      normalized === "Y" ||
+      normalized === "YES" ||
+      normalized === "TRUE" ||
+      normalized === "1"
+    );
+  }
+  return false;
+};
+
+const parsePageOffsetValue = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
 const parseBookCdFromPath = () => {
   if (typeof window === "undefined") return "";
   const match = window.location.pathname.match(
@@ -76,9 +115,16 @@ const parseBookCdFromPath = () => {
 const getRmsAuthToken = () => {
   if (typeof window === "undefined") return "";
   const params = new URLSearchParams(window.location.search);
+  const runtime = readRuntimeRmsConfig();
+  const runtimeToken =
+    (typeof runtime?.authToken === "string" && runtime.authToken.trim()) ||
+    (typeof runtime?.rmsAuthToken === "string" &&
+      runtime.rmsAuthToken.trim()) ||
+    "";
   const raw =
     params.get("rmsToken") ||
     params.get("rmsAuthToken") ||
+    runtimeToken ||
     import.meta.env.VITE_RMS_AUTH_TOKEN ||
     sessionStorage.getItem("jwt") ||
     "";
@@ -288,28 +334,48 @@ const addProgressEntry = ({
 export const getRmsConfig = (): RmsConfig | null => {
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
+  const runtime = readRuntimeRmsConfig();
   const localStorageContext = detectLocalStorageContext();
   const bookCdFromPath = parseBookCdFromPath();
+  const runtimeApiBase =
+    typeof runtime?.apiBase === "string" ? runtime.apiBase.trim() : "";
   const rawApiBase =
-    params.get("rmsApiBase") || import.meta.env.VITE_RMS_API_BASE || "";
+    params.get("rmsApiBase") ||
+    runtimeApiBase ||
+    import.meta.env.VITE_RMS_API_BASE ||
+    "";
   const apiBase = normalizeApiBase(rawApiBase);
+  const runtimeBookCd =
+    typeof runtime?.bookCd === "string" ? runtime.bookCd.trim() : "";
   const bookCd =
     params.get("bookCd") ||
+    runtimeBookCd ||
     import.meta.env.VITE_RMS_BOOK_CD ||
     bookCdFromPath ||
     localStorageContext?.bookCd ||
     "";
+  const runtimeMemberCd =
+    typeof runtime?.memberCd === "string" ? runtime.memberCd.trim() : "";
   const memberCd =
     params.get("memberCd") ||
+    runtimeMemberCd ||
     import.meta.env.VITE_RMS_MEMBER_CD ||
     localStorageContext?.memberCd ||
     "guest";
-  const orderIgnoreRaw =
-    params.get("orderIgnore") || import.meta.env.VITE_RMS_ORDER_IGNORE || "";
-  const orderIgnore = orderIgnoreRaw.toUpperCase() === "Y";
-  const pageOffsetRaw =
-    params.get("rmsPageOffset") || import.meta.env.VITE_RMS_PAGE_OFFSET || "0";
-  const pageOffset = Number(pageOffsetRaw) || 0;
+  const orderIgnoreParam = params.get("orderIgnore");
+  const orderIgnore =
+    orderIgnoreParam != null && orderIgnoreParam !== ""
+      ? parseOrderIgnoreValue(orderIgnoreParam)
+      : typeof runtime?.orderIgnore !== "undefined"
+      ? parseOrderIgnoreValue(runtime.orderIgnore)
+      : parseOrderIgnoreValue(import.meta.env.VITE_RMS_ORDER_IGNORE || "");
+  const pageOffsetParam = params.get("rmsPageOffset");
+  const pageOffset =
+    pageOffsetParam != null && pageOffsetParam !== ""
+      ? parsePageOffsetValue(pageOffsetParam)
+      : typeof runtime?.pageOffset !== "undefined"
+      ? parsePageOffsetValue(runtime.pageOffset)
+      : parsePageOffsetValue(import.meta.env.VITE_RMS_PAGE_OFFSET || "0");
 
   if (!apiBase || !bookCd) return null;
   return { apiBase, bookCd, memberCd, orderIgnore, pageOffset };

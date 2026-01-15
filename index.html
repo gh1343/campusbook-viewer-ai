@@ -32,6 +32,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        try {
+          if (!window.__RMS_CONFIG__) {
+            const raw = sessionStorage.getItem("rms_config");
+            if (raw) {
+              window.__RMS_CONFIG__ = JSON.parse(raw);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
     <!-- <script crossorigin src="/campusbook-viewer-ai/progress_migration.js"></script>
     <script crossorigin src="/campusbook-viewer-ai/progress_debug.js"></script> -->
     <script type="module" src="/src/index.tsx"></script>
