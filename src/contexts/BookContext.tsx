@@ -33,7 +33,24 @@ import {
   loadLastProgressPageFromLocalStorage,
   saveRmsProgress,
 } from "../services/rmsService";
-import navTocRaw from "../../nav.xhtml?raw";
+const NAV_TOC_PATH =
+  "/resources/contents/prod/cms/book/20250318/CT-20250318150313534/source/R1/20250318155912/ebook/OEBPS/nav.xhtml";
+const NAV_TOC_ORIGIN =
+  import.meta.env.VITE_PDF_PROXY_ORIGIN ||
+  "https://d19t5saodanwfx.cloudfront.net";
+const resolveNavTocUrl = () => {
+  const base = NAV_TOC_ORIGIN.replace(/\/+$/, "");
+  const rawUrl = `${base}${NAV_TOC_PATH}`;
+  if (import.meta.env.DEV) {
+    try {
+      const parsed = new URL(rawUrl);
+      return `/pdf_proxy${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch (err) {
+      return rawUrl;
+    }
+  }
+  return rawUrl;
+};
 
 const MOCK_CHAPTERS: Chapter[] = [
   {
@@ -161,6 +178,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [chapters, setChapters] = useState<Chapter[]>(MOCK_CHAPTERS);
+  const [navTocRaw, setNavTocRaw] = useState("");
   const [referenceDocument, setReferenceDocument] = useState<Chapter | null>(
     null
   );
@@ -449,6 +467,30 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [bookmarks]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadNavToc = async () => {
+      try {
+        const response = await fetch(resolveNavTocUrl());
+        if (!response.ok) {
+          throw new Error(`nav.xhtml fetch failed (${response.status})`);
+        }
+        const raw = await response.text();
+        if (!cancelled) {
+          setNavTocRaw(raw);
+        }
+      } catch (err) {
+        console.error("Failed to load nav.xhtml", err);
+      }
+    };
+
+    loadNavToc();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // nav.xhtml을 chapters로 반영
   useEffect(() => {
     if (!navTocRaw) return;
@@ -465,7 +507,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (parsedBookTitle) {
       setBookTitle(parsedBookTitle);
     }
-  }, []);
+  }, [navTocRaw]);
 
   const updateReadingTime = () => {
     setStats((prev) => ({
