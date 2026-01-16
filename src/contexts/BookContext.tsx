@@ -1069,11 +1069,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         });
         if (localSavedPage) {
           goToPdfPage(localSavedPage);
-          return;
         }
 
         const savedPage = await fetchRmsProgressPage(config);
-        if (savedPage) {
+        if (savedPage && savedPage !== localSavedPage) {
           goToPdfPage(savedPage);
         }
       } catch (err) {
