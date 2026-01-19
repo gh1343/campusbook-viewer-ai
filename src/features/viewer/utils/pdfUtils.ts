@@ -1,15 +1,8 @@
 import type React from "react";
+import type { PdfHighlightRect } from "../../../types";
 // Shared types and helpers for PdfViewer
 
-export type HighlightRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  pageNumber: number;
-  pageWidth: number;
-  pageHeight: number;
-};
+export type HighlightRect = PdfHighlightRect;
 
 export type PdfHighlight = { id: string; rects: HighlightRect[] };
 

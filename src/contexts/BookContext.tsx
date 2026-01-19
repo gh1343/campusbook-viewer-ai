@@ -331,9 +331,22 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
   const rmsInitRef = useRef(false);
+  const indexedDbWorkerRef = useRef<Worker | null>(null);
+  const indexedDbLoadKeyRef = useRef<string | null>(null);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState((prev) => ({ ...prev, ...config }));
+  };
+
+  const getIndexedDbWorker = () => {
+    if (indexedDbWorkerRef.current) return indexedDbWorkerRef.current;
+    if (typeof window === "undefined") return null;
+    const worker = new Worker(
+      new URL("../workers/indexedDbWorker.ts", import.meta.url),
+      { type: "module" }
+    );
+    indexedDbWorkerRef.current = worker;
+    return worker;
   };
 
   const splitIntoSentences = (text: string): string[] => {
@@ -504,6 +517,15 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (window.innerWidth < 1024) {
       setToolsOpen(false);
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (indexedDbWorkerRef.current) {
+        indexedDbWorkerRef.current.terminate();
+        indexedDbWorkerRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -1090,6 +1112,122 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     []
   );
 
+  const buildIndexedDbKey = () => {
+    const config = getRmsConfig();
+    if (config?.bookCd) {
+      return `${config.memberCd}_${config.bookCd}`;
+    }
+    if (bookTitle) {
+      return `title_${bookTitle.replace(/\s+/g, "_")}`;
+    }
+    if (typeof window === "undefined") return "local_default";
+    const rawPath = window.location.pathname || "";
+    const normalized = rawPath.replace(/[^a-zA-Z0-9_-]+/g, "_");
+    return normalized ? `path_${normalized}` : "local_default";
+  };
+
+  const loadLocalDataFromIndexedDb = async (storageKey: string) => {
+    if (typeof window === "undefined") return;
+    const worker = getIndexedDbWorker();
+    if (!worker) return;
+
+    try {
+      const result = await new Promise<
+        | {
+            data?: {
+              bookmarks?: PdfBookmark[];
+              highlights?: Highlight[];
+              notes?: GeneralNote[];
+              strokes?: Record<string, Stroke[]>;
+              progress?: {
+                currentPdfPage?: number;
+                viewMode?: ViewMode;
+                pdfTotalPages?: number;
+              };
+            };
+          }
+        | null
+      >((resolve, reject) => {
+        const requestId = `${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`;
+        const cleanup = () => {
+          worker.removeEventListener("message", handleMessage);
+          worker.removeEventListener("error", handleError);
+        };
+        const handleMessage = (event: MessageEvent) => {
+          const response = event.data as {
+            type?: string;
+            requestId?: string;
+            error?: string;
+            payload?: unknown;
+          };
+          if (!response || response.requestId !== requestId) return;
+          cleanup();
+          if (response.type === "load_complete") {
+            resolve((response.payload as { data?: unknown }) || null);
+          } else {
+            reject(new Error(response.error || "IndexedDB load failed."));
+          }
+        };
+        const handleError = () => {
+          cleanup();
+          reject(new Error("IndexedDB worker error."));
+        };
+        worker.addEventListener("message", handleMessage);
+        worker.addEventListener("error", handleError);
+        worker.postMessage({
+          type: "load_bundle",
+          requestId,
+          payload: { storageKey },
+        });
+      });
+
+      if (!result || !result.data) return;
+      const data = result.data;
+      if (Array.isArray(data.bookmarks)) {
+        setBookmarks(data.bookmarks);
+      }
+      if (Array.isArray(data.highlights)) {
+        setHighlights(data.highlights);
+      }
+      if (Array.isArray(data.notes)) {
+        setGeneralNotes(data.notes);
+      }
+      if (data.strokes && typeof data.strokes === "object") {
+        setChapterStrokes(data.strokes);
+      }
+      if (data.progress && typeof data.progress === "object") {
+        const { currentPdfPage: savedPage, viewMode: savedMode } =
+          data.progress;
+        const totalPages =
+          typeof data.progress.pdfTotalPages === "number"
+            ? data.progress.pdfTotalPages
+            : null;
+        if (savedMode === "single" || savedMode === "double") {
+          setViewMode(savedMode);
+        }
+        if (totalPages !== null && Number.isFinite(totalPages)) {
+          setPdfTotalPages(Math.max(0, Math.round(totalPages)));
+        }
+        if (typeof savedPage === "number" && Number.isFinite(savedPage)) {
+          goToPdfPage(savedPage);
+        }
+      }
+    } catch (err) {
+      console.error("IndexedDB load failed", err);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = buildIndexedDbKey();
+    if (!storageKey) return;
+    if (indexedDbLoadKeyRef.current === storageKey) return;
+    indexedDbLoadKeyRef.current = storageKey;
+    loadLocalDataFromIndexedDb(storageKey);
+  }, [bookTitle]);
+
   const saveProgress = async () => {
     const config = getRmsConfig();
     if (!config) {
@@ -1113,6 +1251,72 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const message = err instanceof Error ? err.message : String(err);
       console.error("Failed to save progress", err);
       alert(`Progress Save Failed: ${message}`);
+    }
+  };
+
+  const saveLocalDataToIndexedDb = async () => {
+    if (typeof window === "undefined") return;
+    const worker = getIndexedDbWorker();
+    if (!worker) {
+      alert("IndexedDB 저장을 위한 Worker를 사용할 수 없습니다.");
+      return;
+    }
+
+    const payload = {
+      storageKey: buildIndexedDbKey(),
+      data: {
+        bookmarks,
+        highlights,
+        notes: generalNotes,
+        strokes: chapterStrokes,
+        progress: {
+          currentPdfPage,
+          viewMode,
+          pdfTotalPages,
+          updatedAt: Date.now(),
+        },
+      },
+      meta: {
+        bookTitle,
+      },
+    };
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const requestId = `${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`;
+        const cleanup = () => {
+          worker.removeEventListener("message", handleMessage);
+          worker.removeEventListener("error", handleError);
+        };
+        const handleMessage = (event: MessageEvent) => {
+          const response = event.data as {
+            type?: string;
+            requestId?: string;
+            error?: string;
+          };
+          if (!response || response.requestId !== requestId) return;
+          cleanup();
+          if (response.type === "save_complete") {
+            resolve();
+          } else {
+            reject(new Error(response.error || "IndexedDB save failed."));
+          }
+        };
+        const handleError = () => {
+          cleanup();
+          reject(new Error("IndexedDB worker error."));
+        };
+        worker.addEventListener("message", handleMessage);
+        worker.addEventListener("error", handleError);
+        worker.postMessage({ type: "save_bundle", requestId, payload });
+      });
+      alert("IndexedDB에 저장했습니다.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("IndexedDB save failed", err);
+      alert(`IndexedDB 저장 실패: ${message}`);
     }
   };
 
@@ -1194,6 +1398,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         incrementAiCount,
         updateReadingTime,
         saveProgress,
+        saveLocalDataToIndexedDb,
         pdfTextPages,
         setPdfTextPages: updatePdfTextPages,
         goToPdfPage,

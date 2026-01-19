@@ -27,6 +27,16 @@ export interface PdfBookmark {
   createdAt: number;
 }
 
+export interface PdfHighlightRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  pageNumber: number;
+  pageWidth: number;
+  pageHeight: number;
+}
+
 export interface Highlight {
   id: string;
   chapterId: string;
@@ -34,6 +44,7 @@ export interface Highlight {
   color: "yellow" | "green" | "blue";
   pageNumber?: number;
   note?: string;
+  rects?: PdfHighlightRect[];
   createdAt: number;
 }
 
@@ -203,6 +214,7 @@ export interface BookContextType {
   updateReadingTime: () => void;
 
   saveProgress: () => Promise<void>;
+  saveLocalDataToIndexedDb: () => Promise<void>;
 
   pdfTextPages: { page: number; text: string }[];
   setPdfTextPages: (pages: { page: number; text: string }[]) => void;

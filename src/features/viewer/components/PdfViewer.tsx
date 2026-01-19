@@ -77,6 +77,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const currentPageRef = useRef<number | null>(null);
   const {
     addHighlight,
+    updateHighlight,
     highlights,
     activeHighlightId,
     focusHighlight,
@@ -171,9 +172,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   useEffect(() => {
     // Keep local overlay in sync with global highlights (e.g., sidebar delete)
-    setPdfHighlights((prev) =>
-      prev.filter((h) => highlights.some((hl) => hl.id === h.id))
-    );
+    setPdfHighlights((prev) => {
+      const next = prev.filter((h) => highlights.some((hl) => hl.id === h.id));
+      const existingIds = new Set(next.map((h) => h.id));
+      const incoming = highlights
+        .filter(
+          (hl) =>
+            Array.isArray(hl.rects) &&
+            hl.rects.length > 0 &&
+            !existingIds.has(hl.id)
+        )
+        .map((hl) => ({ id: hl.id, rects: hl.rects || [] }));
+      return incoming.length > 0 ? [...next, ...incoming] : next;
+    });
   }, [highlights]);
 
   useEffect(() => {
@@ -643,6 +654,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pageNumber
     );
     const mergedRects = mergeHighlightRects(rects);
+    updateHighlight(id, { rects: mergedRects });
     const rectBytes = getJsonBytes(mergedRects);
     const chapterLabel = pageNumber
       ? getChapterTitleByPage(pageNumber) || "Reference PDF"

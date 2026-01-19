@@ -27,6 +27,7 @@ import {
   Play,
   Pause,
   Square,
+  Database,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { DrawingColor, TTSVoice } from "../../../types";
@@ -54,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
     penOpacity,
     setPenOpacity,
     saveProgress,
+    saveLocalDataToIndexedDb,
     showAnnotations,
     toggleAnnotations,
     isToolsOpen,
@@ -618,6 +620,13 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <MoreVertical size={20} />
             </button> */}
+            <button
+              onClick={saveLocalDataToIndexedDb}
+              className="idb_save_btn"
+              title="Save annotations to IndexedDB"
+            >
+              <Database size={20} />
+            </button>
             <button onClick={saveProgress} className="save_btn">
               <Save size={20} />
             </button>
