@@ -613,11 +613,35 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   useEffect(() => {
     const onSelectionChange = () => scheduleSelectionCheck();
-    const onTouchEnd = () => scheduleSelectionCheck();
+    const isSelectionInsideViewer = () => {
+      const container = viewerContainerRef.current;
+      const sel = window.getSelection();
+      if (!container || !sel || sel.rangeCount === 0) return false;
+      const anchor = sel.anchorNode;
+      const focus = sel.focusNode;
+      if (!anchor || !focus) return false;
+      return container.contains(anchor) && container.contains(focus);
+    };
+
+    const onContextMenu = (e: Event) => {
+      const container = viewerContainerRef.current;
+      if (!container || !container.contains(e.target as Node)) return;
+      e.preventDefault();
+    };
+
+    const onTouchEnd = (e: Event) => {
+      scheduleSelectionCheck();
+      const selectionText = window.getSelection()?.toString().trim() || "";
+      if (!selectionText) return;
+      if (!isSelectionInsideViewer()) return;
+      if (e.cancelable) e.preventDefault();
+    };
     document.addEventListener("selectionchange", onSelectionChange);
-    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("touchend", onTouchEnd, { passive: false });
     return () => {
       document.removeEventListener("selectionchange", onSelectionChange);
+      document.removeEventListener("contextmenu", onContextMenu);
       document.removeEventListener("touchend", onTouchEnd);
     };
   }, []);
