@@ -1,5 +1,5 @@
 const DB_NAME = "campusbook_viewer";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "viewer_bundle";
 
 type SaveBundlePayload = {

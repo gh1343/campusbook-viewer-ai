@@ -1126,6 +1126,32 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     return normalized ? `path_${normalized}` : "local_default";
   };
 
+  const getStorageEstimate = async () => {
+    if (typeof navigator === "undefined") return null;
+    if (!navigator.storage || !navigator.storage.estimate) return null;
+    try {
+      const estimate = await navigator.storage.estimate();
+      const usage =
+        typeof estimate.usage === "number" && Number.isFinite(estimate.usage)
+          ? estimate.usage
+          : null;
+      const quota =
+        typeof estimate.quota === "number" && Number.isFinite(estimate.quota)
+          ? estimate.quota
+          : null;
+      const remaining =
+        usage !== null && quota !== null
+          ? Math.max(0, quota - usage)
+          : null;
+      return { usage, remaining, quota };
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const formatStorageMb = (value: number | null) =>
+    value === null ? "알 수 없음" : `${bytesToMb(value).toFixed(2)} MB`;
+
   const loadLocalDataFromIndexedDb = async (storageKey: string) => {
     if (typeof window === "undefined") return;
     const worker = getIndexedDbWorker();
@@ -1260,6 +1286,27 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (!worker) {
       alert("IndexedDB 저장을 위한 Worker를 사용할 수 없습니다.");
       return;
+    }
+
+    const estimate = await getStorageEstimate();
+    if (estimate) {
+      alert(
+        [
+          "IndexedDB 저장 용량",
+          `사용된 용량: ${formatStorageMb(estimate.usage)}`,
+          `남은 용량: ${formatStorageMb(estimate.remaining)}`,
+          `전체 용량: ${formatStorageMb(estimate.quota)}`,
+        ].join("\n")
+      );
+    } else {
+      alert(
+        [
+          "IndexedDB 저장 용량",
+          "사용된 용량: 알 수 없음",
+          "남은 용량: 알 수 없음",
+          "전체 용량: 알 수 없음",
+        ].join("\n")
+      );
     }
 
     const payload = {
