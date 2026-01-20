@@ -19,6 +19,25 @@ type ProgressEntry = {
   mode: string;
 };
 
+export type IndexedDbBundlePayload = {
+  storageKey: string;
+  data: {
+    bookmarks?: unknown[];
+    highlights?: unknown[];
+    notes?: unknown[];
+    strokes?: Record<string, unknown[]>;
+    progress?: {
+      currentPdfPage?: number;
+      viewMode?: string;
+      pdfTotalPages?: number;
+      updatedAt?: number;
+    };
+  };
+  meta?: {
+    bookTitle?: string;
+  };
+};
+
 export type RmsConfig = {
   apiBase: string;
   bookCd: string;
@@ -584,4 +603,54 @@ export const saveRmsProgress = async ({
 
   rmsStatusInitFalse(localStoragePath);
   return payload;
+};
+
+export const saveRmsIndexedDbData = async ({
+  apiBase,
+  bookCd,
+  memberCd,
+  payload,
+}: {
+  apiBase: string;
+  bookCd: string;
+  memberCd: string;
+  payload: IndexedDbBundlePayload;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const reqData = {
+    bookCd,
+    memberCd,
+    storageKey: payload.storageKey,
+    data: payload.data,
+    meta: payload.meta || {},
+  };
+
+  const response = await fetch(`${apiBase}/v3/rms/saveData`, {
+    method: "POST",
+    headers: buildRmsHeaders(),
+    body: JSON.stringify(reqData),
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `RMS saveData failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return result;
 };

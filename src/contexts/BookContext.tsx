@@ -31,6 +31,7 @@ import {
   fetchRmsProgressPage,
   getRmsConfig,
   loadLastProgressPageFromLocalStorage,
+  saveRmsIndexedDbData,
   saveRmsProgress,
 } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -1360,6 +1361,21 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         worker.postMessage({ type: "save_bundle", requestId, payload });
       });
       alert("IndexedDB에 저장했습니다.");
+      const config = getRmsConfig();
+      if (config) {
+        try {
+          await saveRmsIndexedDbData({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+            memberCd: config.memberCd,
+            payload,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error("RMS saveData failed", err);
+          alert(`서버 저장 실패: ${message}`);
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("IndexedDB save failed", err);
