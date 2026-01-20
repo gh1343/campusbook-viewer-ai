@@ -44,6 +44,7 @@ const getJsonBytes = (value: unknown) => {
 const bytesToMb = (bytes: number) => Number((bytes / (1024 * 1024)).toFixed(4));
 
 const enable_debug_log = false;
+const COPY_REPLACE_CHAR = "*";
 
 interface PdfViewerProps {
   file: string; // 일단 string URL 기준으로만 사용
@@ -486,6 +487,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       ""
     ).trim();
 
+  const replaceClipboardText = (text: string) =>
+    text.replace(/[^\s]/g, COPY_REPLACE_CHAR);
+
   // ✅ 현재 선택된 텍스트를 강제로 클립보드에 넣는 함수
   const handleCopySelection = async () => {
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
@@ -498,12 +502,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     try {
+      const replacedText = replaceClipboardText(text);
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(replacedText);
       } else {
         // fallback that still works after mobile Safari clears the live selection
         const textarea = document.createElement("textarea");
-        textarea.value = text;
+        textarea.value = replacedText;
         textarea.setAttribute("readonly", "true");
         textarea.style.position = "fixed";
         textarea.style.left = "-9999px";
@@ -523,6 +528,34 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     } finally {
       copyResetRef.current = window.setTimeout(() => setCopyStatus(""), 1000);
     }
+  };
+
+  const handleContainerCopy = (
+    e: React.ClipboardEvent<HTMLDivElement>
+  ) => {
+    const container = viewerContainerRef.current;
+    const sel = window.getSelection();
+    if (
+      !container ||
+      !sel ||
+      sel.isCollapsed ||
+      !sel.toString().trim()
+    ) {
+      return;
+    }
+
+    const anchor = sel.anchorNode;
+    const focus = sel.focusNode;
+    if (!anchor || !focus) return;
+
+    const isInside = container.contains(anchor) && container.contains(focus);
+    if (!isInside) return;
+
+    const replacedText = replaceClipboardText(sel.toString());
+    if (!replacedText.trim()) return;
+
+    e.preventDefault();
+    e.clipboardData.setData("text/plain", replacedText);
   };
 
   const checkPdfSelection = () => {
@@ -731,10 +764,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         {/* ⭐ pdf.js에서 요구하는 container는 그대로 absolute 유지 ⭐ */}
         <div
           ref={viewerContainerRef}
-          className="pdf_viewer_container"
-          onPointerUp={handleContainerPointerUp}
-          onContextMenu={(e) => e.preventDefault()}
-        >
+        className="pdf_viewer_container"
+        onPointerUp={handleContainerPointerUp}
+        onContextMenu={(e) => e.preventDefault()}
+        onCopy={handleContainerCopy}
+      >
           <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
           {/* 커스텀 하이라이트 오버레이 */}
           <div
