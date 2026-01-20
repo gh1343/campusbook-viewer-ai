@@ -41,8 +41,7 @@ const getJsonBytes = (value: unknown) => {
   return new TextEncoder().encode(text).length;
 };
 
-const bytesToMb = (bytes: number) =>
-  Number((bytes / (1024 * 1024)).toFixed(4));
+const bytesToMb = (bytes: number) => Number((bytes / (1024 * 1024)).toFixed(4));
 
 const enable_debug_log = false;
 
@@ -427,8 +426,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const nextMode = forceSinglePage
       ? SpreadMode.NONE
       : preferSpreadView
-        ? SpreadMode.ODD
-        : SpreadMode.NONE;
+      ? SpreadMode.ODD
+      : SpreadMode.NONE;
     if (viewer.spreadMode !== nextMode) {
       viewer.spreadMode = nextMode;
       scheduleRenderRefresh();
@@ -578,7 +577,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
 
     const pageEl = getPageElFromRange(range);
-    const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) || null : null;
+    const pageNumber = pageEl
+      ? Number(pageEl.dataset.pageNumber) || null
+      : null;
     const visualScale = getVisualScale();
     const rects =
       pageEl && pageNumber
@@ -613,35 +614,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   useEffect(() => {
     const onSelectionChange = () => scheduleSelectionCheck();
-    const isSelectionInsideViewer = () => {
-      const container = viewerContainerRef.current;
-      const sel = window.getSelection();
-      if (!container || !sel || sel.rangeCount === 0) return false;
-      const anchor = sel.anchorNode;
-      const focus = sel.focusNode;
-      if (!anchor || !focus) return false;
-      return container.contains(anchor) && container.contains(focus);
-    };
-
-    const onContextMenu = (e: Event) => {
-      const container = viewerContainerRef.current;
-      if (!container || !container.contains(e.target as Node)) return;
-      e.preventDefault();
-    };
-
-    const onTouchEnd = (e: Event) => {
-      scheduleSelectionCheck();
-      const selectionText = window.getSelection()?.toString().trim() || "";
-      if (!selectionText) return;
-      if (!isSelectionInsideViewer()) return;
-      if (e.cancelable) e.preventDefault();
-    };
+    const onTouchEnd = () => scheduleSelectionCheck();
     document.addEventListener("selectionchange", onSelectionChange);
-    document.addEventListener("contextmenu", onContextMenu);
-    document.addEventListener("touchend", onTouchEnd, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
     return () => {
       document.removeEventListener("selectionchange", onSelectionChange);
-      document.removeEventListener("contextmenu", onContextMenu);
       document.removeEventListener("touchend", onTouchEnd);
     };
   }, []);
@@ -656,27 +633,22 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       snapshot?.rects && snapshot.rects.length > 0
         ? snapshot.rects
         : snapshot?.range &&
-            snapshot.pageEl &&
-            snapshot.pageNumber !== null &&
-            snapshot.pageNumber !== undefined
-          ? buildHighlightRectsFromSelection(
-              snapshot.range,
-              snapshot.pageEl,
-              visualScale
-            )
-          : [];
+          snapshot.pageEl &&
+          snapshot.pageNumber !== null &&
+          snapshot.pageNumber !== undefined
+        ? buildHighlightRectsFromSelection(
+            snapshot.range,
+            snapshot.pageEl,
+            visualScale
+          )
+        : [];
 
     if (!activeText || !pageNumber || rects.length === 0) {
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
     // BookContext에도 기록하여 사이드바/검색과 연동하며 동일 ID를 공유
-    const id = addHighlight(
-      activeText,
-      undefined,
-      "reference-doc",
-      pageNumber
-    );
+    const id = addHighlight(activeText, undefined, "reference-doc", pageNumber);
     const mergedRects = mergeHighlightRects(rects);
     updateHighlight(id, { rects: mergedRects });
     const rectBytes = getJsonBytes(mergedRects);
@@ -730,10 +702,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const handleAskAi = () => {
-    const success = askAiAction(
-      selection.text,
-      triggerSmartExplain,
-      () => setSelection((prev) => ({ ...prev, show: false }))
+    const success = askAiAction(selection.text, triggerSmartExplain, () =>
+      setSelection((prev) => ({ ...prev, show: false }))
     );
     if (success) {
       window.getSelection()?.removeAllRanges();
