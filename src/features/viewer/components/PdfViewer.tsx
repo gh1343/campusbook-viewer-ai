@@ -379,7 +379,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   });
 
   useEffect(() => {
-    if (loading) return;
     const viewer = pdfViewerRef.current;
     const containerEl = viewerContainerRef.current;
     const contentEl = viewerRef.current;

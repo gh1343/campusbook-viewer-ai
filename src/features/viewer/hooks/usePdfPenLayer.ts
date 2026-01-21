@@ -67,10 +67,11 @@ export const usePdfPenLayer = ({
             Math.abs(width - lastViewerWidth) >= SIZE_EPSILON;
           const heightChanged =
             Math.abs(height - lastViewerHeight) >= SIZE_EPSILON;
+          const initialHeightSet = lastViewerHeight === 0 && height > 0;
 
-          if (widthChanged) layoutChanged = true;
+          if (widthChanged || initialHeightSet) layoutChanged = true;
           // Height shifts (new pages appended) shouldn't force layoutTick updates.
-          if (heightChanged) refreshOnly = true;
+          if (heightChanged && !initialHeightSet) refreshOnly = true;
 
           if (widthChanged || heightChanged) {
             lastViewerWidth = width;
@@ -84,10 +85,11 @@ export const usePdfPenLayer = ({
             Math.abs(width - lastContainerWidth) >= SIZE_EPSILON;
           const heightChanged =
             Math.abs(height - lastContainerHeight) >= SIZE_EPSILON;
-          if (widthChanged) {
+          const initialHeightSet = lastContainerHeight === 0 && height > 0;
+          if (widthChanged || initialHeightSet) {
             layoutChanged = true;
           }
-          if (heightChanged) {
+          if (heightChanged && !initialHeightSet) {
             refreshOnly = true;
           }
           if (widthChanged || heightChanged) {
