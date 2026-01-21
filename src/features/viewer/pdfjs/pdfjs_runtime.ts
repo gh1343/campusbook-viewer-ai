@@ -89,7 +89,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   let firstPageRendered = false;
   const handlePageRendered = (evt?: { pageNumber?: number }) => {
     scheduleRenderRefresh();
-    if (!firstPageRendered && evt?.pageNumber === 1) {
+    if (!firstPageRendered && evt?.pageNumber) {
       firstPageRendered = true;
       setLoading(false);
     }
