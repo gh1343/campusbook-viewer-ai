@@ -315,3 +315,8 @@
 .more_list .exit_viewer {
   color: rgb(220 38 38);
 }
+@media (max-width: 1024px) {
+  .header_nav {
+    display: none;
+  }
+}
