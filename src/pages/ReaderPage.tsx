@@ -63,12 +63,15 @@ export const ReaderPage: React.FC = () => {
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const didApplyInitialLayoutRef = useRef(false);
 
   // Handle responsive defaults and exclusive sidebars
   useEffect(() => {
     const applyLayout = () => {
       const narrow = window.innerWidth <= 1300;
       setIsNarrow(narrow);
+      if (didApplyInitialLayoutRef.current) return;
+      didApplyInitialLayoutRef.current = true;
       if (narrow) {
         // Small/medium screens: only right panel open by default
         setTocOpen(false);
