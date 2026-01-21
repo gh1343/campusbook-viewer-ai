@@ -95,6 +95,22 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     return points.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY }));
   };
 
+  const calculateStraightness = (points: { x: number; y: number }[]) => {
+    if (points.length < 5) return 0;
+    const start = points[0];
+    const end = points[points.length - 1];
+    const directDist = Math.hypot(end.x - start.x, end.y - start.y);
+    let totalDist = 0;
+    for (let i = 1; i < points.length; i++) {
+      totalDist += Math.hypot(
+        points[i].x - points[i - 1].x,
+        points[i].y - points[i - 1].y
+      );
+    }
+    if (totalDist === 0) return 0;
+    return directDist / totalDist;
+  };
+
   const createCanvas = (className: string, ariaHidden?: string) => {
     const canvas = document.createElement("canvas");
     canvas.className = className;
@@ -209,9 +225,17 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     ) {
       const pageEl = getPageElementByNumber(pageNumber);
       const pageSize = pageEl ? getPageSize(pageEl) : null;
+      const straightness = calculateStraightness(livePointsRef.current);
+      let finalPoints = livePointsRef.current;
+      if (straightness > 0.88 && livePointsRef.current.length > 5) {
+        finalPoints = [
+          livePointsRef.current[0],
+          livePointsRef.current[livePointsRef.current.length - 1],
+        ];
+      }
       const newStroke = {
         id: Date.now().toString(),
-        points: livePointsRef.current,
+        points: finalPoints,
         color: penColorRef.current,
         width: penWidthRef.current,
         opacity: penOpacityRef.current,
@@ -406,6 +430,28 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       ctx.globalAlpha = penOpacityRef.current;
       ctx.arc(p.x, p.y, penWidthRef.current / 2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    const straightness = calculateStraightness(livePointsRef.current);
+    const isStraightIntent =
+      straightness > 0.92 && livePointsRef.current.length > 10;
+    if (isStraightIntent) {
+      const start = livePointsRef.current[0];
+      const end = livePointsRef.current[livePointsRef.current.length - 1];
+      ctx.beginPath();
+      ctx.lineWidth = penWidthRef.current;
+      ctx.strokeStyle = penColorRef.current;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.globalAlpha = penOpacityRef.current;
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = penColorRef.current;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
       return;
     }
