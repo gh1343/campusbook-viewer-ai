@@ -161,6 +161,30 @@
   background-color: rgb(255 247 237);
   color: rgb(217 119 6);
 }
+.pdf_zoom_controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgb(226 232 240);
+  background-color: rgb(241 245 249);
+}
+.pdf_zoom_btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background-color: rgb(255 255 255);
+  color: rgb(100 116 139);
+}
+.pdf_zoom_btn:hover {
+  color: rgb(37 99 235);
+}
 .draw_icon_wrap {
   position: relative;
   display: flex;

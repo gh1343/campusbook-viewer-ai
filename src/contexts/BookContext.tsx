@@ -506,6 +506,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [pdfNavigator, setPdfNavigator] = useState<
     ((page: number) => void) | null
   >(null);
+  const [pdfZoomHandler, setPdfZoomHandler] = useState<
+    ((direction: "in" | "out") => void) | null
+  >(null);
   const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
   const [pdfSearchHighlight, setPdfSearchHighlight] = useState<{
     page: number;
@@ -1077,6 +1080,25 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     [pendingPdfPage]
   );
 
+  const registerPdfZoomHandler = React.useCallback(
+    (fn: (direction: "in" | "out") => void) => {
+      setPdfZoomHandler(() => fn);
+    },
+    []
+  );
+
+  const zoomPdfIn = () => {
+    if (pdfZoomHandler) {
+      pdfZoomHandler("in");
+    }
+  };
+
+  const zoomPdfOut = () => {
+    if (pdfZoomHandler) {
+      pdfZoomHandler("out");
+    }
+  };
+
   useEffect(() => {
     if (rmsInitRef.current) return;
     const config = getRmsConfig();
@@ -1467,6 +1489,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         goToPdfPage,
         goToHighlight,
         registerPdfNavigator,
+        registerPdfZoomHandler,
+        zoomPdfIn,
+        zoomPdfOut,
         pdfSearchHighlight,
         setPdfSearchHighlight,
         currentPdfPage,

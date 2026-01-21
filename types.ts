@@ -84,6 +84,8 @@ export interface Stroke {
   isEraser?: boolean;
   anchorIndex?: number;
   pageNumber?: number;
+  pageWidth?: number;
+  pageHeight?: number;
 }
 
 export interface GeneralNote {
@@ -220,6 +222,9 @@ export interface BookContextType {
   setPdfTextPages: (pages: { page: number; text: string }[]) => void;
   goToPdfPage: (page: number) => void;
   registerPdfNavigator: (fn: (page: number) => void) => void;
+  registerPdfZoomHandler: (fn: (direction: "in" | "out") => void) => void;
+  zoomPdfIn: () => void;
+  zoomPdfOut: () => void;
   pdfSearchHighlight: { page: number; term: string } | null;
   setPdfSearchHighlight: (value: { page: number; term: string } | null) => void;
   currentPdfPage: number;

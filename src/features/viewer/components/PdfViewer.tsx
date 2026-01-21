@@ -96,6 +96,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setActiveToolTab,
     requestHighlightNoteEdit,
     getChapterTitleByPage,
+    registerPdfZoomHandler,
   } = useBook();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
@@ -118,6 +119,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   }, [ua]);
   const MAX_CANVAS_PIXELS = undefined;
   const pdfViewerRef = useRef<PDFViewer | null>(null);
+  const pdfZoomInitialScaleRef = useRef<number | null>(null);
+  const pdfZoomManualRef = useRef(false);
+  const PDF_ZOOM_STEP = 0.1;
 
   const {
     loading,
@@ -169,6 +173,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     chapterStrokes,
     showAnnotations,
   ]);
+
+  useEffect(() => {
+    pdfZoomInitialScaleRef.current = null;
+    pdfZoomManualRef.current = false;
+  }, [file]);
 
   useEffect(() => {
     // Keep local overlay in sync with global highlights (e.g., sidebar delete)
@@ -268,6 +277,66 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return Number.isFinite(parsed) ? parsed : 1;
   };
 
+  const getPdfContentBaseWidth = () => {
+    const contentEl = viewerRef.current;
+    if (!contentEl) return 0;
+
+    const spreadEl = contentEl.querySelector<HTMLElement>(".spread");
+    if (spreadEl) {
+      return spreadEl.offsetWidth || spreadEl.scrollWidth;
+    }
+
+    const pages = contentEl.querySelectorAll<HTMLElement>(".page");
+    if (
+      pages.length >= 2 &&
+      pdfViewerRef.current?.spreadMode !== SpreadMode.NONE
+    ) {
+      const first = pages[0];
+      const second = pages[1];
+      const left = Math.min(first.offsetLeft, second.offsetLeft);
+      const right = Math.max(
+        first.offsetLeft + first.offsetWidth,
+        second.offsetLeft + second.offsetWidth
+      );
+      return right - left;
+    }
+
+    const pageEl = pages[0];
+    return pageEl ? pageEl.offsetWidth : 0;
+  };
+
+  const getPdfZoomBounds = () => {
+    const viewer = pdfViewerRef.current;
+    const containerEl = viewerContainerRef.current;
+    const contentEl = viewerRef.current;
+    const currentScale = viewer?.currentScale || 1;
+
+    if (pdfZoomInitialScaleRef.current === null && currentScale > 0) {
+      pdfZoomInitialScaleRef.current = currentScale;
+    }
+
+    const minScale = pdfZoomInitialScaleRef.current || 1;
+
+    if (!viewer || !containerEl || !contentEl) {
+      return { minScale, maxScale: minScale };
+    }
+
+    const { paddingLeft, paddingRight } = getComputedStyle(contentEl);
+    const paddingX =
+      (parseFloat(paddingLeft) || 0) + (parseFloat(paddingRight) || 0);
+    const availableWidth = Math.max(0, containerEl.clientWidth - paddingX);
+    const contentWidth = Math.max(0, getPdfContentBaseWidth());
+
+    if (!availableWidth || !contentWidth || currentScale <= 0) {
+      return { minScale, maxScale: minScale };
+    }
+
+    const baseWidth = contentWidth / currentScale;
+    const maxScale = Math.max(minScale, availableWidth / baseWidth);
+
+    return { minScale, maxScale };
+  };
+
   const getPageElementFromEvent = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
     const pageEl = target.closest(".page") as HTMLElement | null;
@@ -340,6 +409,33 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
   }, [penRuntime]);
 
+  const applyPdfZoom = useCallback(
+    (direction: "in" | "out") => {
+      const viewer = pdfViewerRef.current;
+      if (!viewer) return;
+
+      const { minScale, maxScale } = getPdfZoomBounds();
+      const currentScale = viewer.currentScale || 1;
+      const nextScale =
+        direction === "in"
+          ? Math.min(maxScale, currentScale + PDF_ZOOM_STEP)
+          : Math.max(minScale, currentScale - PDF_ZOOM_STEP);
+
+      if (Math.abs(nextScale - currentScale) < 0.001) return;
+
+      pdfZoomManualRef.current = true;
+      viewer.currentScale = nextScale;
+      scheduleRenderRefresh();
+      setLayoutTick((prev) => prev + 1);
+    },
+    [scheduleRenderRefresh, setLayoutTick]
+  );
+
+  useEffect(() => {
+    if (!registerPdfZoomHandler) return;
+    registerPdfZoomHandler(applyPdfZoom);
+  }, [registerPdfZoomHandler, applyPdfZoom]);
+
   usePdfJsViewer({
     file,
     viewerContainerRef,
@@ -390,6 +486,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         return;
       }
 
+      if (pdfZoomManualRef.current) return;
+
       const pageEl = contentEl.querySelector<HTMLElement>(".page");
       if (!pageEl) return;
 
@@ -417,6 +515,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     return () => cancelAnimationFrame(frameId);
   }, [loading, layoutTick, isMobileLike]);
+
+  useEffect(() => {
+    const viewer = pdfViewerRef.current;
+    if (!viewer || loading) return;
+    if (pdfZoomInitialScaleRef.current !== null) return;
+
+    const frameId = requestAnimationFrame(() => {
+      const nextScale = pdfViewerRef.current?.currentScale || 1;
+      if (pdfZoomInitialScaleRef.current === null) {
+        pdfZoomInitialScaleRef.current = nextScale;
+      }
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [loading, layoutTick]);
 
   // 사이드바가 열리면 단일 페이지, 닫히면 2페이지 스프레드(데스크톱)로 전환
   useEffect(() => {

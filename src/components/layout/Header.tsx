@@ -78,6 +78,8 @@ export const Header: React.FC<HeaderProps> = ({
     chapters,
     bookTitle,
     getChapterTitleByPage,
+    zoomPdfIn,
+    zoomPdfOut,
   } = useBook();
 
   const location = useLocation();
@@ -390,6 +392,22 @@ export const Header: React.FC<HeaderProps> = ({
                   <BookmarkPlus size={20} />
                 )}
               </button>
+              <div className="pdf_zoom_controls">
+                <button
+                  onClick={zoomPdfOut}
+                  className="pdf_zoom_btn"
+                  title="Zoom Out"
+                >
+                  <Minus size={18} />
+                </button>
+                <button
+                  onClick={zoomPdfIn}
+                  className="pdf_zoom_btn"
+                  title="Zoom In"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
               {/* Pen Tools */}
               <div className="draw_icon_wrap">
                 <div className="draw_icon_inner">

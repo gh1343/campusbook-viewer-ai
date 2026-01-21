@@ -64,6 +64,37 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   const isTouchInputBlocked = (e: React.PointerEvent) =>
     drawingModeRef.current === "pen" && e.pointerType === "touch";
 
+  const getPageSize = (pageEl: HTMLElement) => {
+    const { width, height } = getCanvasMetrics(pageEl);
+    return { width, height };
+  };
+
+  const getStrokeScale = (
+    stroke: { pageWidth?: number; pageHeight?: number },
+    pageWidth: number,
+    pageHeight: number
+  ) => {
+    if (!pageWidth || !pageHeight) {
+      return { scaleX: 1, scaleY: 1 };
+    }
+    const baseWidth = stroke.pageWidth || pageWidth;
+    const baseHeight = stroke.pageHeight || pageHeight;
+    const scaleX = baseWidth ? pageWidth / baseWidth : 1;
+    const scaleY = baseHeight ? pageHeight / baseHeight : 1;
+    return { scaleX, scaleY };
+  };
+
+  const scaleStrokePoints = (
+    points: { x: number; y: number }[],
+    scaleX: number,
+    scaleY: number
+  ) => {
+    if (Math.abs(scaleX - 1) < 0.0001 && Math.abs(scaleY - 1) < 0.0001) {
+      return points;
+    }
+    return points.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY }));
+  };
+
   const createCanvas = (className: string, ariaHidden?: string) => {
     const canvas = document.createElement("canvas");
     canvas.className = className;
@@ -141,10 +172,18 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       }
       renderLiveCanvas();
     } else if (drawingModeRef.current === "eraser") {
+      const pageSize = getPageSize(pageEl);
       const strokes = getPageStrokes(pageNumber);
       strokes.forEach((stroke) => {
+        const { scaleX, scaleY } = getStrokeScale(
+          stroke,
+          pageSize.width,
+          pageSize.height
+        );
         const hit = stroke.points.some(
-          (p: any) => Math.hypot(p.x - pt.x, p.y - pt.y) < 16
+          (p: any) =>
+            Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
+            16 * scaleX
         );
         if (hit) removeStroke("pdf-main", stroke.id);
       });
@@ -168,6 +207,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       pageNumber &&
       livePointsRef.current.length > 1
     ) {
+      const pageEl = getPageElementByNumber(pageNumber);
+      const pageSize = pageEl ? getPageSize(pageEl) : null;
       const newStroke = {
         id: Date.now().toString(),
         points: livePointsRef.current,
@@ -175,6 +216,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
         width: penWidthRef.current,
         opacity: penOpacityRef.current,
         pageNumber,
+        pageWidth: pageSize?.width,
+        pageHeight: pageSize?.height,
       };
       addStroke("pdf-main", newStroke);
     }
@@ -318,10 +361,21 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       ctx.restore();
       if (!showAnnotationsRef.current) return;
 
+      const pageRect = staticCanvas.getBoundingClientRect();
+      const pageWidth = pageRect.width;
+      const pageHeight = pageRect.height;
+
       const strokes = getPageStrokes(pageNumber);
-      strokes.forEach((s: any) =>
-        drawStrokePath(ctx, s.points, s.color, s.width || 3, s.opacity ?? 1)
-      );
+      strokes.forEach((s: any) => {
+        const { scaleX, scaleY } = getStrokeScale(
+          s,
+          pageWidth,
+          pageHeight
+        );
+        const points = scaleStrokePoints(s.points, scaleX, scaleY);
+        const width = (s.width || 3) * scaleX;
+        drawStrokePath(ctx, points, s.color, width, s.opacity ?? 1);
+      });
     });
   };
 
