@@ -1516,6 +1516,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           await saveHighlightsToServer({
             apiBase: config.apiBase,
             bookCd: config.bookCd,
+            memberCd: config.memberCd,
             highlights: snapshot.data.highlights || [],
           });
           alert("하이라이트가 서버에 저장되었습니다.");

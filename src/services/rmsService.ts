@@ -995,10 +995,12 @@ export const saveRmsIndexedDbData = async ({
 export const saveHighlightsToServer = async ({
   apiBase,
   bookCd,
+  memberCd,
   highlights,
 }: {
   apiBase: string;
   bookCd: string;
+  memberCd: string;
   highlights: unknown[];
 }) => {
   if (typeof window === "undefined") {
@@ -1009,7 +1011,7 @@ export const saveHighlightsToServer = async ({
   }
 
   const response = await fetch(
-    `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=hl`,
+    `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&memberCd=${memberCd}&type=hl`,
     {
       method: "POST",
       headers: {
