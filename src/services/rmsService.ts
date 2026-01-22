@@ -21,6 +21,8 @@ type ProgressEntry = {
 
 export type IndexedDbBundlePayload = {
   storageKey: string;
+  schema_version?: number;
+  savedAt?: number;
   data: {
     bookmarks?: unknown[];
     highlights?: unknown[];
@@ -31,11 +33,33 @@ export type IndexedDbBundlePayload = {
       viewMode?: string;
       pdfTotalPages?: number;
       updatedAt?: number;
+      furthestPage?: number;
+      lastReadPage?: number;
     };
   };
   meta?: {
     bookTitle?: string;
   };
+};
+
+export type IndexedDbSnapshot = {
+  key: string;
+  savedAt: number;
+  schema_version?: number;
+  data: IndexedDbBundlePayload["data"];
+  meta?: IndexedDbBundlePayload["meta"];
+};
+
+export type SyncSnapshotPayload = {
+  user_id: string;
+  book_id: string;
+  device_id: string;
+  schema_version: number;
+  app_version: string;
+  snapshot_updated_at: number;
+  storageKey: string;
+  data: IndexedDbBundlePayload["data"];
+  meta?: IndexedDbBundlePayload["meta"];
 };
 
 export type RmsConfig = {
@@ -63,6 +87,11 @@ const DEFAULT_RMS_VER_LIST: RmsVerItem[] = [
   { rmsTp: "RMS_ST", rmsTs: 0 },
 ];
 
+const DEVICE_ID_KEY = "device_id";
+const SYNC_SCHEMA_VERSION = 1;
+const DEFAULT_APP_VERSION = "0.0.0";
+let cached_device_id: string | null = null;
+
 const readJson = <T>(raw: string | null, fallback: T): T => {
   if (!raw) return fallback;
   try {
@@ -82,6 +111,166 @@ const normalizeApiBase = (value: string) => {
   if (!trimmed) return "";
   const withoutTrailing = trimmed.replace(/\/+$/, "");
   return withoutTrailing.replace(/\/v2$/i, "");
+};
+
+const toNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const normalizeMs = (value: unknown) => {
+  const numeric = toNumber(value);
+  return numeric && numeric > 0 ? numeric : null;
+};
+
+const normalizePage = (value: unknown) => {
+  const numeric = toNumber(value);
+  return numeric !== null ? Math.max(1, Math.round(numeric)) : null;
+};
+
+const parseIdTimestamp = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+};
+
+const generate_uuid = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+    ""
+  );
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(
+    12,
+    16
+  )}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+export const get_device_id = () => {
+  if (cached_device_id) return cached_device_id;
+  if (typeof window === "undefined") {
+    cached_device_id = generate_uuid();
+    return cached_device_id;
+  }
+  try {
+    const stored = localStorage.getItem(DEVICE_ID_KEY);
+    if (stored) {
+      cached_device_id = stored;
+      return stored;
+    }
+    const next = generate_uuid();
+    localStorage.setItem(DEVICE_ID_KEY, next);
+    cached_device_id = next;
+    return next;
+  } catch (err) {
+    cached_device_id = generate_uuid();
+    return cached_device_id;
+  }
+};
+
+const normalize_item = (item: Record<string, unknown>, now: number) => {
+  let changed = false;
+  const currentUpdated = normalizeMs(item.updated_at);
+  const currentCreated = normalizeMs(item.created_at);
+  const fallbackUpdated =
+    currentUpdated ??
+    normalizeMs((item as { updatedAt?: unknown }).updatedAt) ??
+    normalizeMs((item as { createdAt?: unknown }).createdAt) ??
+    parseIdTimestamp(item.id) ??
+    now;
+  const fallbackCreated =
+    currentCreated ??
+    normalizeMs((item as { createdAt?: unknown }).createdAt) ??
+    parseIdTimestamp(item.id) ??
+    fallbackUpdated;
+  const next = { ...item } as Record<string, unknown>;
+  if (currentUpdated === null) {
+    next.updated_at = fallbackUpdated;
+    changed = true;
+  }
+  if (currentCreated === null) {
+    next.created_at = fallbackCreated;
+    changed = true;
+  }
+  if (typeof item.deleted !== "boolean") {
+    next.deleted = false;
+    changed = true;
+  }
+  return { item: changed ? next : item, changed };
+};
+
+const normalize_item_list = (items: unknown[] | undefined, now: number) => {
+  if (!Array.isArray(items)) {
+    return { items, changed: false };
+  }
+  let changed = false;
+  const next = items.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const normalized = normalize_item(item as Record<string, unknown>, now);
+    if (normalized.changed) changed = true;
+    return normalized.item;
+  });
+  return { items: changed ? next : items, changed };
+};
+
+const normalize_progress = (
+  progress: IndexedDbBundlePayload["data"]["progress"],
+  now: number
+) => {
+  if (!progress || typeof progress !== "object") {
+    return { progress, changed: false };
+  }
+  let changed = false;
+  const currentPage = normalizePage(progress.currentPdfPage);
+  const existingFurthest = normalizePage(
+    (progress as { furthestPage?: unknown }).furthestPage
+  );
+  let nextFurthest = existingFurthest;
+  if (currentPage !== null) {
+    nextFurthest =
+      existingFurthest !== null
+        ? Math.max(existingFurthest, currentPage)
+        : currentPage;
+  }
+
+  const existingLastRead = normalizePage(
+    (progress as { lastReadPage?: unknown }).lastReadPage
+  );
+  const next = { ...progress } as Record<string, unknown>;
+  if (nextFurthest !== null && nextFurthest !== existingFurthest) {
+    next.furthestPage = nextFurthest;
+    changed = true;
+  }
+  if (currentPage !== null && currentPage !== existingLastRead) {
+    next.lastReadPage = currentPage;
+    changed = true;
+  }
+  if (normalizeMs(progress.updatedAt) === null) {
+    next.updatedAt = now;
+    changed = true;
+  }
+  return { progress: changed ? (next as typeof progress) : progress, changed };
 };
 
 const readRuntimeRmsConfig = () => {
@@ -398,6 +587,154 @@ export const getRmsConfig = (): RmsConfig | null => {
 
   if (!apiBase || !bookCd) return null;
   return { apiBase, bookCd, memberCd, orderIgnore, pageOffset };
+};
+
+export const migrate_snapshot = (snapshot: IndexedDbSnapshot | null) => {
+  if (!snapshot) return { snapshot: null, changed: false };
+  const now = Date.now();
+  let changed = false;
+  const data = snapshot.data;
+  const bookmarksState = normalize_item_list(data.bookmarks, now);
+  const highlightsState = normalize_item_list(data.highlights, now);
+  const notesState = normalize_item_list(data.notes, now);
+  const progressState = normalize_progress(data.progress, now);
+
+  let nextData = data;
+  if (
+    bookmarksState.changed ||
+    highlightsState.changed ||
+    notesState.changed ||
+    progressState.changed
+  ) {
+    nextData = {
+      ...data,
+      bookmarks: bookmarksState.items,
+      highlights: highlightsState.items,
+      notes: notesState.items,
+      progress: progressState.progress,
+    };
+    changed = true;
+  }
+
+  const parsedSchema = toNumber(snapshot.schema_version);
+  let schema_version = snapshot.schema_version;
+  if (parsedSchema === null || parsedSchema <= 0) {
+    schema_version = SYNC_SCHEMA_VERSION;
+    changed = true;
+  } else if (schema_version !== parsedSchema) {
+    schema_version = parsedSchema;
+    changed = true;
+  }
+
+  if (!changed) {
+    return { snapshot, changed };
+  }
+  return {
+    snapshot: {
+      ...snapshot,
+      schema_version,
+      data: nextData,
+    },
+    changed,
+  };
+};
+
+export const build_sync_payload = (
+  snapshot: IndexedDbSnapshot
+): SyncSnapshotPayload => {
+  const migrated = migrate_snapshot(snapshot);
+  const source = migrated.snapshot || snapshot;
+  const config = getRmsConfig();
+  const user_id = config?.memberCd || "guest";
+  const book_id =
+    config?.bookCd || source.meta?.bookTitle || source.key || "unknown";
+  const device_id = get_device_id();
+  const schema_version = toNumber(source.schema_version) ?? SYNC_SCHEMA_VERSION;
+  const app_version = String(
+    import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION
+  );
+  const progressUpdatedAt = normalizeMs(source.data?.progress?.updatedAt) ?? 0;
+  const savedAt = normalizeMs(source.savedAt) ?? 0;
+  const snapshot_updated_at = Math.max(savedAt, progressUpdatedAt);
+
+  const prefix_id = (items: unknown[] | undefined) => {
+    if (!Array.isArray(items)) return items;
+    return items.map((item) => {
+      if (!item || typeof item !== "object") return item;
+      const rawId = (item as { id?: unknown }).id;
+      const baseId = rawId !== null && rawId !== undefined ? String(rawId) : "";
+      if (!baseId) return item;
+      const nextId = device_id ? `${device_id}_${baseId}` : baseId;
+      return { ...item, id: nextId };
+    });
+  };
+
+  return {
+    user_id,
+    book_id,
+    device_id,
+    schema_version,
+    app_version,
+    snapshot_updated_at,
+    storageKey: source.key,
+    data: {
+      ...source.data,
+      bookmarks: prefix_id(source.data?.bookmarks),
+      highlights: prefix_id(source.data?.highlights),
+      notes: prefix_id(source.data?.notes),
+    },
+    meta: source.meta || {},
+  };
+};
+
+export const sync_snapshot = async ({
+  apiBase,
+  snapshot,
+  timeoutMs,
+}: {
+  apiBase: string;
+  snapshot: IndexedDbSnapshot;
+  timeoutMs?: number;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("Sync is only available in the browser.");
+  }
+  if (!apiBase) {
+    throw new Error("Missing RMS configuration (apiBase).");
+  }
+
+  const payload = build_sync_payload(snapshot);
+  const controller = new AbortController();
+  const timeout = typeof timeoutMs === "number" ? timeoutMs : 2500;
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(`${apiBase}/sync/snapshot`, {
+      method: "POST",
+      headers: buildRmsHeaders(),
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    let result: any = null;
+    try {
+      result = await response.json();
+    } catch (err) {
+      result = null;
+    }
+
+    if (!response.ok) {
+      const message =
+        result?.message ||
+        result?.error ||
+        `Snapshot sync failed (${response.status})`;
+      throw new Error(message);
+    }
+
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 export const fetchRmsProgressPage = async ({

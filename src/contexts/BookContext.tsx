@@ -31,9 +31,11 @@ import {
   fetchRmsProgressPage,
   getRmsConfig,
   loadLastProgressPageFromLocalStorage,
-  saveRmsIndexedDbData,
+  migrate_snapshot,
+  sync_snapshot,
   saveRmsProgress,
 } from "../services/rmsService";
+import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
   "/resources/contents/prod/cms/book/20250318/CT-20250318150313534/source/R1/20250318155912/ebook/OEBPS/nav.xhtml";
 const NAV_TOC_ORIGIN =
@@ -678,11 +680,15 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (!page || page < 1) return;
     setBookmarks((prev) => {
       if (prev.some((b) => b.page === page)) return prev;
+      const now = Date.now();
       const bookmark: PdfBookmark = {
-        id: Date.now().toString(),
+        id: now.toString(),
         page,
         label: label || `Page ${page}`,
-        createdAt: Date.now(),
+        createdAt: now,
+        created_at: now,
+        updated_at: now,
+        deleted: false,
       };
       return [bookmark, ...prev];
     });
@@ -763,14 +769,18 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     pageNumber?: number
   ): string => {
     const chapterId = targetChapterId || currentChapter.id;
+    const now = Date.now();
     const newHighlight: Highlight = {
-      id: Date.now().toString(),
+      id: now.toString(),
       chapterId: chapterId,
       text,
       color: "yellow",
       pageNumber,
       note,
-      createdAt: Date.now(),
+      createdAt: now,
+      created_at: now,
+      updated_at: now,
+      deleted: false,
     };
     const itemBytes = getJsonBytes(newHighlight);
     const chapterLabel = (() => {
@@ -820,8 +830,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     id: string,
     data: Partial<Highlight> & { note?: string }
   ) => {
+    const now = Date.now();
     setHighlights((prev) =>
-      prev.map((hl) => (hl.id === id ? { ...hl, ...data } : hl))
+      prev.map((hl) =>
+        hl.id === id ? { ...hl, ...data, updated_at: now } : hl
+      )
     );
   };
 
@@ -903,23 +916,28 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const addGeneralNote = (title: string, content: string) => {
+    const now = Date.now();
     const newNote: GeneralNote = {
-      id: Date.now().toString(),
+      id: now.toString(),
       title: title || "Untitled Note",
       content: content,
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
+      created_at: now,
+      updated_at: now,
+      deleted: false,
     };
     setGeneralNotes((prev) => [newNote, ...prev]);
   };
 
   const updateGeneralNote = (id: string, title: string, content: string) => {
+    const now = Date.now();
     setGeneralNotes((prev) =>
       prev.map((note) =>
         note.id === id
-          ? { ...note, title, content, updatedAt: Date.now() }
+          ? { ...note, title, content, updatedAt: now, updated_at: now }
           : note
       )
     );
@@ -1181,59 +1199,95 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (!worker) return;
 
     try {
-      const result = await new Promise<
-        | {
-            data?: {
-              bookmarks?: PdfBookmark[];
-              highlights?: Highlight[];
-              notes?: GeneralNote[];
-              strokes?: Record<string, Stroke[]>;
-              progress?: {
-                currentPdfPage?: number;
-                viewMode?: ViewMode;
-                pdfTotalPages?: number;
-              };
-            };
-          }
-        | null
-      >((resolve, reject) => {
-        const requestId = `${Date.now()}_${Math.random()
-          .toString(36)
-          .slice(2)}`;
-        const cleanup = () => {
-          worker.removeEventListener("message", handleMessage);
-          worker.removeEventListener("error", handleError);
-        };
-        const handleMessage = (event: MessageEvent) => {
-          const response = event.data as {
-            type?: string;
-            requestId?: string;
-            error?: string;
-            payload?: unknown;
+      const result = await new Promise<IndexedDbSnapshot | null>(
+        (resolve, reject) => {
+          const requestId = `${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          const cleanup = () => {
+            worker.removeEventListener("message", handleMessage);
+            worker.removeEventListener("error", handleError);
           };
-          if (!response || response.requestId !== requestId) return;
-          cleanup();
-          if (response.type === "load_complete") {
-            resolve((response.payload as { data?: unknown }) || null);
-          } else {
-            reject(new Error(response.error || "IndexedDB load failed."));
-          }
-        };
-        const handleError = () => {
-          cleanup();
-          reject(new Error("IndexedDB worker error."));
-        };
-        worker.addEventListener("message", handleMessage);
-        worker.addEventListener("error", handleError);
-        worker.postMessage({
-          type: "load_bundle",
-          requestId,
-          payload: { storageKey },
-        });
-      });
+          const handleMessage = (event: MessageEvent) => {
+            const response = event.data as {
+              type?: string;
+              requestId?: string;
+              error?: string;
+              payload?: unknown;
+            };
+            if (!response || response.requestId !== requestId) return;
+            cleanup();
+            if (response.type === "load_complete") {
+              resolve((response.payload as IndexedDbSnapshot) || null);
+            } else {
+              reject(new Error(response.error || "IndexedDB load failed."));
+            }
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("IndexedDB worker error."));
+          };
+          worker.addEventListener("message", handleMessage);
+          worker.addEventListener("error", handleError);
+          worker.postMessage({
+            type: "load_bundle",
+            requestId,
+            payload: { storageKey },
+          });
+        }
+      );
 
       if (!result || !result.data) return;
-      const data = result.data;
+      const migrated = migrate_snapshot(result);
+      const snapshot = migrated.snapshot || result;
+      if (migrated.changed) {
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const requestId = `${Date.now()}_${Math.random()
+              .toString(36)
+              .slice(2)}`;
+            const cleanup = () => {
+              worker.removeEventListener("message", handleMessage);
+              worker.removeEventListener("error", handleError);
+            };
+            const handleMessage = (event: MessageEvent) => {
+              const response = event.data as {
+                type?: string;
+                requestId?: string;
+                error?: string;
+              };
+              if (!response || response.requestId !== requestId) return;
+              cleanup();
+              if (response.type === "save_complete") {
+                resolve();
+              } else {
+                reject(new Error(response.error || "IndexedDB save failed."));
+              }
+            };
+            const handleError = () => {
+              cleanup();
+              reject(new Error("IndexedDB worker error."));
+            };
+            worker.addEventListener("message", handleMessage);
+            worker.addEventListener("error", handleError);
+            worker.postMessage({
+              type: "save_bundle",
+              requestId,
+              payload: {
+                storageKey: snapshot.key,
+                data: snapshot.data,
+                meta: snapshot.meta,
+                schema_version: snapshot.schema_version,
+                savedAt: snapshot.savedAt,
+              },
+            });
+          });
+        } catch (err) {
+          console.error("IndexedDB migrate save failed", err);
+        }
+      }
+
+      const data = snapshot.data;
       if (Array.isArray(data.bookmarks)) {
         setBookmarks(data.bookmarks);
       }
@@ -1311,6 +1365,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
 
+    const storageKey = buildIndexedDbKey();
     const estimate = await getStorageEstimate();
     if (estimate) {
       alert(
@@ -1332,8 +1387,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       );
     }
 
-    const payload = {
-      storageKey: buildIndexedDbKey(),
+    const savedAt = Date.now();
+    const baseSnapshot: IndexedDbSnapshot = {
+      key: storageKey,
+      savedAt,
       data: {
         bookmarks,
         highlights,
@@ -1343,12 +1400,21 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           currentPdfPage,
           viewMode,
           pdfTotalPages,
-          updatedAt: Date.now(),
+          updatedAt: savedAt,
         },
       },
       meta: {
         bookTitle,
       },
+    };
+    const migrated = migrate_snapshot(baseSnapshot);
+    const snapshot = migrated.snapshot || baseSnapshot;
+    const payload = {
+      storageKey: snapshot.key,
+      schema_version: snapshot.schema_version,
+      savedAt: snapshot.savedAt,
+      data: snapshot.data,
+      meta: snapshot.meta,
     };
 
     try {
@@ -1386,15 +1452,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const config = getRmsConfig();
       if (config) {
         try {
-          await saveRmsIndexedDbData({
+          await sync_snapshot({
             apiBase: config.apiBase,
-            bookCd: config.bookCd,
-            memberCd: config.memberCd,
-            payload,
+            snapshot,
           });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          console.error("RMS saveData failed", err);
+          console.error("Snapshot sync failed", err);
           alert(`서버 저장 실패: ${message}`);
         }
       }

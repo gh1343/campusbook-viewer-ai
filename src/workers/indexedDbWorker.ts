@@ -4,6 +4,8 @@ const STORE_NAME = "viewer_bundle";
 
 type SaveBundlePayload = {
   storageKey: string;
+  schema_version?: number;
+  savedAt?: number;
   data: {
     bookmarks: unknown[];
     highlights: unknown[];
@@ -14,6 +16,8 @@ type SaveBundlePayload = {
       viewMode: string;
       pdfTotalPages: number;
       updatedAt: number;
+      furthestPage?: number;
+      lastReadPage?: number;
     };
   };
   meta?: {
@@ -28,6 +32,7 @@ type LoadBundlePayload = {
 type StoredBundle = {
   key: string;
   savedAt: number;
+  schema_version?: number;
   data: SaveBundlePayload["data"];
   meta?: SaveBundlePayload["meta"];
 };
@@ -51,9 +56,19 @@ const saveBundle = async (payload: SaveBundlePayload) => {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
+      const savedAt =
+        typeof payload.savedAt === "number" && Number.isFinite(payload.savedAt)
+          ? payload.savedAt
+          : Date.now();
+      const schema_version =
+        typeof payload.schema_version === "number" &&
+        Number.isFinite(payload.schema_version)
+          ? payload.schema_version
+          : 1;
       store.put({
         key: payload.storageKey,
-        savedAt: Date.now(),
+        savedAt,
+        schema_version,
         data: payload.data,
         meta: payload.meta || {},
       });

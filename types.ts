@@ -25,6 +25,9 @@ export interface PdfBookmark {
   page: number;
   label: string;
   createdAt: number;
+  created_at?: number;
+  updated_at?: number;
+  deleted?: boolean;
 }
 
 export interface PdfHighlightRect {
@@ -46,6 +49,9 @@ export interface Highlight {
   note?: string;
   rects?: PdfHighlightRect[];
   createdAt: number;
+  created_at?: number;
+  updated_at?: number;
+  deleted?: boolean;
 }
 
 export interface ChatMessage {
@@ -96,6 +102,9 @@ export interface GeneralNote {
   chapterTitle?: string;
   createdAt: number;
   updatedAt: number;
+  created_at?: number;
+  updated_at?: number;
+  deleted?: boolean;
 }
 
 export type Theme = "light" | "dark";
