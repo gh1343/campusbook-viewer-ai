@@ -34,6 +34,7 @@ import {
   migrate_snapshot,
   sync_snapshot,
   saveRmsProgress,
+  saveHighlightsToServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -169,6 +170,47 @@ const getJsonBytes = (value: unknown) => {
 
 const bytesToMb = (bytes: number) =>
   Number((bytes / (1024 * 1024)).toFixed(4));
+
+const stableStringify = (value: unknown) =>
+  JSON.stringify(value, (_key, val) => {
+    if (!val || typeof val !== "object" || Array.isArray(val)) return val;
+    return Object.keys(val as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, k) => {
+        acc[k] = (val as Record<string, unknown>)[k];
+        return acc;
+      }, {});
+  });
+
+const normalizeSnapshotForCompare = (snapshot: IndexedDbSnapshot) => {
+  const data = snapshot.data || {};
+  const progress = data.progress;
+  const normalizedProgress =
+    progress && typeof progress === "object"
+      ? {
+          currentPdfPage: progress.currentPdfPage,
+          viewMode: progress.viewMode,
+          pdfTotalPages: progress.pdfTotalPages,
+          furthestPage: progress.furthestPage,
+          lastReadPage: progress.lastReadPage,
+        }
+      : progress;
+  return {
+    data: {
+      bookmarks: Array.isArray(data.bookmarks) ? data.bookmarks : [],
+      highlights: Array.isArray(data.highlights) ? data.highlights : [],
+      notes: Array.isArray(data.notes) ? data.notes : [],
+      strokes:
+        data.strokes && typeof data.strokes === "object" ? data.strokes : {},
+      progress: normalizedProgress,
+    },
+    meta: snapshot.meta || {},
+  };
+};
+
+const isSameSnapshot = (a: IndexedDbSnapshot, b: IndexedDbSnapshot) =>
+  stableStringify(normalizeSnapshotForCompare(a)) ===
+  stableStringify(normalizeSnapshotForCompare(b));
 
 const enable_debug_log = false;
 
@@ -336,6 +378,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const rmsInitRef = useRef(false);
   const indexedDbWorkerRef = useRef<Worker | null>(null);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
+  const indexedDbSnapshotRef = useRef<IndexedDbSnapshot | null>(null);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState((prev) => ({ ...prev, ...config }));
@@ -1167,6 +1210,29 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     return normalized ? `path_${normalized}` : "local_default";
   };
 
+  const buildCurrentIndexedDbSnapshot = (
+    storageKey: string,
+    savedAt: number
+  ): IndexedDbSnapshot => ({
+    key: storageKey,
+    savedAt,
+    data: {
+      bookmarks,
+      highlights,
+      notes: generalNotes,
+      strokes: chapterStrokes,
+      progress: {
+        currentPdfPage,
+        viewMode,
+        pdfTotalPages,
+        updatedAt: savedAt,
+      },
+    },
+    meta: {
+      bookTitle,
+    },
+  });
+
   const getStorageEstimate = async () => {
     if (typeof navigator === "undefined") return null;
     if (!navigator.storage || !navigator.storage.estimate) return null;
@@ -1237,7 +1303,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         }
       );
 
-      if (!result || !result.data) return;
+      if (!result || !result.data) {
+        indexedDbSnapshotRef.current = null;
+        return;
+      }
       const migrated = migrate_snapshot(result);
       const snapshot = migrated.snapshot || result;
       if (migrated.changed) {
@@ -1317,6 +1386,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           goToPdfPage(savedPage);
         }
       }
+      indexedDbSnapshotRef.current = snapshot;
     } catch (err) {
       console.error("IndexedDB load failed", err);
     }
@@ -1366,6 +1436,19 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     const storageKey = buildIndexedDbKey();
+    const savedAt = Date.now();
+    const baseSnapshot = buildCurrentIndexedDbSnapshot(storageKey, savedAt);
+    const migrated = migrate_snapshot(baseSnapshot);
+    const snapshot = migrated.snapshot || baseSnapshot;
+
+    const previousSnapshot = indexedDbSnapshotRef.current;
+    if (previousSnapshot && previousSnapshot.key === storageKey) {
+      if (isSameSnapshot(previousSnapshot, snapshot)) {
+        alert("변경된 내용이 없어 IndexedDB 저장을 건너뜁니다.");
+        return;
+      }
+    }
+
     const estimate = await getStorageEstimate();
     if (estimate) {
       alert(
@@ -1386,29 +1469,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         ].join("\n")
       );
     }
-
-    const savedAt = Date.now();
-    const baseSnapshot: IndexedDbSnapshot = {
-      key: storageKey,
-      savedAt,
-      data: {
-        bookmarks,
-        highlights,
-        notes: generalNotes,
-        strokes: chapterStrokes,
-        progress: {
-          currentPdfPage,
-          viewMode,
-          pdfTotalPages,
-          updatedAt: savedAt,
-        },
-      },
-      meta: {
-        bookTitle,
-      },
-    };
-    const migrated = migrate_snapshot(baseSnapshot);
-    const snapshot = migrated.snapshot || baseSnapshot;
     const payload = {
       storageKey: snapshot.key,
       schema_version: snapshot.schema_version,
@@ -1448,17 +1508,20 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         worker.addEventListener("error", handleError);
         worker.postMessage({ type: "save_bundle", requestId, payload });
       });
+      indexedDbSnapshotRef.current = snapshot;
       alert("IndexedDB에 저장했습니다.");
       const config = getRmsConfig();
       if (config) {
         try {
-          await sync_snapshot({
+          await saveHighlightsToServer({
             apiBase: config.apiBase,
-            snapshot,
+            bookCd: config.bookCd,
+            highlights: snapshot.data.highlights || [],
           });
+          alert("하이라이트가 서버에 저장되었습니다.");
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          console.error("Snapshot sync failed", err);
+          console.error("Highlights save failed", err);
           alert(`서버 저장 실패: ${message}`);
         }
       }

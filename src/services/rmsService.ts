@@ -991,3 +991,48 @@ export const saveRmsIndexedDbData = async ({
 
   return result;
 };
+
+export const saveHighlightsToServer = async ({
+  apiBase,
+  bookCd,
+  highlights,
+}: {
+  apiBase: string;
+  bookCd: string;
+  highlights: unknown[];
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const response = await fetch(
+    `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=hl`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(highlights),
+    }
+  );
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Highlights save failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return result;
+};
