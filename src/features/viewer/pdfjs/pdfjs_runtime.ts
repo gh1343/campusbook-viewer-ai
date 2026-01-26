@@ -157,6 +157,15 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     cMapUrl: CMAP_URL,
     cMapPacked: true,
     standardFontDataUrl: STANDARD_FONT_DATA_URL,
+
+    // Network optimization options
+    httpHeaders: {},
+    withCredentials: false,
+
+    // Range Request optimization
+    rangeChunkSize: 65536,  // 64KB (default), increase for slower networks
+    disableAutoFetch: false, // Keep auto-fetching enabled
+    disableStream: false,    // Keep streaming enabled for faster initial rendering
   });
   loadingTask.onProgress = ({ loaded = 0, total = 0 }) => {
     if (cancelled) return;

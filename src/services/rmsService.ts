@@ -995,12 +995,10 @@ export const saveRmsIndexedDbData = async ({
 export const saveHighlightsToServer = async ({
   apiBase,
   bookCd,
-  memberCd,
   highlights,
 }: {
   apiBase: string;
   bookCd: string;
-  memberCd: string;
   highlights: unknown[];
 }) => {
   if (typeof window === "undefined") {
@@ -1010,16 +1008,37 @@ export const saveHighlightsToServer = async ({
     throw new Error("Missing RMS configuration (apiBase/bookCd).");
   }
 
-  const response = await fetch(
-    `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&memberCd=${memberCd}&type=hl`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-      },
-      body: JSON.stringify(highlights),
-    }
-  );
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const payload = {
+    bookCode: bookCd,
+    type: "hl",
+    data: JSON.stringify(highlights),
+  };
+
+  console.log("=== Sending Highlights to Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("Payload:", payload);
+  console.log("Highlights Count:", highlights.length);
+  console.log("Highlights Data (stringified):", JSON.stringify(highlights));
+  console.log("====================================");
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
 
   let result: any = null;
   try {
@@ -1035,6 +1054,65 @@ export const saveHighlightsToServer = async ({
       `Highlights save failed (${response.status})`;
     throw new Error(message);
   }
+
+  return result;
+};
+
+export const loadHighlightsFromServer = async ({
+  apiBase,
+  bookCd,
+}: {
+  apiBase: string;
+  bookCd: string;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=hl`;
+
+  console.log("=== Loading Highlights from Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("======================================");
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Highlights load failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  console.log("=== Loaded Highlights Response ===");
+  console.log("Result:", result);
+  console.log("==================================");
 
   return result;
 };

@@ -35,6 +35,7 @@ import {
   sync_snapshot,
   saveRmsProgress,
   saveHighlightsToServer,
+  loadHighlightsFromServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -168,8 +169,7 @@ const getJsonBytes = (value: unknown) => {
   return new TextEncoder().encode(text).length;
 };
 
-const bytesToMb = (bytes: number) =>
-  Number((bytes / (1024 * 1024)).toFixed(4));
+const bytesToMb = (bytes: number) => Number((bytes / (1024 * 1024)).toFixed(4));
 
 const stableStringify = (value: unknown) =>
   JSON.stringify(value, (_key, val) => {
@@ -1247,9 +1247,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           ? estimate.quota
           : null;
       const remaining =
-        usage !== null && quota !== null
-          ? Math.max(0, quota - usage)
-          : null;
+        usage !== null && quota !== null ? Math.max(0, quota - usage) : null;
       return { usage, remaining, quota };
     } catch (err) {
       return null;
@@ -1357,11 +1355,108 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       const data = snapshot.data;
+
+      // Load highlights: Server first, fallback to IndexedDB
+      const config = getRmsConfig();
+      let serverHighlights: any[] | null = null;
+
+      // Try to load from server first
+      if (config) {
+        console.log("[Highlights] Attempting to load from server...");
+        try {
+          const serverData = await loadHighlightsFromServer({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+          });
+          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
+          if (serverData && serverData.ok && serverData.result && Array.isArray(serverData.result.dataList)) {
+            // Parse each JSON string in dataList and clean up data
+            serverHighlights = serverData.result.dataList.map((jsonStr: string) => {
+              const highlight = JSON.parse(jsonStr);
+              // Remove created_at, keep only createdAt
+              delete highlight.created_at;
+              // Remove updated_at as well since we're using createdAt only
+              delete highlight.updated_at;
+              return highlight;
+            });
+            console.log(
+              "[Highlights] ✅ Loaded from server:",
+              serverHighlights.length
+            );
+          } else {
+            console.warn("[Highlights] Invalid server response:", serverData);
+          }
+        } catch (err) {
+          console.error("[Highlights] ❌ Failed to load from server:", err);
+        }
+      } else {
+        console.log("[Highlights] No RMS config, skipping server load");
+      }
+
+      // Use server data if available, otherwise fallback to IndexedDB
+      if (serverHighlights) {
+        setHighlights(serverHighlights);
+
+        // Update IndexedDB cache with server data
+        snapshot.data.highlights = serverHighlights;
+
+        // Save updated snapshot to IndexedDB silently (don't await)
+        new Promise<void>((resolve, reject) => {
+          const requestId = `${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          const cleanup = () => {
+            worker.removeEventListener("message", handleMessage);
+            worker.removeEventListener("error", handleError);
+          };
+          const handleMessage = (event: MessageEvent) => {
+            const response = event.data as {
+              type?: string;
+              requestId?: string;
+              error?: string;
+            };
+            if (!response || response.requestId !== requestId) return;
+            cleanup();
+            if (response.type === "save_complete") {
+              resolve();
+            } else {
+              reject(new Error(response.error || "IndexedDB save failed."));
+            }
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("IndexedDB worker error."));
+          };
+          worker.addEventListener("message", handleMessage);
+          worker.addEventListener("error", handleError);
+          worker.postMessage({
+            type: "save_bundle",
+            requestId,
+            payload: {
+              storageKey: snapshot.key,
+              data: snapshot.data,
+              meta: snapshot.meta,
+              schema_version: snapshot.schema_version,
+              savedAt: Date.now(),
+            },
+          });
+        }).then(() => {
+          console.log("[Highlights] Server data cached to IndexedDB");
+        }).catch(saveErr => {
+          console.error("[Highlights] Failed to cache to IndexedDB:", saveErr);
+        });
+      } else if (Array.isArray(data.highlights)) {
+        // Fallback to IndexedDB
+        setHighlights(data.highlights);
+        console.log(
+          "[Highlights] 📦 Loaded from IndexedDB (fallback):",
+          data.highlights.length
+        );
+      }
+
+      // Load other data from IndexedDB
       if (Array.isArray(data.bookmarks)) {
         setBookmarks(data.bookmarks);
-      }
-      if (Array.isArray(data.highlights)) {
-        setHighlights(data.highlights);
       }
       if (Array.isArray(data.notes)) {
         setGeneralNotes(data.notes);
@@ -1516,7 +1611,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           await saveHighlightsToServer({
             apiBase: config.apiBase,
             bookCd: config.bookCd,
-            memberCd: config.memberCd,
             highlights: snapshot.data.highlights || [],
           });
           alert("하이라이트가 서버에 저장되었습니다.");
