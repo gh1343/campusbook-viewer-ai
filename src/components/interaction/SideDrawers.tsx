@@ -313,9 +313,9 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     contentEditableRef.current ? contentEditableRef.current.innerHTML : "";
 
   const handleTabChange = (
-    tab: "ai" | "notes" | "notebook" | "reference" | "search"
+    tab: "ai" | "highlight" | "mynote" | "reference" | "search"
   ) => {
-    if (activeToolTab === "notebook" && editingNote) {
+    if (activeToolTab === "mynote" && editingNote) {
       const content = getCurrentContent();
       setEditingNote((prev) => (prev ? { ...prev, content } : null));
     }
@@ -346,7 +346,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     return chapterTitle || `Chapter ${chapterIndex + 1}`;
   };
 
-  // Filtered Lists for Memos and Notebook
+  // Filtered Lists for Memos and MyNote
   const filteredHighlights = highlights.filter(
     (hl) =>
       hl.text.toLowerCase().includes(localFilter.toLowerCase()) ||
@@ -360,7 +360,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   );
 
   useEffect(() => {
-    if (activeToolTab !== "notes" || !activeHighlightId) return;
+    if (activeToolTab !== "highlight" || !activeHighlightId) return;
     const target = highlightItemRefs.current[activeHighlightId];
     if (!target) return;
     requestAnimationFrame(() => {
@@ -373,8 +373,8 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     if (!pendingHighlightEditId) return;
     const target = highlights.find((hl) => hl.id === pendingHighlightEditId);
     if (!target) return;
-    if (activeToolTab !== "notes") {
-      setActiveToolTab("notes");
+    if (activeToolTab !== "highlight") {
+      setActiveToolTab("highlight");
     }
     setEditingHighlightId(target.id);
     setHighlightText(target.note || "");
@@ -614,24 +614,24 @@ ${contextString}
   return (
     <PanelWrapper isOpen={isOpen} onClose={onClose} side="right">
       <div className="right_panel_menu">
-        <button
+        {/* <button
           onClick={() => handleTabChange("ai")}
           className={`ai ${activeToolTab === "ai" ? "on" : "off"}`}
           title="AI"
         >
           <MessageSquare size={14} />
-        </button>
+        </button> */}
         <button
-          onClick={() => handleTabChange("notes")}
-          className={`notes ${activeToolTab === "notes" ? "on" : "off"}`}
+          onClick={() => handleTabChange("highlight")}
+          className={`highlight ${activeToolTab === "highlight" ? "on" : "off"}`}
           title="Highlights"
         >
           <Highlighter size={14} />
         </button>
         <button
-          onClick={() => handleTabChange("notebook")}
-          className={`notebook ${activeToolTab === "notebook" ? "on" : "off"}`}
-          title="Notebook"
+          onClick={() => handleTabChange("mynote")}
+          className={`mynote ${activeToolTab === "mynote" ? "on" : "off"}`}
+          title="mynote"
         >
           <Book size={14} />
         </button>
@@ -711,7 +711,7 @@ ${contextString}
         )}
 
         {/* Highlights Tab with Local Search */}
-        {activeToolTab === "notes" && (
+        {activeToolTab === "highlight" && (
           <div className="absolute inset-0 flex flex-col">
             <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
               <div className="relative">
@@ -834,8 +834,8 @@ ${contextString}
           </div>
         )}
 
-        {/* Notebook Tab with Local Search */}
-        {activeToolTab === "notebook" && (
+        {/* MyNote Tab with Local Search */}
+        {activeToolTab === "mynote" && (
           <div className="absolute inset-0 flex flex-col bg-slate-50 dark:bg-slate-950">
             {editingNote ? (
               <div className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 animate-fade-in">
@@ -1085,7 +1085,7 @@ ${contextString}
                           );
                           if (note) {
                             setEditingNote(note);
-                            setActiveToolTab("notebook");
+                            setActiveToolTab("mynote");
                           }
                         } else if (result.type === "book") {
                           if (result.pageNumber) {

@@ -44,10 +44,10 @@
 .right_panel_menu button.ai.on {
   color: rgb(37 99 235);
 }
-.right_panel_menu button.notes.on {
+.right_panel_menu button.highlight.on {
   color: rgb(217 119 6);
 }
-.right_panel_menu button.notebook.on {
+.right_panel_menu button.mynote.on {
   color: rgb(22 163 74);
 }
 .right_panel_menu button.reference.on {

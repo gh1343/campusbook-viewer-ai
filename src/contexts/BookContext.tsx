@@ -355,8 +355,8 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [aiChatHistory, setAiChatHistory] = useState<ChatMessage[]>([]);
   const [isToolsOpen, setToolsOpen] = useState(true);
   const [activeToolTab, setActiveToolTab] = useState<
-    "ai" | "notes" | "notebook" | "reference" | "search"
-  >("ai");
+    "ai" | "highlight" | "mynote" | "reference" | "search"
+  >("highlight");
   const [searchQuery, setSearchQuery] = useState("");
 
   // --- TTS (stub implementation for UI controls) ---
@@ -791,7 +791,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
         // 4) 툴 패널 열고 AI 탭 or 원하는 탭으로 이동
         setToolsOpen(true);
-        setActiveToolTab("ai"); // 혹은 'notes' / 'search' 등으로 변경 가능
+        setActiveToolTab("ai"); // 혹은 'highlight' / 'search' 등으로 변경 가능
 
         alert(`"${file.name}"을(를) 메인 책으로 로드했습니다.`);
       } else {
@@ -1369,16 +1369,23 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             bookCd: config.bookCd,
           });
           // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
-          if (serverData && serverData.ok && serverData.result && Array.isArray(serverData.result.dataList)) {
+          if (
+            serverData &&
+            serverData.ok &&
+            serverData.result &&
+            Array.isArray(serverData.result.dataList)
+          ) {
             // Parse each JSON string in dataList and clean up data
-            serverHighlights = serverData.result.dataList.map((jsonStr: string) => {
-              const highlight = JSON.parse(jsonStr);
-              // Remove created_at, keep only createdAt
-              delete highlight.created_at;
-              // Remove updated_at as well since we're using createdAt only
-              delete highlight.updated_at;
-              return highlight;
-            });
+            serverHighlights = serverData.result.dataList.map(
+              (jsonStr: string) => {
+                const highlight = JSON.parse(jsonStr);
+                // Remove created_at, keep only createdAt
+                delete highlight.created_at;
+                // Remove updated_at as well since we're using createdAt only
+                delete highlight.updated_at;
+                return highlight;
+              }
+            );
             console.log(
               "[Highlights] ✅ Loaded from server:",
               serverHighlights.length
@@ -1440,11 +1447,16 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
               savedAt: Date.now(),
             },
           });
-        }).then(() => {
-          console.log("[Highlights] Server data cached to IndexedDB");
-        }).catch(saveErr => {
-          console.error("[Highlights] Failed to cache to IndexedDB:", saveErr);
-        });
+        })
+          .then(() => {
+            console.log("[Highlights] Server data cached to IndexedDB");
+          })
+          .catch((saveErr) => {
+            console.error(
+              "[Highlights] Failed to cache to IndexedDB:",
+              saveErr
+            );
+          });
       } else if (Array.isArray(data.highlights)) {
         // Fallback to IndexedDB
         setHighlights(data.highlights);
