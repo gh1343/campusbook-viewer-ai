@@ -64,6 +64,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scaleWrapperRef = useRef<HTMLDivElement>(null);
+  const transformLayerRef = useRef<HTMLDivElement>(null);
   const pageCanvasMapRef = useRef<
     Map<
       number,
@@ -122,6 +123,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const pdfZoomInitialScaleRef = useRef<number | null>(null);
   const pdfZoomManualRef = useRef(false);
   const PDF_ZOOM_STEP = 0.1;
+  const PDF_ZOOM_MIN_SCALE = 0.5;
+  const PDF_ZOOM_MAX_SCALE = 3;
+  const PINCH_SELECTION_COOLDOWN_MS = 200;
 
   const {
     loading,
@@ -157,6 +161,29 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const showAnnotationsRef = useRef(showAnnotations);
   const livePointsRef = useRef<{ x: number; y: number }[]>([]);
   const isDrawingRef = useRef(false);
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(
+    new Map()
+  );
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartScaleRef = useRef<number | null>(null);
+  const pinchPreviewScaleRef = useRef(1);
+  const isPinchingRef = useRef(false);
+  const lastPinchAtRef = useRef(0);
+  const pinchTransformRafRef = useRef<number | null>(null);
+  const pendingTransformRef = useRef<{
+    scale: number;
+    translateX: number;
+    translateY: number;
+  } | null>(null);
+  const pinchAnchorRef = useRef<{
+    pageNumber: number;
+    relX: number;
+    relY: number;
+    viewportX: number;
+    viewportY: number;
+  } | null>(null);
+  const containerTouchActionRef = useRef<string | null>(null);
+  const containerUserSelectRef = useRef<string | null>(null);
 
   useEffect(() => {
     drawingModeRef.current = drawingMode;
@@ -267,6 +294,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (pinchTransformRafRef.current !== null) {
+        cancelAnimationFrame(pinchTransformRafRef.current);
+        pinchTransformRafRef.current = null;
+      }
+    };
+  }, []);
+
   // ----- Pen Canvas Helpers -----
   const getVisualScale = () => {
     if (!scaleWrapperRef.current) return 1;
@@ -277,62 +313,135 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return Number.isFinite(parsed) ? parsed : 1;
   };
 
-  const getPdfContentBaseWidth = () => {
-    const contentEl = viewerRef.current;
-    if (!contentEl) return 0;
+  const schedulePinchTransform = (
+    scale: number,
+    translateX: number,
+    translateY: number
+  ) => {
+    pendingTransformRef.current = { scale, translateX, translateY };
+    if (pinchTransformRafRef.current !== null) return;
+    pinchTransformRafRef.current = requestAnimationFrame(() => {
+      pinchTransformRafRef.current = null;
+      const layer = transformLayerRef.current;
+      const pending = pendingTransformRef.current;
+      if (!layer || !pending) return;
+      layer.style.transform = `translate3d(${pending.translateX}px, ${pending.translateY}px, 0) scale(${pending.scale})`;
+    });
+  };
 
-    const spreadEl = contentEl.querySelector<HTMLElement>(".spread");
-    if (spreadEl) {
-      return spreadEl.offsetWidth || spreadEl.scrollWidth;
+  const resetPinchTransform = () => {
+    schedulePinchTransform(1, 0, 0);
+  };
+
+  const setPinchInteractionState = (active: boolean) => {
+    const container = viewerContainerRef.current;
+    if (!container) return;
+
+    if (active) {
+      if (containerTouchActionRef.current === null) {
+        containerTouchActionRef.current = container.style.touchAction || "";
+      }
+      if (containerUserSelectRef.current === null) {
+        containerUserSelectRef.current = container.style.userSelect || "";
+      }
+      container.style.touchAction = "none";
+      container.style.userSelect = "none";
+      container.dataset.pinching = "1";
+      window.getSelection()?.removeAllRanges();
+      return;
     }
 
-    const pages = contentEl.querySelectorAll<HTMLElement>(".page");
-    if (
-      pages.length >= 2 &&
-      pdfViewerRef.current?.spreadMode !== SpreadMode.NONE
-    ) {
-      const first = pages[0];
-      const second = pages[1];
-      const left = Math.min(first.offsetLeft, second.offsetLeft);
-      const right = Math.max(
-        first.offsetLeft + first.offsetWidth,
-        second.offsetLeft + second.offsetWidth
+    container.style.touchAction = containerTouchActionRef.current || "";
+    container.style.userSelect = containerUserSelectRef.current || "";
+    containerTouchActionRef.current = null;
+    containerUserSelectRef.current = null;
+    delete container.dataset.pinching;
+  };
+
+  const getPinchCenter = () => {
+    const container = viewerContainerRef.current;
+    const layer = transformLayerRef.current;
+    if (!container || !layer) return null;
+    const pts = Array.from(activePointersRef.current.values());
+    if (pts.length < 2) return null;
+    const centerClientX = (pts[0].x + pts[1].x) / 2;
+    const centerClientY = (pts[0].y + pts[1].y) / 2;
+    const containerRect = container.getBoundingClientRect();
+    const viewportX = centerClientX - containerRect.left;
+    const viewportY = centerClientY - containerRect.top;
+    const contentX =
+      viewportX + container.scrollLeft - layer.offsetLeft;
+    const contentY =
+      viewportY + container.scrollTop - layer.offsetTop;
+    return { contentX, contentY, viewportX, viewportY };
+  };
+
+  const updatePinchAnchor = () => {
+    const container = viewerContainerRef.current;
+    const viewerRoot = viewerRef.current;
+    if (!container || !viewerRoot) return;
+    const pts = Array.from(activePointersRef.current.values());
+    if (pts.length < 2) return;
+
+    const centerClientX = (pts[0].x + pts[1].x) / 2;
+    const centerClientY = (pts[0].y + pts[1].y) / 2;
+    const containerRect = container.getBoundingClientRect();
+    const viewportX = centerClientX - containerRect.left;
+    const viewportY = centerClientY - containerRect.top;
+
+    let pageEl: HTMLElement | null = null;
+    const hit = document.elementFromPoint(centerClientX, centerClientY);
+    if (hit instanceof HTMLElement) {
+      const closestPage = hit.closest(".page");
+      if (closestPage instanceof HTMLElement && viewerRoot.contains(closestPage)) {
+        pageEl = closestPage;
+      }
+    }
+    if (!pageEl) {
+      const pages = Array.from(
+        viewerRoot.querySelectorAll<HTMLElement>(".page")
       );
-      return right - left;
+      pageEl =
+        pages.find((page) => {
+          const rect = page.getBoundingClientRect();
+          return (
+            centerClientX >= rect.left &&
+            centerClientX <= rect.right &&
+            centerClientY >= rect.top &&
+            centerClientY <= rect.bottom
+          );
+        }) || null;
     }
+    if (!pageEl) return;
 
-    const pageEl = pages[0];
-    return pageEl ? pageEl.offsetWidth : 0;
+    const pageNumber = Number(pageEl.dataset.pageNumber);
+    if (!pageNumber) return;
+    const rect = pageEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const relX = Math.min(
+      1,
+      Math.max(0, (centerClientX - rect.left) / rect.width)
+    );
+    const relY = Math.min(
+      1,
+      Math.max(0, (centerClientY - rect.top) / rect.height)
+    );
+
+    pinchAnchorRef.current = { pageNumber, relX, relY, viewportX, viewportY };
   };
 
   const getPdfZoomBounds = () => {
     const viewer = pdfViewerRef.current;
-    const containerEl = viewerContainerRef.current;
-    const contentEl = viewerRef.current;
     const currentScale = viewer?.currentScale || 1;
 
     if (pdfZoomInitialScaleRef.current === null && currentScale > 0) {
       pdfZoomInitialScaleRef.current = currentScale;
     }
 
-    const minScale = pdfZoomInitialScaleRef.current || 1;
-
-    if (!viewer || !containerEl || !contentEl) {
-      return { minScale, maxScale: minScale };
-    }
-
-    const { paddingLeft, paddingRight } = getComputedStyle(contentEl);
-    const paddingX =
-      (parseFloat(paddingLeft) || 0) + (parseFloat(paddingRight) || 0);
-    const availableWidth = Math.max(0, containerEl.clientWidth - paddingX);
-    const contentWidth = Math.max(0, getPdfContentBaseWidth());
-
-    if (!availableWidth || !contentWidth || currentScale <= 0) {
-      return { minScale, maxScale: minScale };
-    }
-
-    const baseWidth = contentWidth / currentScale;
-    const maxScale = Math.max(minScale, availableWidth / baseWidth);
+    const baseMinScale = pdfZoomInitialScaleRef.current || 1;
+    const minScale = Math.min(baseMinScale, PDF_ZOOM_MIN_SCALE);
+    const maxScale = Math.max(minScale, PDF_ZOOM_MAX_SCALE);
 
     return { minScale, maxScale };
   };
@@ -372,6 +481,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         showAnnotationsRef,
         livePointsRef,
         isDrawingRef,
+        isPinchingRef,
         getVisualScale,
         getPagePoint,
         getPageElementFromEvent,
@@ -400,6 +510,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const scheduleRenderRefresh = useCallback(() => {
     if (rafRefreshId.current !== null) return;
+    // 핀치줌 중에는 렌더링 스킵 (메모리 절약)
+    if (isPinchingRef.current) return;
     rafRefreshId.current = requestAnimationFrame(() => {
       rafRefreshId.current = null;
       penRuntime.syncPageCanvases();
@@ -409,26 +521,35 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
   }, [penRuntime]);
 
-  const applyPdfZoom = useCallback(
-    (direction: "in" | "out") => {
+  const setPdfScale = useCallback(
+    (nextScale: number) => {
       const viewer = pdfViewerRef.current;
       if (!viewer) return;
 
       const { minScale, maxScale } = getPdfZoomBounds();
-      const currentScale = viewer.currentScale || 1;
-      const nextScale =
-        direction === "in"
-          ? Math.min(maxScale, currentScale + PDF_ZOOM_STEP)
-          : Math.max(minScale, currentScale - PDF_ZOOM_STEP);
-
-      if (Math.abs(nextScale - currentScale) < 0.001) return;
+      const clampedScale = Math.min(maxScale, Math.max(minScale, nextScale));
+      if (Math.abs(clampedScale - viewer.currentScale) < 0.001) return;
 
       pdfZoomManualRef.current = true;
-      viewer.currentScale = nextScale;
+      viewer.currentScale = clampedScale;
       scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
     },
     [scheduleRenderRefresh, setLayoutTick]
+  );
+
+  const applyPdfZoom = useCallback(
+    (direction: "in" | "out") => {
+      const viewer = pdfViewerRef.current;
+      if (!viewer) return;
+      const currentScale = viewer.currentScale || 1;
+      const nextScale =
+        direction === "in"
+          ? currentScale + PDF_ZOOM_STEP
+          : currentScale - PDF_ZOOM_STEP;
+      setPdfScale(nextScale);
+    },
+    [setPdfScale]
   );
 
   useEffect(() => {
@@ -642,17 +763,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
   };
 
-  const handleContainerCopy = (
-    e: React.ClipboardEvent<HTMLDivElement>
-  ) => {
+  const handleContainerCopy = (e: React.ClipboardEvent<HTMLDivElement>) => {
     const container = viewerContainerRef.current;
     const sel = window.getSelection();
-    if (
-      !container ||
-      !sel ||
-      sel.isCollapsed ||
-      !sel.toString().trim()
-    ) {
+    if (!container || !sel || sel.isCollapsed || !sel.toString().trim()) {
       return;
     }
 
@@ -670,7 +784,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     e.clipboardData.setData("text/plain", replacedText);
   };
 
+  const shouldSkipSelection = () => {
+    if (isPinchingRef.current) return true;
+    const lastPinchAt = lastPinchAtRef.current;
+    if (!lastPinchAt) return false;
+    return Date.now() - lastPinchAt < PINCH_SELECTION_COOLDOWN_MS;
+  };
+
   const checkPdfSelection = () => {
+    if (shouldSkipSelection()) {
+      setSelection((prev) => ({ ...prev, show: false }));
+      return;
+    }
     if (drawingMode !== "idle") {
       setSelection((prev) => ({ ...prev, show: false }));
       return;
@@ -752,10 +877,272 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     delays.forEach((d) => setTimeout(checkPdfSelection, d));
   };
 
-  const handleContainerPointerUp = () => {
+  const finishPinchZoom = () => {
+    const viewer = pdfViewerRef.current;
+    const container = viewerContainerRef.current;
+    const viewerRoot = viewerRef.current;
+    const anchor = pinchAnchorRef.current;
+
+    if (!viewer || !container || !viewerRoot || !anchor) {
+      resetPinchTransform();
+      setPinchInteractionState(false);
+      lastPinchAtRef.current = Date.now();
+      pinchStartDistRef.current = null;
+      pinchStartScaleRef.current = null;
+      pinchPreviewScaleRef.current = 1;
+      isPinchingRef.current = false;
+      pinchAnchorRef.current = null;
+      return;
+    }
+
+    // 메모리 최적화: 변경이 너무 작으면 스킵
+    const previewScale = pinchPreviewScaleRef.current || 1;
+    if (Math.abs(previewScale - 1) < 0.05) {
+      // 5% 미만 변경은 무시
+      resetPinchTransform();
+      setPinchInteractionState(false);
+      penRuntime.resetTouchState();
+      lastPinchAtRef.current = Date.now();
+      pinchStartDistRef.current = null;
+      pinchStartScaleRef.current = null;
+      pinchPreviewScaleRef.current = 1;
+      isPinchingRef.current = false;
+      pinchAnchorRef.current = null;
+      return;
+    }
+
+    const baseScale = pinchStartScaleRef.current ?? viewer.currentScale ?? 1;
+    const nextScale = baseScale * previewScale;
+
+    // 현재 앵커 포인트의 절대 위치를 미리 계산
+    const pageElBefore = viewerRoot.querySelector<HTMLElement>(
+      `.page[data-page-number="${anchor.pageNumber}"]`
+    );
+
+    if (!pageElBefore) {
+      setPdfScale(nextScale);
+      resetPinchTransform();
+      setPinchInteractionState(false);
+      lastPinchAtRef.current = Date.now();
+      pinchStartDistRef.current = null;
+      pinchStartScaleRef.current = null;
+      pinchPreviewScaleRef.current = 1;
+      isPinchingRef.current = false;
+      pinchAnchorRef.current = null;
+      return;
+    }
+
+    // 스케일 적용
+    setPdfScale(nextScale);
+
+    // 메모리 정리: 불필요한 transform 제거
+    resetPinchTransform();
+
+    // 스크롤 보정을 위한 재시도 로직
+    const scheduleScrollCorrection = (retries: number) => {
+      if (retries <= 0) return;
+
+      const pageEl = viewerRoot.querySelector<HTMLElement>(
+        `.page[data-page-number="${anchor.pageNumber}"]`
+      );
+
+      if (!pageEl) {
+        requestAnimationFrame(() => scheduleScrollCorrection(retries - 1));
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const pageRect = pageEl.getBoundingClientRect();
+
+      // 페이지가 아직 렌더링되지 않았으면 재시도
+      if (pageRect.width <= 0 || pageRect.height <= 0) {
+        requestAnimationFrame(() => scheduleScrollCorrection(retries - 1));
+        return;
+      }
+
+      // 현재 페이지 오프셋 계산
+      const pageOffsetLeft = pageRect.left - containerRect.left + container.scrollLeft;
+      const pageOffsetTop = pageRect.top - containerRect.top + container.scrollTop;
+
+      // 앵커 포인트의 목표 위치 계산
+      const targetLeft = pageOffsetLeft + anchor.relX * pageRect.width;
+      const targetTop = pageOffsetTop + anchor.relY * pageRect.height;
+
+      // 뷰포트에서 앵커가 있어야 할 위치를 유지하도록 스크롤 조정
+      const nextLeft = targetLeft - anchor.viewportX;
+      const nextTop = targetTop - anchor.viewportY;
+
+      const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+      const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+
+      const finalLeft = Math.min(maxLeft, Math.max(0, nextLeft));
+      const finalTop = Math.min(maxTop, Math.max(0, nextTop));
+
+      container.scrollLeft = finalLeft;
+      container.scrollTop = finalTop;
+    };
+
+    // 충분한 프레임 대기 후 스크롤 보정 실행 (PDF.js 렌더링 완료 대기)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scheduleScrollCorrection(6);
+        });
+      });
+    });
+
+    setPinchInteractionState(false);
+
+    // 펜 레이어의 터치 상태도 초기화
+    penRuntime.resetTouchState();
+
+    lastPinchAtRef.current = Date.now();
+    pinchStartDistRef.current = null;
+    pinchStartScaleRef.current = null;
+    pinchPreviewScaleRef.current = 1;
+    isPinchingRef.current = false;
+    pinchAnchorRef.current = null;
+
+    // 핀치줌 완료 후 메모리 정리 및 렌더링
+    requestAnimationFrame(() => {
+      // 화면 밖 캔버스 즉시 정리 (메모리 절약)
+      penRuntime.forceCleanupOffscreenCanvases();
+      scheduleRenderRefresh();
+    });
+  };
+
+  const handleContainerPointerDown = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (e.pointerType !== "touch") return;
+    activePointersRef.current.set(e.pointerId, {
+      x: e.clientX,
+      y: e.clientY,
+    });
+    if (activePointersRef.current.size === 2) {
+      // 핀치줌 시작 시 펜 드로잉 중단
+      if (isDrawingRef.current) {
+        isDrawingRef.current = false;
+        livePointsRef.current = [];
+        currentPageRef.current = null;
+        scheduleRenderRefresh();
+      }
+
+      const pts = Array.from(activePointersRef.current.values());
+      pinchStartDistRef.current = Math.hypot(
+        pts[1].x - pts[0].x,
+        pts[1].y - pts[0].y
+      );
+      const viewer = pdfViewerRef.current;
+      pinchStartScaleRef.current = viewer?.currentScale || 1;
+      pinchPreviewScaleRef.current = 1;
+      isPinchingRef.current = true;
+      updatePinchAnchor();
+      setPinchInteractionState(true);
+      resetPinchTransform();
+      e.preventDefault();
+    }
+  };
+
+  const handleContainerPointerMove = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (e.pointerType !== "touch") return;
+    if (!activePointersRef.current.has(e.pointerId)) return;
+    activePointersRef.current.set(e.pointerId, {
+      x: e.clientX,
+      y: e.clientY,
+    });
+    if (activePointersRef.current.size !== 2) return;
+
+    const pts = Array.from(activePointersRef.current.values());
+    const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    if (!pinchStartDistRef.current) {
+      pinchStartDistRef.current = dist;
+      const viewer = pdfViewerRef.current;
+      pinchStartScaleRef.current = viewer?.currentScale || 1;
+      pinchPreviewScaleRef.current = 1;
+      isPinchingRef.current = true;
+      setPinchInteractionState(true);
+      resetPinchTransform();
+      return;
+    }
+
+    const viewer = pdfViewerRef.current;
+    if (!viewer) return;
+
+    const baseScale = pinchStartScaleRef.current ?? viewer.currentScale | 1;
+    const ratio = dist / pinchStartDistRef.current;
+    const nextScale = baseScale * ratio;
+    const { minScale, maxScale } = getPdfZoomBounds();
+    const clampedScale = Math.min(maxScale, Math.max(minScale, nextScale));
+    const previewScale = baseScale ? clampedScale / baseScale : 1;
+    pinchPreviewScaleRef.current = previewScale;
+    isPinchingRef.current = true;
+    updatePinchAnchor();
+    const center = getPinchCenter();
+    if (center) {
+      const translateX = center.contentX * (1 - previewScale);
+      const translateY = center.contentY * (1 - previewScale);
+      schedulePinchTransform(previewScale, translateX, translateY);
+    }
+    e.preventDefault();
+  };
+
+  const clearPinchPointer = (pointerId: number) => {
+    activePointersRef.current.delete(pointerId);
+
+    // 모든 포인터가 해제되었을 때만 상태 정리
+    if (activePointersRef.current.size === 0) {
+      // 핀치 상태 정리
+      if (isPinchingRef.current || pinchStartDistRef.current !== null) {
+        finishPinchZoom();
+        return;
+      }
+
+      // 펜 레이어의 터치 상태도 초기화
+      penRuntime.resetTouchState();
+
+      pinchStartDistRef.current = null;
+      pinchStartScaleRef.current = null;
+      pinchPreviewScaleRef.current = 1;
+      isPinchingRef.current = false;
+      resetPinchTransform();
+      setPinchInteractionState(false);
+      pinchAnchorRef.current = null;
+    }
+  };
+
+  const handleContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "touch") {
+      clearPinchPointer(e.pointerId);
+    }
     if (drawingMode !== "idle") return;
+    if (shouldSkipSelection()) return;
     scheduleSelectionCheck();
   };
+
+  const handleContainerPointerCancel = (
+    e: React.PointerEvent<HTMLDivElement>
+  ) => {
+    if (e.pointerType !== "touch") return;
+    clearPinchPointer(e.pointerId);
+  };
+
+  useEffect(() => {
+    const container = viewerContainerRef.current;
+    if (!container) return;
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isPinchingRef.current) return;
+      e.preventDefault();
+    };
+    container.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+    });
+    return () => {
+      container.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, []);
 
   useEffect(() => {
     const onSelectionChange = () => scheduleSelectionCheck();
@@ -876,53 +1263,61 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         {/* ⭐ pdf.js에서 요구하는 container는 그대로 absolute 유지 ⭐ */}
         <div
           ref={viewerContainerRef}
-        className="pdf_viewer_container"
-        onPointerUp={handleContainerPointerUp}
-        onContextMenu={(e) => e.preventDefault()}
-        onCopy={handleContainerCopy}
-      >
-          <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
-          {/* 커스텀 하이라이트 오버레이 */}
+          className="pdf_viewer_container"
+          onPointerDown={handleContainerPointerDown}
+          onPointerMove={handleContainerPointerMove}
+          onPointerUp={handleContainerPointerUp}
+          onPointerCancel={handleContainerPointerCancel}
+          onContextMenu={(e) => e.preventDefault()}
+          onCopy={handleContainerCopy}
+        >
           <div
-            className="pdf_highlight_layer"
-            data-layout-tick={layoutTick} // layout 변경 시 리렌더 트리거
+            ref={transformLayerRef}
+            className="pdf_viewer_transform_layer"
           >
-            {pdfHighlights.flatMap((h) =>
-              h.rects.map((rect, idx) => {
-                const containerEl = viewerContainerRef.current;
-                const pageEl = viewerRef.current?.querySelector<HTMLElement>(
-                  `.page[data-page-number="${rect.pageNumber}"]`
-                );
-                if (!containerEl || !pageEl) return null;
-
-                const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } =
-                  getPageOffsetInfo(
-                    containerEl,
-                    pageEl,
-                    rect.pageWidth,
-                    rect.pageHeight
+            <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
+            {/* 커스텀 하이라이트 오버레이 */}
+            <div
+              className="pdf_highlight_layer"
+              data-layout-tick={layoutTick} // layout 변경 시 리렌더 트리거
+            >
+              {pdfHighlights.flatMap((h) =>
+                h.rects.map((rect, idx) => {
+                  const containerEl = viewerContainerRef.current;
+                  const pageEl = viewerRef.current?.querySelector<HTMLElement>(
+                    `.page[data-page-number="${rect.pageNumber}"]`
                   );
+                  if (!containerEl || !pageEl) return null;
 
-                const left = pageOffsetLeft + rect.left * scaleX;
-                const top = pageOffsetTop + rect.top * scaleY;
-                const width = rect.width * scaleX;
-                const height = rect.height * scaleY;
+                  const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } =
+                    getPageOffsetInfo(
+                      containerEl,
+                      pageEl,
+                      rect.pageWidth,
+                      rect.pageHeight
+                    );
 
-                return (
-                  <div
-                    key={`${h.id}-${idx}`}
-                    className="pdf_highlight"
-                    data-highlight-id={h.id}
-                    style={{
-                      left,
-                      top,
-                      width,
-                      height,
-                    }}
-                  />
-                );
-              })
-            )}
+                  const left = pageOffsetLeft + rect.left * scaleX;
+                  const top = pageOffsetTop + rect.top * scaleY;
+                  const width = rect.width * scaleX;
+                  const height = rect.height * scaleY;
+
+                  return (
+                    <div
+                      key={`${h.id}-${idx}`}
+                      className="pdf_highlight"
+                      data-highlight-id={h.id}
+                      style={{
+                        left,
+                        top,
+                        width,
+                        height,
+                      }}
+                    />
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -18,6 +18,7 @@ interface PenLayerRuntimeDeps {
   showAnnotationsRef: MutableRef<boolean>;
   livePointsRef: MutableRef<{ x: number; y: number }[]>;
   isDrawingRef: MutableRef<boolean>;
+  isPinchingRef?: MutableRef<boolean>;
   getVisualScale: () => number;
   getPagePoint: (e: React.PointerEvent, pageEl: HTMLElement, getVisualScale: () => number) => { x: number; y: number } | null;
   getPageElementFromEvent: (e: React.PointerEvent) => { pageEl: HTMLElement; pageNumber: number } | null;
@@ -49,6 +50,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     showAnnotationsRef,
     livePointsRef,
     isDrawingRef,
+    isPinchingRef,
     getVisualScale,
     getPagePoint,
     getPageElementFromEvent,
@@ -63,6 +65,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   const isTouchInputBlocked = (e: React.PointerEvent) =>
     drawingModeRef.current === "pen" && e.pointerType === "touch";
+
+  const isPinching = () => isPinchingRef?.current ?? false;
 
   const getPageSize = (pageEl: HTMLElement) => {
     const { width, height } = getCanvasMetrics(pageEl);
@@ -127,30 +131,121 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   ) => {
     const { width, height, dpr } = getCanvasMetrics(pageEl);
     if (!width || !height) return;
+
+    // 메모리 최적화: 최대 캔버스 크기 제한 (iPad Safari 메모리 한계 고려)
+    // 4096x4096 = 67MB per canvas, 안전한 상한선
+    const MAX_CANVAS_DIMENSION = 4096;
+
+    let targetWidth = width * dpr;
+    let targetHeight = height * dpr;
+
+    // 최대 크기를 초과하면 비율을 유지하며 축소
+    if (targetWidth > MAX_CANVAS_DIMENSION || targetHeight > MAX_CANVAS_DIMENSION) {
+      const scale = Math.min(
+        MAX_CANVAS_DIMENSION / targetWidth,
+        MAX_CANVAS_DIMENSION / targetHeight
+      );
+      targetWidth = Math.floor(targetWidth * scale);
+      targetHeight = Math.floor(targetHeight * scale);
+    }
+
     [staticCanvas, liveCanvas].forEach((canvas) => {
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      // 크기가 이미 맞으면 스킵 (메모리 재할당 방지)
+      if (canvas.width === targetWidth && canvas.height === targetHeight) {
+        return;
+      }
+
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       canvas.style.width = "100%";
       canvas.style.height = "100%";
       const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
+        // 스케일 조정: 실제 dpr 대신 제한된 크기 기반
+        const effectiveScale = targetWidth / width;
+        ctx.scale(effectiveScale, effectiveScale);
       }
     });
   };
 
+  // 터치 포인터 추적 (핀치 감지용)
+  const activeTouchPointers = new Set<number>();
+
+  const cancelDrawingForPinch = () => {
+    isDrawingRef.current = false;
+    livePointsRef.current = [];
+    currentPageRef.current = null;
+    activePointerId = null;
+    renderLiveCanvas();
+  };
+
+  // 모든 터치 포인터 상태 초기화
+  const resetTouchState = () => {
+    activeTouchPointers.clear();
+    cancelDrawingForPinch();
+  };
+
+  // 메모리 정리: 화면 밖 캔버스 즉시 제거
+  const forceCleanupOffscreenCanvases = () => {
+    if (!viewerRef.current || !viewerContainerRef.current) return;
+    const viewRect = viewerContainerRef.current.getBoundingClientRect();
+    const visualScale = getVisualScale();
+    const BUFFER = Math.max(100, Math.floor(400 / visualScale));
+
+    const visiblePages = new Set<number>();
+    const pages = Array.from(
+      viewerRef.current.querySelectorAll<HTMLElement>(".page")
+    );
+
+    pages.forEach((pageEl) => {
+      if (pageWithinBuffer(pageEl, viewRect, BUFFER)) {
+        const pageNumber = Number(pageEl.dataset.pageNumber);
+        if (pageNumber) visiblePages.add(pageNumber);
+      }
+    });
+
+    // 보이지 않는 페이지의 캔버스 즉시 정리
+    for (const [pageNumber] of pageCanvasMapRef.current.entries()) {
+      if (!visiblePages.has(pageNumber)) {
+        disposePageEntry(pageNumber);
+      }
+    }
+  };
+
   const handlePenStart = (e: React.PointerEvent) => {
+    // 터치 포인터 추적
+    if (e.pointerType === "touch") {
+      activeTouchPointers.add(e.pointerId);
+      // 두 손가락 이상이면 핀치줌으로 간주하고 드로잉 취소
+      if (activeTouchPointers.size >= 2) {
+        cancelDrawingForPinch();
+        return;
+      }
+    }
+
+    // 핀치줌 중에는 펜 입력 무시
+    if (isPinching()) return;
+
     if (isTouchInputBlocked(e)) {
       e.preventDefault();
       return; // Block finger/palm when pen tool is active
     }
     if (drawingModeRef.current === "idle") return;
+
+    // 이미 다른 포인터가 활성화되어 있으면 무시 (핀치줌 허용)
+    if (activePointerId !== null && activePointerId !== e.pointerId) {
+      return;
+    }
+
     activePointerId = e.pointerId;
     const info = getPageElementFromEvent(e);
     if (!info) return;
     const { pageEl, pageNumber } = info;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    // 터치 입력은 setPointerCapture를 사용하지 않음 (핀치줌 허용)
+    if (e.pointerType !== "touch") {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    }
     const pt = getPagePoint(e, pageEl, getVisualScale);
     if (!pt) return;
     currentPageRef.current = pageNumber;
@@ -160,6 +255,18 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenMove = (e: React.PointerEvent) => {
+    // 두 손가락 이상 터치 중이면 핀치줌으로 간주
+    if (e.pointerType === "touch" && activeTouchPointers.size >= 2) {
+      cancelDrawingForPinch();
+      return;
+    }
+
+    // 핀치줌 중에는 펜 입력 무시
+    if (isPinching()) {
+      cancelDrawingForPinch();
+      return;
+    }
+
     if (isTouchInputBlocked(e)) {
       e.preventDefault();
       return;
@@ -207,11 +314,20 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenEnd = (e: React.PointerEvent) => {
+    // 터치 포인터 추적에서 제거 (항상 실행)
+    if (e.pointerType === "touch") {
+      activeTouchPointers.delete(e.pointerId);
+    }
+
+    // activePointerId 정리 (해당 포인터가 끝났으면)
+    if (activePointerId === e.pointerId) {
+      activePointerId = null;
+    }
+
     if (isTouchInputBlocked(e)) {
       e.preventDefault();
       return;
     }
-    if (activePointerId !== null && e.pointerId !== activePointerId) return;
     if (!isDrawingRef.current && drawingModeRef.current !== "eraser") return;
     const el = e.target as HTMLElement;
     if (el.hasPointerCapture?.(e.pointerId)) {
@@ -326,7 +442,13 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   const syncPageCanvases = () => {
     if (!viewerRef.current || !viewerContainerRef.current) return;
     const viewRect = viewerContainerRef.current.getBoundingClientRect();
-    const BUFFER = 800; // 처리 범위 여유
+
+    // 메모리 최적화: 확대 배율에 따라 버퍼 동적 조정
+    const visualScale = getVisualScale();
+    // 배율이 높을수록 버퍼를 줄여서 메모리 절약
+    // 1.0배율: 400px, 2.0배율: 200px, 3.0배율: 133px
+    const BUFFER = Math.max(100, Math.floor(400 / visualScale));
+
     const pages: HTMLElement[] = Array.from(
       viewerRef.current.querySelectorAll<HTMLElement>(".page")
     ).filter((pageEl) => pageWithinBuffer(pageEl, viewRect, BUFFER));
@@ -483,5 +605,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     refreshCanvases,
     disposePageEntry,
     getPageStrokes,
+    resetTouchState,
+    forceCleanupOffscreenCanvases,
   };
 };

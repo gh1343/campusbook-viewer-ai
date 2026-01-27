@@ -12,6 +12,11 @@
   line-height: 1;
 }
 
+.pdf_viewer_container[data-pinching="1"] .textLayer :is(span, br) {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
 .pdf_viewer_container .textLayer span {
   /* margin-top: -0.2em; */
 }
@@ -154,12 +159,8 @@
   --visual-scale: 1;
   position: absolute;
   inset: 0;
-  overflow: auto;
+  overflow: hidden;
   background: #eee;
-  transform: scale(var(--visual-scale));
-  transform-origin: top left;
-  width: calc(100% / var(--visual-scale));
-  height: calc(100% / var(--visual-scale));
 }
 
 .pdf_viewer_container {
@@ -167,6 +168,13 @@
   inset: 0;
   overflow: auto;
   background: transparent;
+}
+
+.pdf_viewer_transform_layer {
+  position: relative;
+  transform-origin: 0 0;
+  transform: translate3d(0px, 0px, 0) scale(1);
+  will-change: transform;
 }
 
 .pdf_viewer_content {
