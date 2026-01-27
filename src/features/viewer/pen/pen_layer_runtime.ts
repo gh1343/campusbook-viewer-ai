@@ -63,9 +63,6 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   let activePointerId: number | null = null;
 
-  const isTouchInputBlocked = (e: React.PointerEvent) =>
-    drawingModeRef.current === "pen" && e.pointerType === "touch";
-
   const isPinching = () => isPinchingRef?.current ?? false;
 
   const getPageSize = (pageEl: HTMLElement) => {
@@ -214,6 +211,49 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenStart = (e: React.PointerEvent) => {
+    // 펜 입력 처리 (최우선)
+    if (e.pointerType === "pen") {
+      // 펜 모드가 아니면 무시
+      if (drawingModeRef.current === "idle") return;
+
+      console.log('[PenStart] Pen detected, mode:', drawingModeRef.current);
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // 컨테이너의 touch-action을 일시적으로 none으로 설정 (펜 그리기 중 스크롤 방지)
+      if (viewerContainerRef.current) {
+        viewerContainerRef.current.style.touchAction = "none";
+      }
+
+      activePointerId = e.pointerId;
+      const info = getPageElementFromEvent(e);
+      if (!info) return;
+      const { pageEl, pageNumber } = info;
+
+      // 포인터 캡처는 컨테이너에서만 (캔버스가 아닐 때)
+      const target = e.target as HTMLElement;
+      if (target && !target.classList.contains('pdf_pen_page_canvas_live')) {
+        try {
+          target.setPointerCapture?.(e.pointerId);
+        } catch (err) {
+          // 캡처 실패는 무시
+        }
+      }
+
+      const pt = getPagePoint(e, pageEl, getVisualScale);
+      if (!pt) {
+        console.log('[PenStart] Failed to get point');
+        return;
+      }
+      console.log('[PenStart] Drawing started at', pt);
+      currentPageRef.current = pageNumber;
+      isDrawingRef.current = true;
+      livePointsRef.current = [pt];
+      renderLiveCanvas();
+      return;
+    }
+
     // 터치 포인터 추적
     if (e.pointerType === "touch") {
       activeTouchPointers.add(e.pointerId);
@@ -227,10 +267,12 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     // 핀치줌 중에는 펜 입력 무시
     if (isPinching()) return;
 
-    if (isTouchInputBlocked(e)) {
-      e.preventDefault();
-      return; // Block finger/palm when pen tool is active
+    // 펜 모드일 때: 터치는 스크롤/핀치줌용으로 허용, 펜만 그리기
+    if (drawingModeRef.current === "pen" && e.pointerType === "touch") {
+      // 손가락은 스크롤용으로 이벤트 통과 (preventDefault 하지 않음)
+      return;
     }
+
     if (drawingModeRef.current === "idle") return;
 
     // 이미 다른 포인터가 활성화되어 있으면 무시 (핀치줌 허용)
@@ -242,10 +284,12 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     const info = getPageElementFromEvent(e);
     if (!info) return;
     const { pageEl, pageNumber } = info;
-    // 터치 입력은 setPointerCapture를 사용하지 않음 (핀치줌 허용)
-    if (e.pointerType !== "touch") {
+
+    // 마우스 입력일 때도 포인터 캡처
+    if (e.pointerType === "mouse") {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     }
+
     const pt = getPagePoint(e, pageEl, getVisualScale);
     if (!pt) return;
     currentPageRef.current = pageNumber;
@@ -255,6 +299,54 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenMove = (e: React.PointerEvent) => {
+    // 펜 입력 처리 (최우선)
+    if (e.pointerType === "pen") {
+      // 펜이 활성 포인터가 아니면 무시
+      if (activePointerId !== null && e.pointerId !== activePointerId) return;
+      if (drawingModeRef.current === "idle") return;
+      if (e.buttons === 0 && !isDrawingRef.current) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const pageNumber =
+        currentPageRef.current || getPageElementFromEvent(e)?.pageNumber || null;
+      if (!pageNumber) return;
+      const pageEl = getPageElementByNumber(pageNumber);
+      if (!pageEl) return;
+
+      const pt = getPagePoint(e, pageEl, getVisualScale);
+      if (!pt) return;
+
+      if (drawingModeRef.current === "pen") {
+        isDrawingRef.current = true;
+        currentPageRef.current = pageNumber;
+        if (livePointsRef.current.length === 0) {
+          livePointsRef.current = [pt];
+        } else {
+          livePointsRef.current.push(pt);
+        }
+        renderLiveCanvas();
+      } else if (drawingModeRef.current === "eraser") {
+        const pageSize = getPageSize(pageEl);
+        const strokes = getPageStrokes(pageNumber);
+        strokes.forEach((stroke) => {
+          const { scaleX, scaleY } = getStrokeScale(
+            stroke,
+            pageSize.width,
+            pageSize.height
+          );
+          const hit = stroke.points.some(
+            (p: any) =>
+              Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
+              16 * scaleX
+          );
+          if (hit) removeStroke("pdf-main", stroke.id);
+        });
+      }
+      return;
+    }
+
     // 두 손가락 이상 터치 중이면 핀치줌으로 간주
     if (e.pointerType === "touch" && activeTouchPointers.size >= 2) {
       cancelDrawingForPinch();
@@ -267,10 +359,11 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       return;
     }
 
-    if (isTouchInputBlocked(e)) {
-      e.preventDefault();
+    // 펜 모드일 때: 터치는 스크롤용으로 허용, 펜만 그리기
+    if (drawingModeRef.current === "pen" && e.pointerType === "touch") {
       return;
     }
+
     if (activePointerId !== null && e.pointerId !== activePointerId) return;
     if (drawingModeRef.current === "idle") return;
     if (e.buttons === 0 && !isDrawingRef.current) return;
@@ -281,7 +374,6 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     const pageEl = getPageElementByNumber(pageNumber);
     if (!pageEl) return;
 
-    e.preventDefault();
     const pt = getPagePoint(e, pageEl, getVisualScale);
     if (!pt) return;
 
@@ -314,6 +406,14 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenEnd = (e: React.PointerEvent) => {
+    // 펜 입력 종료 처리
+    if (e.pointerType === "pen" && activePointerId === e.pointerId) {
+      // 컨테이너의 touch-action 복원 (손가락 스크롤 다시 허용)
+      if (viewerContainerRef.current) {
+        viewerContainerRef.current.style.touchAction = "pan-x pan-y";
+      }
+    }
+
     // 터치 포인터 추적에서 제거 (항상 실행)
     if (e.pointerType === "touch") {
       activeTouchPointers.delete(e.pointerId);
@@ -324,14 +424,19 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       activePointerId = null;
     }
 
-    if (isTouchInputBlocked(e)) {
-      e.preventDefault();
+    // 펜 모드일 때: 터치는 스크롤용으로 허용
+    if (drawingModeRef.current === "pen" && e.pointerType === "touch") {
       return;
     }
+
     if (!isDrawingRef.current && drawingModeRef.current !== "eraser") return;
     const el = e.target as HTMLElement;
     if (el.hasPointerCapture?.(e.pointerId)) {
-      el.releasePointerCapture(e.pointerId);
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        // 캡처 해제 실패는 무시
+      }
     }
     const pageNumber = currentPageRef.current;
     if (
@@ -370,8 +475,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   const bindPenHandlers = (canvas: HTMLCanvasElement) => {
     if (canvas.dataset.penBound) return;
-    canvas.addEventListener("pointerdown", handlePenStart);
-    canvas.addEventListener("pointermove", handlePenMove);
+    canvas.addEventListener("pointerdown", handlePenStart, { passive: false });
+    canvas.addEventListener("pointermove", handlePenMove, { passive: false });
     canvas.addEventListener("pointerup", handlePenEnd);
     canvas.addEventListener("pointerleave", handlePenEnd);
     canvas.addEventListener("pointercancel", handlePenEnd);
@@ -476,9 +581,16 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     const mode = drawingModeRef.current || "idle";
     const active = mode === "pen" || mode === "eraser";
     pageCanvasMapRef.current.forEach(({ liveCanvas }) => {
-      liveCanvas.style.pointerEvents = active ? "auto" : "none";
-      liveCanvas.style.touchAction = active ? "none" : "auto";
-      liveCanvas.style.cursor = active ? "crosshair" : "default";
+      // 펜 모드일 때는 pointer-events를 none으로 설정하여 터치 이벤트 통과
+      // 펜 입력은 컨테이너에서 직접 처리
+      if (mode === "pen") {
+        liveCanvas.style.pointerEvents = "none";
+        liveCanvas.style.cursor = "crosshair";
+      } else {
+        liveCanvas.style.pointerEvents = active ? "auto" : "none";
+        liveCanvas.style.cursor = active ? "crosshair" : "default";
+      }
+      liveCanvas.style.touchAction = "none";
     });
   };
 

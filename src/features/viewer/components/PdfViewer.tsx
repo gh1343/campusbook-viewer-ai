@@ -447,8 +447,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const getPageElementFromEvent = (e: React.PointerEvent) => {
+    // 먼저 target에서 찾기 시도
     const target = e.target as HTMLElement;
-    const pageEl = target.closest(".page") as HTMLElement | null;
+    let pageEl = target.closest(".page") as HTMLElement | null;
+
+    // target에서 못 찾으면 clientX/Y 좌표로 찾기
+    if (!pageEl) {
+      const elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+      if (elementAtPoint instanceof HTMLElement) {
+        pageEl = elementAtPoint.closest(".page") as HTMLElement | null;
+      }
+    }
+
     if (!pageEl) return null;
     const pageNumber = Number(pageEl.dataset.pageNumber);
     if (!pageNumber) return null;
@@ -1014,6 +1024,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerDown = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
+    // 펜 입력 처리 (펜 모드일 때만)
+    if (e.pointerType === "pen" && drawingMode === "pen") {
+      penRuntime.handlePenStart(e);
+      return;
+    }
+
+    // 펜 입력은 기본적으로 스킵
+    if (e.pointerType === "pen") return;
+
     if (e.pointerType !== "touch") return;
     activePointersRef.current.set(e.pointerId, {
       x: e.clientX,
@@ -1047,6 +1066,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerMove = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
+    // 펜 입력 처리 (펜 모드일 때만)
+    if (e.pointerType === "pen" && drawingMode === "pen") {
+      penRuntime.handlePenMove(e);
+      return;
+    }
+
+    // 펜으로 그리기 중이면 스크롤 방지
+    if (e.pointerType === "pen" && isDrawingRef.current) {
+      e.preventDefault();
+      return;
+    }
+
     if (e.pointerType !== "touch") return;
     if (!activePointersRef.current.has(e.pointerId)) return;
     activePointersRef.current.set(e.pointerId, {
@@ -1114,6 +1145,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const handleContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    // 펜 입력 처리 (펜 모드일 때만)
+    if (e.pointerType === "pen" && drawingMode === "pen") {
+      penRuntime.handlePenEnd(e);
+      return;
+    }
+
     if (e.pointerType === "touch") {
       clearPinchPointer(e.pointerId);
     }
@@ -1125,6 +1162,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerCancel = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
+    // 펜 입력 처리 (펜 모드일 때만)
+    if (e.pointerType === "pen" && drawingMode === "pen") {
+      penRuntime.handlePenEnd(e);
+      return;
+    }
+
     if (e.pointerType !== "touch") return;
     clearPinchPointer(e.pointerId);
   };
@@ -1133,8 +1176,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const container = viewerContainerRef.current;
     if (!container) return;
     const handleTouchMove = (e: TouchEvent) => {
-      if (!isPinchingRef.current) return;
-      e.preventDefault();
+      // 핀치줌 중이거나 펜으로 그리는 중일 때 터치 스크롤 차단
+      if (isPinchingRef.current || isDrawingRef.current) {
+        e.preventDefault();
+      }
     };
     container.addEventListener("touchmove", handleTouchMove, {
       passive: false,
