@@ -169,6 +169,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const pinchPreviewScaleRef = useRef(1);
   const isPinchingRef = useRef(false);
   const lastPinchAtRef = useRef(0);
+  const pinchTargetPageRef = useRef<number | null>(null);
   const pinchTransformRafRef = useRef<number | null>(null);
   const pendingTransformRef = useRef<{
     scale: number;
@@ -567,6 +568,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     registerPdfZoomHandler(applyPdfZoom);
   }, [registerPdfZoomHandler, applyPdfZoom]);
 
+  const onPageChangeFiltered = useCallback((page: number) => {
+    // 핀치 줌 중에는 페이지 변경 이벤트 무시
+    if (isPinchingRef.current) {
+      return;
+    }
+    onPageChange?.(page);
+  }, [onPageChange]);
+
   usePdfJsViewer({
     file,
     viewerContainerRef,
@@ -578,7 +587,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     MAX_CANVAS_PIXELS,
     isMobileLike,
     isMobileSafari,
-    onPageChange,
+    onPageChange: onPageChangeFiltered,
     onPagesCount,
     registerGoToPage,
     setPdfTextPages,
@@ -948,25 +957,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // 메모리 정리: 불필요한 transform 제거
     resetPinchTransform();
 
-    // 스크롤 보정을 위한 재시도 로직
-    const scheduleScrollCorrection = (retries: number) => {
-      if (retries <= 0) return;
-
+    // 스크롤 보정을 위한 단일 프레임 로직 (페이지 튀는 현상 최소화)
+    const scheduleScrollCorrection = () => {
       const pageEl = viewerRoot.querySelector<HTMLElement>(
         `.page[data-page-number="${anchor.pageNumber}"]`
       );
 
-      if (!pageEl) {
-        requestAnimationFrame(() => scheduleScrollCorrection(retries - 1));
-        return;
-      }
+      if (!pageEl) return;
 
       const containerRect = container.getBoundingClientRect();
       const pageRect = pageEl.getBoundingClientRect();
 
-      // 페이지가 아직 렌더링되지 않았으면 재시도
+      // 페이지가 아직 렌더링되지 않았으면 스킵
       if (pageRect.width <= 0 || pageRect.height <= 0) {
-        requestAnimationFrame(() => scheduleScrollCorrection(retries - 1));
         return;
       }
 
@@ -992,12 +995,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       container.scrollTop = finalTop;
     };
 
-    // 충분한 프레임 대기 후 스크롤 보정 실행 (PDF.js 렌더링 완료 대기)
+    // 최소한의 프레임 대기 후 스크롤 보정 (페이지 튀는 현상 최소화)
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          scheduleScrollCorrection(6);
-        });
+        scheduleScrollCorrection();
       });
     });
 
@@ -1010,8 +1011,22 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     pinchStartDistRef.current = null;
     pinchStartScaleRef.current = null;
     pinchPreviewScaleRef.current = 1;
-    isPinchingRef.current = false;
     pinchAnchorRef.current = null;
+
+    // 핀치 완료 후 플래그 해제하고 실제 페이지 동기화
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        isPinchingRef.current = false;
+
+        // PDF.js의 실제 현재 페이지와 동기화
+        const actualPage = viewer?.currentPageNumber;
+        if (actualPage && pinchTargetPageRef.current && actualPage !== pinchTargetPageRef.current) {
+          // 페이지가 달라졌다면 올바른 페이지로 이벤트 발생
+          onPageChange?.(pinchTargetPageRef.current);
+        }
+        pinchTargetPageRef.current = null;
+      });
+    });
 
     // 핀치줌 완료 후 메모리 정리 및 렌더링
     requestAnimationFrame(() => {
@@ -1056,6 +1071,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchStartScaleRef.current = viewer?.currentScale || 1;
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = true;
+      // 현재 페이지 번호 저장 (핀치 줌 중 페이지 변경 이벤트 무시용)
+      pinchTargetPageRef.current = currentPdfPage;
       updatePinchAnchor();
       setPinchInteractionState(true);
       resetPinchTransform();
@@ -1138,6 +1155,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchStartScaleRef.current = null;
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = false;
+      pinchTargetPageRef.current = null;
       resetPinchTransform();
       setPinchInteractionState(false);
       pinchAnchorRef.current = null;
@@ -1186,6 +1204,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
     return () => {
       container.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, []);
+
+  useEffect(() => {
+    // 전역적으로 Ctrl + 마우스 휠로 인한 브라우저 확대/축소 차단
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("wheel", handleWheel, {
+      passive: false,
+    });
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
     };
   }, []);
 
