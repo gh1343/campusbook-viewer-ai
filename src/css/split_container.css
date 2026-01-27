@@ -48,11 +48,9 @@
   min-height: 0; /* allow to shrink within container */
 }
 .cc_bottom {
-  /* position: sticky;
-  bottom: 0;
-  z-index: 30; */
   width: 100%;
   flex: 0 0 auto; /* occupies its own height only */
+  touch-action: none;
 }
 /* 오른쪽 패널 */
 .right_panel_wrap {

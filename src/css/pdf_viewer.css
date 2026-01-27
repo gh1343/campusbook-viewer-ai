@@ -161,6 +161,7 @@
   inset: 0;
   overflow: hidden;
   background: #eee;
+  overscroll-behavior-y: contain;
 }
 
 .pdf_viewer_container {
@@ -168,6 +169,7 @@
   inset: 0;
   overflow: auto;
   background: transparent;
+  overscroll-behavior-y: contain;
 }
 
 .pdf_viewer_transform_layer {
