@@ -440,8 +440,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pdfZoomInitialScaleRef.current = currentScale;
     }
 
-    const baseMinScale = pdfZoomInitialScaleRef.current || 1;
-    const minScale = Math.min(baseMinScale, PDF_ZOOM_MIN_SCALE);
+    // 초기 화면 크기를 최소값으로 설정 (더 축소 불가)
+    const minScale = pdfZoomInitialScaleRef.current || 1;
     const maxScale = Math.max(minScale, PDF_ZOOM_MAX_SCALE);
 
     return { minScale, maxScale };
@@ -550,17 +550,54 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   );
 
   const applyPdfZoom = useCallback(
-    (direction: "in" | "out") => {
+    (direction: "in" | "out", mouseX?: number, mouseY?: number) => {
       const viewer = pdfViewerRef.current;
-      if (!viewer) return;
+      const container = viewerContainerRef.current;
+      if (!viewer || !container) return;
+
       const currentScale = viewer.currentScale || 1;
       const nextScale =
         direction === "in"
           ? currentScale + PDF_ZOOM_STEP
           : currentScale - PDF_ZOOM_STEP;
-      setPdfScale(nextScale);
+
+      const { minScale, maxScale } = getPdfZoomBounds();
+      const clampedScale = Math.min(maxScale, Math.max(minScale, nextScale));
+
+      if (Math.abs(clampedScale - currentScale) < 0.001) return;
+
+      // 마우스 위치가 제공된 경우, 해당 위치를 앵커로 사용
+      if (mouseX !== undefined && mouseY !== undefined) {
+        const containerRect = container.getBoundingClientRect();
+        const viewportX = mouseX - containerRect.left;
+        const viewportY = mouseY - containerRect.top;
+
+        // 현재 스크롤 위치 + 뷰포트 내 마우스 위치 = 컨텐츠 상의 절대 위치
+        const contentX = container.scrollLeft + viewportX;
+        const contentY = container.scrollTop + viewportY;
+
+        // 스케일 비율 미리 계산
+        const scaleRatio = clampedScale / currentScale;
+        const newContentX = contentX * scaleRatio;
+        const newContentY = contentY * scaleRatio;
+
+        // 스케일 변경 (이 과정에서 setLayoutTick이 호출됨)
+        pdfZoomManualRef.current = true;
+        viewer.currentScale = clampedScale;
+
+        // 스크롤 조정을 즉시 수행 (하이라이트 튀는 현상 방지)
+        container.scrollLeft = newContentX - viewportX;
+        container.scrollTop = newContentY - viewportY;
+
+        // 렌더링 및 레이아웃 업데이트
+        scheduleRenderRefresh();
+        setLayoutTick((prev) => prev + 1);
+      } else {
+        // 마우스 위치가 없으면 기존 방식대로
+        setPdfScale(clampedScale);
+      }
     },
-    [setPdfScale]
+    [setPdfScale, scheduleRenderRefresh, setLayoutTick]
   );
 
   useEffect(() => {
@@ -1208,19 +1245,39 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   }, []);
 
   useEffect(() => {
+    const container = viewerContainerRef.current;
+    if (!container) return;
+
+    // PDF 컨테이너 내부에서 Ctrl + 휠: PDF 확대/축소 적용
+    const handleContainerWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation(); // 전역 핸들러로 전파 방지
+
+        const direction = e.deltaY < 0 ? "in" : "out";
+        applyPdfZoom(direction, e.clientX, e.clientY);
+      }
+    };
+
     // 전역적으로 Ctrl + 마우스 휠로 인한 브라우저 확대/축소 차단
-    const handleWheel = (e: WheelEvent) => {
+    const handleGlobalWheel = (e: WheelEvent) => {
       if (e.ctrlKey) {
         e.preventDefault();
       }
     };
-    window.addEventListener("wheel", handleWheel, {
+
+    container.addEventListener("wheel", handleContainerWheel, {
       passive: false,
     });
+    window.addEventListener("wheel", handleGlobalWheel, {
+      passive: false,
+    });
+
     return () => {
-      window.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("wheel", handleContainerWheel);
+      window.removeEventListener("wheel", handleGlobalWheel);
     };
-  }, []);
+  }, [applyPdfZoom]);
 
   useEffect(() => {
     const onSelectionChange = () => scheduleSelectionCheck();
