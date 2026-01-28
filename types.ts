@@ -24,8 +24,7 @@ export interface PdfBookmark {
   id: string;
   page: number;
   label: string;
-  createdAt: number;
-  created_at?: number;
+  created_at: number;
   updated_at?: number;
   deleted?: boolean;
 }
@@ -48,8 +47,7 @@ export interface Highlight {
   pageNumber?: number;
   note?: string;
   rects?: PdfHighlightRect[];
-  createdAt: number;
-  created_at?: number;
+  created_at: number;
   updated_at?: number;
   deleted?: boolean;
 }
@@ -100,10 +98,8 @@ export interface GeneralNote {
   content: string;
   chapterId?: string;
   chapterTitle?: string;
-  createdAt: number;
-  updatedAt: number;
-  created_at?: number;
-  updated_at?: number;
+  created_at: number;
+  updated_at: number;
   deleted?: boolean;
 }
 

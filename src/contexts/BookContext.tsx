@@ -320,7 +320,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
                 id: `migrated-${item}`,
                 page: item,
                 label: `Page ${item}`,
-                createdAt: Date.now(),
+                created_at: Date.now(),
               } as PdfBookmark;
             }
             return null;
@@ -728,7 +728,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         id: now.toString(),
         page,
         label: label || `Page ${page}`,
-        createdAt: now,
         created_at: now,
         updated_at: now,
         deleted: false,
@@ -820,7 +819,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       color: "yellow",
       pageNumber,
       note,
-      createdAt: now,
       created_at: now,
       updated_at: now,
       deleted: false,
@@ -882,7 +880,12 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const removeHighlight = (id: string) => {
-    setHighlights((prev) => prev.filter((h) => h.id !== id));
+    const now = Date.now();
+    setHighlights((prev) =>
+      prev.map((h) =>
+        h.id === id ? { ...h, deleted: true, updated_at: now } : h
+      )
+    );
   };
 
   const focusHighlight = (id: string) => {
@@ -966,8 +969,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       content: content,
       chapterId: currentChapter.id,
       chapterTitle: currentChapter.title,
-      createdAt: now,
-      updatedAt: now,
       created_at: now,
       updated_at: now,
       deleted: false,
@@ -979,9 +980,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     const now = Date.now();
     setGeneralNotes((prev) =>
       prev.map((note) =>
-        note.id === id
-          ? { ...note, title, content, updatedAt: now, updated_at: now }
-          : note
+        note.id === id ? { ...note, title, content, updated_at: now } : note
       )
     );
   };
@@ -1067,8 +1066,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
     highlights.forEach((hl) => {
       if (
-        hl.text.toLowerCase().includes(lowerQuery) ||
-        (hl.note && hl.note.toLowerCase().includes(lowerQuery))
+        !hl.deleted &&
+        (hl.text.toLowerCase().includes(lowerQuery) ||
+          (hl.note && hl.note.toLowerCase().includes(lowerQuery)))
       ) {
         results.push({
           id: `hl-${hl.id}`,
@@ -1356,8 +1356,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
       const data = snapshot.data;
 
-      // Load highlights: Server first, fallback to IndexedDB
+      // Load highlights: Merge server and IndexedDB based on timestamps
       const config = getRmsConfig();
+      const localHighlights = Array.isArray(data.highlights) ? data.highlights : [];
       let serverHighlights: any[] | null = null;
 
       // Try to load from server first
@@ -1375,16 +1376,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             serverData.result &&
             Array.isArray(serverData.result.dataList)
           ) {
-            // Parse each JSON string in dataList and clean up data
+            // Parse each JSON string in dataList
             serverHighlights = serverData.result.dataList.map(
-              (jsonStr: string) => {
-                const highlight = JSON.parse(jsonStr);
-                // Remove created_at, keep only createdAt
-                delete highlight.created_at;
-                // Remove updated_at as well since we're using createdAt only
-                delete highlight.updated_at;
-                return highlight;
-              }
+              (jsonStr: string) => JSON.parse(jsonStr)
             );
             console.log(
               "[Highlights] ✅ Loaded from server:",
@@ -1400,14 +1394,97 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         console.log("[Highlights] No RMS config, skipping server load");
       }
 
-      // Use server data if available, otherwise fallback to IndexedDB
-      if (serverHighlights) {
-        setHighlights(serverHighlights);
+      // Merge server and local highlights based on timestamps using Web Worker
+      let mergedHighlights: any[] = [];
+      if (serverHighlights && serverHighlights.length > 0) {
+        console.log("[Highlights] Merging server and local data using Web Worker...");
 
-        // Update IndexedDB cache with server data
-        snapshot.data.highlights = serverHighlights;
+        try {
+          // Use Web Worker for merge operation to avoid blocking main thread
+          const mergeResult = await new Promise<{
+            merged: any[];
+            stats: {
+              total: number;
+              serverOnly: number;
+              localOnly: number;
+              serverNewer: number;
+              localNewer: number;
+            };
+          }>((resolve, reject) => {
+            const mergeWorker = new Worker(
+              new URL("../workers/mergeWorker.ts", import.meta.url),
+              { type: "module" }
+            );
 
-        // Save updated snapshot to IndexedDB silently (don't await)
+            const timeout = setTimeout(() => {
+              mergeWorker.terminate();
+              reject(new Error("Merge operation timed out"));
+            }, 10000); // 10 second timeout
+
+            mergeWorker.onmessage = (e) => {
+              clearTimeout(timeout);
+              mergeWorker.terminate();
+              if (e.data.type === "merge-complete") {
+                resolve({
+                  merged: e.data.merged,
+                  stats: e.data.stats,
+                });
+              } else {
+                reject(new Error("Invalid merge response"));
+              }
+            };
+
+            mergeWorker.onerror = (err) => {
+              clearTimeout(timeout);
+              mergeWorker.terminate();
+              reject(err);
+            };
+
+            mergeWorker.postMessage({
+              type: "merge",
+              serverData: serverHighlights,
+              localData: localHighlights,
+            });
+          });
+
+          mergedHighlights = mergeResult.merged;
+          const { serverOnly, localOnly, serverNewer, localNewer } =
+            mergeResult.stats;
+
+          console.log(
+            `[Highlights] Merge summary: ${localNewer} local newer, ${serverNewer} server newer, ${localOnly} local only, ${serverOnly} server only`
+          );
+        } catch (err) {
+          console.error("[Highlights] Web Worker merge failed, falling back to sync merge:", err);
+
+          // Fallback to synchronous merge if worker fails
+          const serverMap = new Map(serverHighlights.map((h: any) => [h.id, h]));
+          const localMap = new Map(localHighlights.map((h: any) => [h.id, h]));
+          const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
+
+          allIds.forEach((id) => {
+            const serverItem = serverMap.get(id);
+            const localItem = localMap.get(id);
+
+            if (serverItem && localItem) {
+              const serverTime = serverItem.updated_at || serverItem.created_at || 0;
+              const localTime = localItem.updated_at || localItem.created_at || 0;
+              mergedHighlights.push(localTime > serverTime ? localItem : serverItem);
+            } else {
+              mergedHighlights.push(localItem || serverItem);
+            }
+          });
+        }
+
+        console.log(
+          `[Highlights] Merged ${mergedHighlights.length} items (Server: ${serverHighlights.length}, Local: ${localHighlights.length})`
+        );
+        setHighlights(mergedHighlights);
+
+        // Update IndexedDB with merged data
+        snapshot.data.highlights = mergedHighlights;
+
+        // Save merged snapshot to IndexedDB
         new Promise<void>((resolve, reject) => {
           const requestId = `${Date.now()}_${Math.random()
             .toString(36)
@@ -1449,20 +1526,20 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
         })
           .then(() => {
-            console.log("[Highlights] Server data cached to IndexedDB");
+            console.log("[Highlights] Merged data saved to IndexedDB");
           })
           .catch((saveErr) => {
             console.error(
-              "[Highlights] Failed to cache to IndexedDB:",
+              "[Highlights] Failed to save merged data to IndexedDB:",
               saveErr
             );
           });
-      } else if (Array.isArray(data.highlights)) {
-        // Fallback to IndexedDB
-        setHighlights(data.highlights);
+      } else if (localHighlights.length > 0) {
+        // No server data: use local
+        setHighlights(localHighlights);
         console.log(
-          "[Highlights] 📦 Loaded from IndexedDB (fallback):",
-          data.highlights.length
+          "[Highlights] 📦 Using local IndexedDB data:",
+          localHighlights.length
         );
       }
 
@@ -1626,6 +1703,67 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             highlights: snapshot.data.highlights || [],
           });
           alert("하이라이트가 서버에 저장되었습니다.");
+
+          // Remove deleted highlights from IndexedDB after successful server save
+          const filteredHighlights = (snapshot.data.highlights || []).filter(
+            (h: any) => !h.deleted
+          );
+          if (filteredHighlights.length !== (snapshot.data.highlights || []).length) {
+            const cleanedSnapshot = {
+              ...snapshot,
+              data: {
+                ...snapshot.data,
+                highlights: filteredHighlights,
+              },
+            };
+
+            // Save cleaned snapshot to IndexedDB
+            await new Promise<void>((resolve, reject) => {
+              const requestId = `${Date.now()}_${Math.random()
+                .toString(36)
+                .slice(2)}`;
+              const cleanup = () => {
+                worker.removeEventListener("message", handleMessage);
+                worker.removeEventListener("error", handleError);
+              };
+              const handleMessage = (event: MessageEvent) => {
+                const response = event.data as {
+                  type?: string;
+                  requestId?: string;
+                  error?: string;
+                };
+                if (!response || response.requestId !== requestId) return;
+                cleanup();
+                if (response.type === "save_complete") {
+                  resolve();
+                } else {
+                  reject(new Error(response.error || "IndexedDB save failed."));
+                }
+              };
+              const handleError = () => {
+                cleanup();
+                reject(new Error("IndexedDB worker error."));
+              };
+              worker.addEventListener("message", handleMessage);
+              worker.addEventListener("error", handleError);
+              worker.postMessage({
+                type: "save_bundle",
+                requestId,
+                payload: {
+                  storageKey: cleanedSnapshot.key,
+                  schema_version: cleanedSnapshot.schema_version,
+                  savedAt: cleanedSnapshot.savedAt,
+                  data: cleanedSnapshot.data,
+                  meta: cleanedSnapshot.meta,
+                },
+              });
+            });
+
+            indexedDbSnapshotRef.current = cleanedSnapshot;
+            // Also update the local state to remove deleted highlights
+            setHighlights((prev) => prev.filter((h) => !h.deleted));
+            console.log("[Highlights] Deleted items removed from IndexedDB and local state");
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           console.error("Highlights save failed", err);

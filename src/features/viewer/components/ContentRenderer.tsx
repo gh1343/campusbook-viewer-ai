@@ -78,7 +78,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     if (!showAnnotations) return html;
 
     const chapterHighlights = highlights.filter(
-      h => h.chapterId === targetChapter.id
+      h => h.chapterId === targetChapter.id && !h.deleted
     );
     const sortedHighlights = [...chapterHighlights].sort(
       (a, b) => b.text.length - a.text.length

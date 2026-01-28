@@ -152,16 +152,18 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const buildHighlightExport = () => {
-    const items = highlights.map((hl) => ({
-      id: hl.id,
-      chapterId: hl.chapterId,
-      chapterLabel: getHighlightChapterLabel(hl.chapterId, hl.pageNumber),
-      pageNumber: hl.pageNumber ?? null,
-      text: hl.text,
-      note: hl.note || "",
-      color: hl.color,
-      createdAt: hl.createdAt,
-    }));
+    const items = highlights
+      .filter((hl) => !hl.deleted)
+      .map((hl) => ({
+        id: hl.id,
+        chapterId: hl.chapterId,
+        chapterLabel: getHighlightChapterLabel(hl.chapterId, hl.pageNumber),
+        pageNumber: hl.pageNumber ?? null,
+        text: hl.text,
+        note: hl.note || "",
+        color: hl.color,
+        created_at: hl.created_at,
+      }));
     return {
       exportedAt: new Date().toISOString(),
       bookTitle,

@@ -210,11 +210,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   useEffect(() => {
     // Keep local overlay in sync with global highlights (e.g., sidebar delete)
     setPdfHighlights((prev) => {
-      const next = prev.filter((h) => highlights.some((hl) => hl.id === h.id));
+      const next = prev.filter((h) =>
+        highlights.some((hl) => hl.id === h.id && !hl.deleted)
+      );
       const existingIds = new Set(next.map((h) => h.id));
       const incoming = highlights
         .filter(
           (hl) =>
+            !hl.deleted &&
             Array.isArray(hl.rects) &&
             hl.rects.length > 0 &&
             !existingIds.has(hl.id)

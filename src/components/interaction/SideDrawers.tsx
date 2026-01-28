@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { GoogleGenAI } from "@google/genai";
 import { useBook } from "../../contexts/BookContext";
 import {
@@ -197,7 +197,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                       {bm.label || `Page ${bm.page}`}
                     </span> */}
                   <span className="bookmark_meta">
-                    Saved {new Date(bm.createdAt).toLocaleDateString()}
+                    Saved {new Date(bm.created_at).toLocaleDateString()}
                   </span>
                 </div>
               </button>
@@ -289,6 +289,10 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
   const aiTalkEndRef = useRef<HTMLDivElement>(null);
 
+  // Lazy loading state for highlights
+  const [visibleHighlightCount, setVisibleHighlightCount] = useState(20);
+  const highlightScrollRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (
       editingNote &&
@@ -347,10 +351,22 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   };
 
   // Filtered Lists for Memos and MyNote
-  const filteredHighlights = highlights.filter(
-    (hl) =>
-      hl.text.toLowerCase().includes(localFilter.toLowerCase()) ||
-      (hl.note && hl.note.toLowerCase().includes(localFilter.toLowerCase()))
+  const filteredHighlights = useMemo(
+    () =>
+      highlights
+        .filter((hl) => !hl.deleted)
+        .filter(
+          (hl) =>
+            hl.text.toLowerCase().includes(localFilter.toLowerCase()) ||
+            (hl.note &&
+              hl.note.toLowerCase().includes(localFilter.toLowerCase()))
+        ),
+    [highlights, localFilter]
+  );
+
+  const visibleHighlights = useMemo(
+    () => filteredHighlights.slice(0, visibleHighlightCount),
+    [filteredHighlights, visibleHighlightCount]
   );
 
   const filteredNotes = generalNotes.filter(
@@ -358,6 +374,32 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       note.title.toLowerCase().includes(localFilter.toLowerCase()) ||
       note.content.toLowerCase().includes(localFilter.toLowerCase())
   );
+
+  // Handle scroll for lazy loading highlights
+  useEffect(() => {
+    const container = highlightScrollRef.current;
+    if (!container || activeToolTab !== "highlight") return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      if (
+        scrollHeight - scrollTop - clientHeight < 300 &&
+        visibleHighlightCount < filteredHighlights.length
+      ) {
+        setVisibleHighlightCount((prev) =>
+          Math.min(prev + 20, filteredHighlights.length)
+        );
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [activeToolTab, visibleHighlightCount, filteredHighlights.length]);
+
+  // Reset visible count when filter changes
+  useEffect(() => {
+    setVisibleHighlightCount(20);
+  }, [localFilter, activeToolTab]);
 
   useEffect(() => {
     if (activeToolTab !== "highlight" || !activeHighlightId) return;
@@ -727,15 +769,23 @@ ${contextString}
                   className="absolute left-2.5 top-2 text-slate-400"
                 />
               </div>
+              {filteredHighlights.length > visibleHighlightCount && (
+                <div className="mt-2 text-xs text-slate-500 text-center">
+                  Showing {visibleHighlightCount} of {filteredHighlights.length}
+                </div>
+              )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div
+              ref={highlightScrollRef}
+              className="flex-1 overflow-y-auto p-4 space-y-3"
+            >
               {filteredHighlights.length === 0 && (
                 <div className="text-center py-10 opacity-50">
                   <Highlighter size={24} className="mx-auto mb-2" />
                   <p className="text-sm">No highlights</p>
                 </div>
               )}
-              {filteredHighlights.map((hl) => (
+              {visibleHighlights.map((hl) => (
                 <div
                   key={hl.id}
                   onClick={() => goToHighlight(hl)}
