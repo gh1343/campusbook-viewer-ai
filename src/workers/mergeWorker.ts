@@ -68,18 +68,20 @@ function performMerge(
       const localTime = localItem.updated_at || localItem.created_at || 0;
 
       if (localTime > serverTime) {
+        // Local is newer - keep local data (which may have syncStatus: "pending")
         merged.push(localItem);
         localNewerCount++;
       } else {
+        // Server is newer - keep server data (already has syncStatus: "synced")
         merged.push(serverItem);
         serverNewerCount++;
       }
     } else if (localItem) {
-      // Only in local
+      // Only in local - keep as is (may have syncStatus: "pending")
       merged.push(localItem);
       localOnlyCount++;
     } else if (serverItem) {
-      // Only in server
+      // Only in server - already synced
       merged.push(serverItem);
       serverOnlyCount++;
     }

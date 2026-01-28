@@ -822,6 +822,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       created_at: now,
       updated_at: now,
       deleted: false,
+      syncStatus: "pending", // Mark as pending sync
     };
     const itemBytes = getJsonBytes(newHighlight);
     const chapterLabel = (() => {
@@ -874,7 +875,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     const now = Date.now();
     setHighlights((prev) =>
       prev.map((hl) =>
-        hl.id === id ? { ...hl, ...data, updated_at: now } : hl
+        hl.id === id
+          ? { ...hl, ...data, updated_at: now, syncStatus: "pending" }
+          : hl
       )
     );
   };
@@ -883,7 +886,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     const now = Date.now();
     setHighlights((prev) =>
       prev.map((h) =>
-        h.id === id ? { ...h, deleted: true, updated_at: now } : h
+        h.id === id
+          ? { ...h, deleted: true, updated_at: now, syncStatus: "pending" }
+          : h
       )
     );
   };
@@ -1376,9 +1381,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             serverData.result &&
             Array.isArray(serverData.result.dataList)
           ) {
-            // Parse each JSON string in dataList
+            // Parse each JSON string in dataList and mark as synced
             serverHighlights = serverData.result.dataList.map(
-              (jsonStr: string) => JSON.parse(jsonStr)
+              (jsonStr: string) => {
+                const parsed = JSON.parse(jsonStr);
+                // Mark server data as synced (already on server)
+                return { ...parsed, syncStatus: "synced" };
+              }
             );
             console.log(
               "[Highlights] ✅ Loaded from server:",
@@ -1697,26 +1706,43 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const config = getRmsConfig();
       if (config) {
         try {
-          await saveHighlightsToServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-            highlights: snapshot.data.highlights || [],
-          });
-          alert("하이라이트가 서버에 저장되었습니다.");
-
-          // Remove deleted highlights from IndexedDB after successful server save
-          const filteredHighlights = (snapshot.data.highlights || []).filter(
-            (h: any) => !h.deleted
+          // Filter only changed highlights (syncStatus === "pending")
+          const changedHighlights = (snapshot.data.highlights || []).filter(
+            (h: any) => h.syncStatus === "pending"
           );
-          if (filteredHighlights.length !== (snapshot.data.highlights || []).length) {
+
+          if (changedHighlights.length > 0) {
+            console.log(
+              `[Highlights] Sending ${changedHighlights.length} changed items to server (Total: ${(snapshot.data.highlights || []).length})`
+            );
+
+            await saveHighlightsToServer({
+              apiBase: config.apiBase,
+              bookCd: config.bookCd,
+              highlights: changedHighlights,
+            });
+            alert(
+              `하이라이트가 서버에 저장되었습니다. (${changedHighlights.length}개 항목)`
+            );
+
+            // Mark saved highlights as synced and remove deleted ones
+            const updatedHighlights = (snapshot.data.highlights || [])
+              .map((h: any) => {
+                // Mark as synced if it was pending
+                if (h.syncStatus === "pending") {
+                  return { ...h, syncStatus: "synced" };
+                }
+                return h;
+              })
+              .filter((h: any) => !h.deleted); // Remove deleted items
+
             const cleanedSnapshot = {
               ...snapshot,
               data: {
                 ...snapshot.data,
-                highlights: filteredHighlights,
+                highlights: updatedHighlights,
               },
             };
-
             // Save cleaned snapshot to IndexedDB
             await new Promise<void>((resolve, reject) => {
               const requestId = `${Date.now()}_${Math.random()
@@ -1760,9 +1786,22 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             });
 
             indexedDbSnapshotRef.current = cleanedSnapshot;
-            // Also update the local state to remove deleted highlights
-            setHighlights((prev) => prev.filter((h) => !h.deleted));
-            console.log("[Highlights] Deleted items removed from IndexedDB and local state");
+            // Also update the local state to remove deleted highlights and mark as synced
+            setHighlights((prev) =>
+              prev
+                .filter((h) => !h.deleted)
+                .map((h) =>
+                  h.syncStatus === "pending"
+                    ? { ...h, syncStatus: "synced" as const }
+                    : h
+                )
+            );
+            console.log(
+              `[Highlights] ${changedHighlights.length} items synced, deleted items removed`
+            );
+          } else {
+            console.log("[Highlights] No changes to sync");
+            alert("변경된 항목이 없습니다.");
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

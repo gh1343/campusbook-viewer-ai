@@ -50,6 +50,7 @@ export interface Highlight {
   created_at: number;
   updated_at?: number;
   deleted?: boolean;
+  syncStatus?: "pending" | "synced"; // Track sync status
 }
 
 export interface ChatMessage {
