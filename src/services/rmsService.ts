@@ -1240,3 +1240,128 @@ export const loadProgressFromServer = async ({
 
   return result;
 };
+
+export const saveBookmarksToServer = async ({
+  apiBase,
+  bookCd,
+  bookmarks,
+}: {
+  apiBase: string;
+  bookCd: string;
+  bookmarks: unknown[];
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const payload = {
+    bookCode: bookCd,
+    type: "bm",
+    data: JSON.stringify(bookmarks),
+  };
+
+  console.log("=== Sending Bookmarks to Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("Payload:", payload);
+  console.log("Bookmarks Count:", bookmarks.length);
+  console.log("Bookmarks Data (stringified):", JSON.stringify(bookmarks));
+  console.log("====================================");
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Bookmarks save failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return result;
+};
+
+export const loadBookmarksFromServer = async ({
+  apiBase,
+  bookCd,
+}: {
+  apiBase: string;
+  bookCd: string;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=bm`;
+
+  console.log("=== Loading Bookmarks from Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("======================================");
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Bookmarks load failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  console.log("=== Loaded Bookmarks Response ===");
+  console.log("Result:", result);
+  console.log("==================================");
+
+  return result;
+};

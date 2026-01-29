@@ -36,6 +36,8 @@ import {
   loadHighlightsFromServer,
   saveProgressToServer,
   loadProgressFromServer,
+  saveBookmarksToServer,
+  loadBookmarksFromServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -733,13 +735,21 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         created_at: now,
         updated_at: now,
         deleted: false,
+        syncStatus: "pending", // Mark as pending sync
       };
       return [bookmark, ...prev];
     });
   };
 
   const removePdfBookmark = (id: string) => {
-    setBookmarks((prev) => prev.filter((b) => b.id !== id));
+    const now = Date.now();
+    setBookmarks((prev) =>
+      prev.map((b) =>
+        b.id === id
+          ? { ...b, deleted: true, updated_at: now, syncStatus: "pending" }
+          : b
+      )
+    );
   };
 
   const clearHighlightFocus = () => {
@@ -1373,9 +1383,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       // Load highlights: Merge server and IndexedDB based on timestamps
       const config = getRmsConfig();
       const localHighlights = Array.isArray(data.highlights) ? data.highlights : [];
+      const localBookmarks = Array.isArray(data.bookmarks) ? data.bookmarks : [];
       let serverHighlights: any[] | null = null;
+      let serverBookmarks: any[] | null = null;
 
-      // Try to load from server first
+      // Try to load highlights from server first
       if (config) {
         console.log("[Highlights] Attempting to load from server...");
         try {
@@ -1410,6 +1422,43 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         }
       } else {
         console.log("[Highlights] No RMS config, skipping server load");
+      }
+
+      // Try to load bookmarks from server
+      if (config) {
+        console.log("[Bookmarks] Attempting to load from server...");
+        try {
+          const bookmarkData = await loadBookmarksFromServer({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+          });
+          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
+          if (
+            bookmarkData &&
+            bookmarkData.ok &&
+            bookmarkData.result &&
+            Array.isArray(bookmarkData.result.dataList)
+          ) {
+            // Parse each JSON string in dataList and mark as synced
+            serverBookmarks = bookmarkData.result.dataList.map(
+              (jsonStr: string) => {
+                const parsed = JSON.parse(jsonStr);
+                // Mark server data as synced (already on server)
+                return { ...parsed, syncStatus: "synced" };
+              }
+            );
+            console.log(
+              "[Bookmarks] ✅ Loaded from server:",
+              serverBookmarks.length
+            );
+          } else {
+            console.warn("[Bookmarks] Invalid server response:", bookmarkData);
+          }
+        } catch (err) {
+          console.error("[Bookmarks] ❌ Failed to load from server:", err);
+        }
+      } else {
+        console.log("[Bookmarks] No RMS config, skipping server load");
       }
 
       // Merge server and local highlights based on timestamps using Web Worker
@@ -1499,7 +1548,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         );
         setHighlights(mergedHighlights);
 
-        // Update IndexedDB with merged data
+        // Update IndexedDB with merged highlights data
         snapshot.data.highlights = mergedHighlights;
 
         // Save merged snapshot to IndexedDB
@@ -1561,10 +1610,156 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         );
       }
 
-      // Load other data from IndexedDB
-      if (Array.isArray(data.bookmarks)) {
-        setBookmarks(data.bookmarks);
+      // Merge bookmarks: Same logic as highlights
+      let mergedBookmarks: any[] = [];
+      if (serverBookmarks && serverBookmarks.length > 0) {
+        console.log("[Bookmarks] Merging server and local data using Web Worker...");
+
+        try {
+          // Use Web Worker for merge operation to avoid blocking main thread
+          const mergeResult = await new Promise<{
+            merged: any[];
+            stats: {
+              total: number;
+              serverOnly: number;
+              localOnly: number;
+              serverNewer: number;
+              localNewer: number;
+            };
+          }>((resolve, reject) => {
+            const mergeWorker = new Worker(
+              new URL("../workers/mergeWorker.ts", import.meta.url),
+              { type: "module" }
+            );
+
+            const timeout = setTimeout(() => {
+              mergeWorker.terminate();
+              reject(new Error("Merge operation timed out"));
+            }, 10000); // 10 second timeout
+
+            mergeWorker.onmessage = (e) => {
+              clearTimeout(timeout);
+              mergeWorker.terminate();
+              if (e.data.type === "merge-complete") {
+                resolve({
+                  merged: e.data.merged,
+                  stats: e.data.stats,
+                });
+              } else {
+                reject(new Error("Invalid merge response"));
+              }
+            };
+
+            mergeWorker.onerror = (err) => {
+              clearTimeout(timeout);
+              mergeWorker.terminate();
+              reject(err);
+            };
+
+            mergeWorker.postMessage({
+              type: "merge",
+              serverData: serverBookmarks,
+              localData: localBookmarks,
+            });
+          });
+
+          mergedBookmarks = mergeResult.merged;
+          const { serverOnly, localOnly, serverNewer, localNewer } =
+            mergeResult.stats;
+
+          console.log(
+            `[Bookmarks] Merge summary: ${localNewer} local newer, ${serverNewer} server newer, ${localOnly} local only, ${serverOnly} server only`
+          );
+        } catch (err) {
+          console.error("[Bookmarks] Web Worker merge failed, falling back to sync merge:", err);
+
+          // Fallback to synchronous merge if worker fails
+          const serverMap = new Map(serverBookmarks.map((b: any) => [b.id, b]));
+          const localMap = new Map(localBookmarks.map((b: any) => [b.id, b]));
+          const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
+
+          allIds.forEach((id) => {
+            const serverItem = serverMap.get(id);
+            const localItem = localMap.get(id);
+
+            if (serverItem && localItem) {
+              const serverTime = serverItem.updated_at || serverItem.created_at || 0;
+              const localTime = localItem.updated_at || localItem.created_at || 0;
+              mergedBookmarks.push(localTime > serverTime ? localItem : serverItem);
+            } else {
+              mergedBookmarks.push(localItem || serverItem);
+            }
+          });
+        }
+
+        console.log(
+          `[Bookmarks] Merged ${mergedBookmarks.length} items (Server: ${serverBookmarks.length}, Local: ${localBookmarks.length})`
+        );
+        setBookmarks(mergedBookmarks);
+
+        // Update IndexedDB with merged bookmarks data
+        snapshot.data.bookmarks = mergedBookmarks;
+
+        // Save merged snapshot to IndexedDB (bookmarks included)
+        new Promise<void>((resolve, reject) => {
+          const requestId = `${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          const cleanup = () => {
+            worker.removeEventListener("message", handleMessage);
+            worker.removeEventListener("error", handleError);
+          };
+          const handleMessage = (event: MessageEvent) => {
+            const response = event.data as {
+              type?: string;
+              requestId?: string;
+              error?: string;
+            };
+            if (!response || response.requestId !== requestId) return;
+            cleanup();
+            if (response.type === "save_complete") {
+              resolve();
+            } else {
+              reject(new Error(response.error || "IndexedDB save failed."));
+            }
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("IndexedDB worker error."));
+          };
+          worker.addEventListener("message", handleMessage);
+          worker.addEventListener("error", handleError);
+          worker.postMessage({
+            type: "save_bundle",
+            requestId,
+            payload: {
+              storageKey: snapshot.key,
+              data: snapshot.data,
+              meta: snapshot.meta,
+              schema_version: snapshot.schema_version,
+              savedAt: Date.now(),
+            },
+          });
+        })
+          .then(() => {
+            console.log("[Bookmarks] Merged data saved to IndexedDB");
+          })
+          .catch((saveErr) => {
+            console.error(
+              "[Bookmarks] Failed to save merged data to IndexedDB:",
+              saveErr
+            );
+          });
+      } else if (localBookmarks.length > 0) {
+        // No server data: use local
+        setBookmarks(localBookmarks);
+        console.log(
+          "[Bookmarks] 📦 Using local IndexedDB data:",
+          localBookmarks.length
+        );
       }
+
+      // Load other data from IndexedDB
       if (Array.isArray(data.notes)) {
         setGeneralNotes(data.notes);
       }
@@ -1761,6 +1956,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const config = getRmsConfig();
       if (config) {
         try {
+          // Start with the current snapshot
+          let currentSnapshot = snapshot;
+
           // Filter only changed highlights (syncStatus === "pending")
           const changedHighlights = (snapshot.data.highlights || []).filter(
             (h: any) => h.syncStatus === "pending"
@@ -1791,10 +1989,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
               })
               .filter((h: any) => !h.deleted); // Remove deleted items
 
-            const cleanedSnapshot = {
-              ...snapshot,
+            currentSnapshot = {
+              ...currentSnapshot,
               data: {
-                ...snapshot.data,
+                ...currentSnapshot.data,
                 highlights: updatedHighlights,
               },
             };
@@ -1831,16 +2029,16 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
                 type: "save_bundle",
                 requestId,
                 payload: {
-                  storageKey: cleanedSnapshot.key,
-                  schema_version: cleanedSnapshot.schema_version,
-                  savedAt: cleanedSnapshot.savedAt,
-                  data: cleanedSnapshot.data,
-                  meta: cleanedSnapshot.meta,
+                  storageKey: currentSnapshot.key,
+                  schema_version: currentSnapshot.schema_version,
+                  savedAt: currentSnapshot.savedAt,
+                  data: currentSnapshot.data,
+                  meta: currentSnapshot.meta,
                 },
               });
             });
 
-            indexedDbSnapshotRef.current = cleanedSnapshot;
+            indexedDbSnapshotRef.current = currentSnapshot;
             // Also update the local state to remove deleted highlights and mark as synced
             setHighlights((prev) =>
               prev
@@ -1858,6 +2056,102 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             console.log("[Highlights] No changes to sync");
           }
 
+          // Filter only changed bookmarks (syncStatus === "pending")
+          const changedBookmarks = (currentSnapshot.data.bookmarks || []).filter(
+            (b: any) => b.syncStatus === "pending"
+          );
+
+          if (changedBookmarks.length > 0) {
+            console.log(
+              `[Bookmarks] Sending ${changedBookmarks.length} changed items to server (Total: ${(currentSnapshot.data.bookmarks || []).length})`
+            );
+
+            await saveBookmarksToServer({
+              apiBase: config.apiBase,
+              bookCd: config.bookCd,
+              bookmarks: changedBookmarks,
+            });
+            console.log(`[Bookmarks] ✅ Saved ${changedBookmarks.length} items to server`);
+
+            // Mark saved bookmarks as synced and remove deleted ones
+            const updatedBookmarks = (currentSnapshot.data.bookmarks || [])
+              .map((b: any) => {
+                // Mark as synced if it was pending
+                if (b.syncStatus === "pending") {
+                  return { ...b, syncStatus: "synced" };
+                }
+                return b;
+              })
+              .filter((b: any) => !b.deleted); // Remove deleted items
+
+            currentSnapshot = {
+              ...currentSnapshot,
+              data: {
+                ...currentSnapshot.data,
+                bookmarks: updatedBookmarks,
+              },
+            };
+
+            // Save cleaned snapshot to IndexedDB
+            await new Promise<void>((resolve, reject) => {
+              const requestId = `${Date.now()}_${Math.random()
+                .toString(36)
+                .slice(2)}`;
+              const cleanup = () => {
+                worker.removeEventListener("message", handleMessage);
+                worker.removeEventListener("error", handleError);
+              };
+              const handleMessage = (event: MessageEvent) => {
+                const response = event.data as {
+                  type?: string;
+                  requestId?: string;
+                  error?: string;
+                };
+                if (!response || response.requestId !== requestId) return;
+                cleanup();
+                if (response.type === "save_complete") {
+                  resolve();
+                } else {
+                  reject(new Error(response.error || "IndexedDB save failed."));
+                }
+              };
+              const handleError = () => {
+                cleanup();
+                reject(new Error("IndexedDB worker error."));
+              };
+              worker.addEventListener("message", handleMessage);
+              worker.addEventListener("error", handleError);
+              worker.postMessage({
+                type: "save_bundle",
+                requestId,
+                payload: {
+                  storageKey: currentSnapshot.key,
+                  schema_version: currentSnapshot.schema_version,
+                  savedAt: currentSnapshot.savedAt,
+                  data: currentSnapshot.data,
+                  meta: currentSnapshot.meta,
+                },
+              });
+            });
+
+            indexedDbSnapshotRef.current = currentSnapshot;
+            // Also update the local state to remove deleted bookmarks and mark as synced
+            setBookmarks((prev) =>
+              prev
+                .filter((b) => !b.deleted)
+                .map((b) =>
+                  b.syncStatus === "pending"
+                    ? { ...b, syncStatus: "synced" as const }
+                    : b
+                )
+            );
+            console.log(
+              `[Bookmarks] ${changedBookmarks.length} items synced, deleted items removed`
+            );
+          } else {
+            console.log("[Bookmarks] No changes to sync");
+          }
+
           // Save progress to server
           console.log("[Progress] Sending progress to server...");
           const progressData = {
@@ -1872,10 +2166,17 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
           console.log("[Progress] ✅ Saved to server");
 
+          const savedItems = [];
           if (changedHighlights.length > 0) {
-            alert(
-              `저장이 완료되었습니다.\n- 하이라이트: ${changedHighlights.length}개\n- 진행도: 저장됨`
-            );
+            savedItems.push(`하이라이트: ${changedHighlights.length}개`);
+          }
+          if (changedBookmarks.length > 0) {
+            savedItems.push(`북마크: ${changedBookmarks.length}개`);
+          }
+          savedItems.push("진행도: 저장됨");
+
+          if (savedItems.length > 1) {
+            alert(`저장이 완료되었습니다.\n- ${savedItems.join("\n- ")}`);
           } else {
             alert("진행도가 서버에 저장되었습니다.");
           }
