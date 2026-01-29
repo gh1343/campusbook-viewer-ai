@@ -36,6 +36,8 @@ import {
   saveRmsProgress,
   saveHighlightsToServer,
   loadHighlightsFromServer,
+  saveProgressToServer,
+  loadProgressFromServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -1552,6 +1554,40 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         );
       }
 
+      // Load progress from server
+      if (config) {
+        console.log("[Progress] Attempting to load from server...");
+        try {
+          const progressData = await loadProgressFromServer({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+          });
+          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
+          if (
+            progressData &&
+            progressData.ok &&
+            progressData.result &&
+            Array.isArray(progressData.result.dataList) &&
+            progressData.result.dataList.length > 0
+          ) {
+            // Parse the most recent progress data
+            const parsed = JSON.parse(progressData.result.dataList[0]);
+            console.log("[Progress] ✅ Loaded from server:", parsed);
+
+            // Apply progress data to state
+            if (typeof parsed.currentPdfPage === "number") {
+              setCurrentPdfPage(parsed.currentPdfPage);
+            }
+          } else {
+            console.log("[Progress] No progress data on server");
+          }
+        } catch (err) {
+          console.error("[Progress] ❌ Failed to load from server:", err);
+        }
+      } else {
+        console.log("[Progress] No RMS config, skipping server load");
+      }
+
       // Load other data from IndexedDB
       if (Array.isArray(data.bookmarks)) {
         setBookmarks(data.bookmarks);
@@ -1801,11 +1837,32 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             );
           } else {
             console.log("[Highlights] No changes to sync");
-            alert("변경된 항목이 없습니다.");
+          }
+
+          // Save progress to server
+          console.log("[Progress] Sending progress to server...");
+          const progressData = {
+            currentPdfPage,
+            lastReadAt: new Date().toISOString(),
+          };
+
+          await saveProgressToServer({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+            progress: progressData,
+          });
+          console.log("[Progress] ✅ Saved to server");
+
+          if (changedHighlights.length > 0) {
+            alert(
+              `저장이 완료되었습니다.\n- 하이라이트: ${changedHighlights.length}개\n- 진행도: 저장됨`
+            );
+          } else {
+            alert("진행도가 서버에 저장되었습니다.");
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          console.error("Highlights save failed", err);
+          console.error("Server save failed", err);
           alert(`서버 저장 실패: ${message}`);
         }
       }

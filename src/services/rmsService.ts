@@ -1116,3 +1116,127 @@ export const loadHighlightsFromServer = async ({
 
   return result;
 };
+
+export const saveProgressToServer = async ({
+  apiBase,
+  bookCd,
+  progress,
+}: {
+  apiBase: string;
+  bookCd: string;
+  progress: unknown;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const payload = {
+    bookCode: bookCd,
+    type: "pr",
+    data: JSON.stringify(progress),
+  };
+
+  console.log("=== Sending Progress to Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("Payload:", payload);
+  console.log("Progress Data (stringified):", JSON.stringify(progress));
+  console.log("====================================");
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Progress save failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return result;
+};
+
+export const loadProgressFromServer = async ({
+  apiBase,
+  bookCd,
+}: {
+  apiBase: string;
+  bookCd: string;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=pr`;
+
+  console.log("=== Loading Progress from Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("======================================");
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Progress load failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  console.log("=== Loaded Progress Response ===");
+  console.log("Result:", result);
+  console.log("==================================");
+
+  return result;
+};
