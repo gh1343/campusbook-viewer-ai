@@ -28,9 +28,7 @@ import { generateExplanation } from "../services/geminiService";
 import { processPdf, findRelevantChunks } from "../services/pdfRagService";
 import { synthesizeWithGemini } from "../services/ttsService";
 import {
-  fetchRmsProgressPage,
   getRmsConfig,
-  loadLastProgressPageFromLocalStorage,
   migrate_snapshot,
   sync_snapshot,
   saveRmsProgress,
@@ -377,10 +375,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
-  const rmsInitRef = useRef(false);
   const indexedDbWorkerRef = useRef<Worker | null>(null);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
   const indexedDbSnapshotRef = useRef<IndexedDbSnapshot | null>(null);
+  const pendingPdfPageRef = useRef<number | null>(null);
+  const pdfTotalPagesRef = useRef<number>(0);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState((prev) => ({ ...prev, ...config }));
@@ -557,6 +556,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     ((direction: "in" | "out") => void) | null
   >(null);
   const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
+  const [initialPageToLoad, setInitialPageToLoad] = useState<number | null>(null);
   const [pdfSearchHighlight, setPdfSearchHighlight] = useState<{
     page: number;
     term: string;
@@ -1131,21 +1131,31 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     clearHighlightFocus();
     setCurrentPdfPage(safePage);
     if (pdfNavigator) {
+      console.log(`[goToPdfPage] Navigating immediately to page ${safePage}`);
       pdfNavigator(safePage);
     } else {
+      console.log(`[goToPdfPage] Setting pending page to ${safePage}`);
+      pendingPdfPageRef.current = safePage;
       setPendingPdfPage(safePage);
     }
   };
 
   const registerPdfNavigator = React.useCallback(
     (fn: (page: number) => void) => {
+      const pending = pendingPdfPageRef.current;
+      const totalPages = pdfTotalPagesRef.current;
+      console.log(`[registerPdfNavigator] Called with pendingPdfPage: ${pending}, totalPages: ${totalPages}`);
       setPdfNavigator(() => fn);
-      if (pendingPdfPage !== null) {
-        fn(pendingPdfPage);
+      if (pending !== null && totalPages > 0) {
+        console.log(`[registerPdfNavigator] Navigating to pending page: ${pending}`);
+        fn(pending);
+        pendingPdfPageRef.current = null;
         setPendingPdfPage(null);
+      } else if (pending !== null) {
+        console.log(`[registerPdfNavigator] PDF not ready yet, keeping pending page: ${pending}`);
       }
     },
-    [pendingPdfPage]
+    []
   );
 
   const registerPdfZoomHandler = React.useCallback(
@@ -1167,34 +1177,31 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
+  // pdfTotalPages 변경 시 ref 업데이트
   useEffect(() => {
-    if (rmsInitRef.current) return;
-    const config = getRmsConfig();
-    if (!config) return;
-    rmsInitRef.current = true;
+    pdfTotalPagesRef.current = pdfTotalPages;
+  }, [pdfTotalPages]);
 
-    const loadRmsProgress = async () => {
-      try {
-        const localSavedPage = loadLastProgressPageFromLocalStorage({
-          bookCd: config.bookCd,
-          memberCd: config.memberCd,
-          pageOffset: config.pageOffset,
-        });
-        if (localSavedPage) {
-          goToPdfPage(localSavedPage);
-        }
+  // PDF가 로드 완료되면 initialPageToLoad로 이동
+  useEffect(() => {
+    if (pdfTotalPages > 0 && initialPageToLoad !== null && pdfNavigator) {
+      console.log(`[useEffect/initialPageToLoad] PDF loaded (${pdfTotalPages} pages), navigating to initial page: ${initialPageToLoad}`);
+      pdfNavigator(initialPageToLoad);
+      setInitialPageToLoad(null);
+      setCurrentPdfPage(initialPageToLoad);
+    }
+  }, [pdfTotalPages, initialPageToLoad, pdfNavigator]);
 
-        const savedPage = await fetchRmsProgressPage(config);
-        if (savedPage && savedPage !== localSavedPage) {
-          goToPdfPage(savedPage);
-        }
-      } catch (err) {
-        console.error("Failed to load RMS progress", err);
-      }
-    };
-
-    loadRmsProgress();
-  }, [goToPdfPage]);
+  // PDF가 로드 완료되면 pendingPdfPage로 이동
+  useEffect(() => {
+    if (pdfTotalPages > 0 && pendingPdfPageRef.current !== null && pdfNavigator) {
+      const targetPage = pendingPdfPageRef.current;
+      console.log(`[useEffect/pendingPdfPage] PDF loaded (${pdfTotalPages} pages), navigating to pending page: ${targetPage}`);
+      pdfNavigator(targetPage);
+      pendingPdfPageRef.current = null;
+      setPendingPdfPage(null);
+    }
+  }, [pdfTotalPages, pdfNavigator]);
 
   const updatePdfTextPages = React.useCallback(
     (pages: { page: number; text: string }[]) => {
@@ -1554,7 +1561,20 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         );
       }
 
-      // Load progress from server
+      // Load other data from IndexedDB
+      if (Array.isArray(data.bookmarks)) {
+        setBookmarks(data.bookmarks);
+      }
+      if (Array.isArray(data.notes)) {
+        setGeneralNotes(data.notes);
+      }
+      if (data.strokes && typeof data.strokes === "object") {
+        setChapterStrokes(data.strokes);
+      }
+
+      // Load progress: Server data takes priority over IndexedDB
+      let serverProgressPage: number | null = null;
+
       if (config) {
         console.log("[Progress] Attempting to load from server...");
         try {
@@ -1574,9 +1594,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             const parsed = JSON.parse(progressData.result.dataList[0]);
             console.log("[Progress] ✅ Loaded from server:", parsed);
 
-            // Apply progress data to state
+            // Store server progress page
             if (typeof parsed.currentPdfPage === "number") {
-              setCurrentPdfPage(parsed.currentPdfPage);
+              serverProgressPage = parsed.currentPdfPage;
             }
           } else {
             console.log("[Progress] No progress data on server");
@@ -1588,16 +1608,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         console.log("[Progress] No RMS config, skipping server load");
       }
 
-      // Load other data from IndexedDB
-      if (Array.isArray(data.bookmarks)) {
-        setBookmarks(data.bookmarks);
-      }
-      if (Array.isArray(data.notes)) {
-        setGeneralNotes(data.notes);
-      }
-      if (data.strokes && typeof data.strokes === "object") {
-        setChapterStrokes(data.strokes);
-      }
+      // Apply progress data: prioritize server, fallback to IndexedDB
       if (data.progress && typeof data.progress === "object") {
         const { currentPdfPage: savedPage, viewMode: savedMode } =
           data.progress;
@@ -1611,9 +1622,17 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         if (totalPages !== null && Number.isFinite(totalPages)) {
           setPdfTotalPages(Math.max(0, Math.round(totalPages)));
         }
-        if (typeof savedPage === "number" && Number.isFinite(savedPage)) {
-          goToPdfPage(savedPage);
+
+        // Use server progress if available, otherwise use IndexedDB
+        const targetPage = serverProgressPage !== null ? serverProgressPage : savedPage;
+        if (typeof targetPage === "number" && Number.isFinite(targetPage)) {
+          console.log(`[Progress] Setting initial page to load: ${targetPage} (source: ${serverProgressPage !== null ? 'server' : 'IndexedDB'})`);
+          setInitialPageToLoad(targetPage);
         }
+      } else if (serverProgressPage !== null) {
+        // No IndexedDB progress, but server has data
+        console.log(`[Progress] Setting initial page to load: ${serverProgressPage} (source: server)`);
+        setInitialPageToLoad(serverProgressPage);
       }
       indexedDbSnapshotRef.current = snapshot;
     } catch (err) {

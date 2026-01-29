@@ -127,6 +127,17 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       onPagesCount?.(evt.pagesCount);
     }
     handlePageRendered();
+
+    // PDF가 완전히 로드되면 pending 페이지 네비게이션 실행
+    if (pendingPageNavigation !== null) {
+      console.log(`[pdfjs_runtime/pagesloaded] Executing pending navigation to page ${pendingPageNavigation}`);
+      const pageToNavigate = pendingPageNavigation;
+      pendingPageNavigation = null;
+      // 약간의 지연을 두고 실행하여 페이지 렌더링 완료 보장
+      setTimeout(() => {
+        attemptPageNavigation(pageToNavigate);
+      }, 100);
+    }
   });
 
   eventBus.on("pagerendered", handlePageRendered);
@@ -136,16 +147,25 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     }
   });
 
-  registerGoToPage?.((page: number) => {
+  let pendingPageNavigation: number | null = null;
+
+  const attemptPageNavigation = (page: number) => {
+    console.log(`[pdfjs_runtime/attemptPageNavigation] Attempting to navigate to page: ${page}`);
     if (
       !pdfViewerRef.current ||
       !pdfViewerRef.current.pdfDocument ||
       !pdfViewerRef.current.pagesCount
-    )
-      return;
+    ) {
+      console.log(`[pdfjs_runtime/attemptPageNavigation] PDF not ready - viewer: ${!!pdfViewerRef.current}, document: ${!!pdfViewerRef.current?.pdfDocument}, pagesCount: ${pdfViewerRef.current?.pagesCount}`);
+      console.log(`[pdfjs_runtime/attemptPageNavigation] Storing pending navigation to page ${page}`);
+      pendingPageNavigation = page;
+      return false;
+    }
     const maxPage = pdfViewerRef.current.pdfDocument.numPages;
     const target = Math.min(Math.max(page, 1), maxPage);
+    console.log(`[pdfjs_runtime/attemptPageNavigation] Target page: ${target} (max: ${maxPage})`);
     pdfViewerRef.current.currentPageNumber = target;
+    console.log(`[pdfjs_runtime/attemptPageNavigation] Set currentPageNumber to ${target}`);
 
     // scrollPageIntoView는 확대된 상태에서 제대로 작동하지 않을 수 있으므로
     // 직접 스크롤 위치를 계산하여 이동
@@ -153,6 +173,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       const pageEl = viewer.querySelector<HTMLElement>(
         `.page[data-page-number="${target}"]`
       );
+      console.log(`[pdfjs_runtime/attemptPageNavigation/raf] pageEl found: ${!!pageEl}`);
       if (pageEl && viewerContainer) {
         const containerRect = viewerContainer.getBoundingClientRect();
         const pageRect = pageEl.getBoundingClientRect();
@@ -161,6 +182,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         const scrollTop = pageRect.top - containerRect.top + viewerContainer.scrollTop;
         const scrollLeft = pageRect.left - containerRect.left + viewerContainer.scrollLeft;
 
+        console.log(`[pdfjs_runtime/attemptPageNavigation/raf] Scrolling to top: ${scrollTop}, left: ${scrollLeft}`);
         viewerContainer.scrollTo({
           top: Math.max(0, scrollTop),
           left: Math.max(0, scrollLeft),
@@ -168,9 +190,16 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         });
       } else {
         // 페이지 요소가 아직 렌더링되지 않았으면 기본 방식 사용
+        console.log(`[pdfjs_runtime/attemptPageNavigation/raf] Using fallback scrollPageIntoView`);
         pdfViewerRef.current?.scrollPageIntoView({ pageNumber: target });
       }
     });
+    return true;
+  };
+
+  registerGoToPage?.((page: number) => {
+    console.log(`[pdfjs_runtime/goToPage] Requested page: ${page}`);
+    attemptPageNavigation(page);
   });
 
   linkService.setViewer(pdfViewer);
