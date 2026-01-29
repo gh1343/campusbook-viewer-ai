@@ -940,6 +940,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const viewerRoot = viewerRef.current;
     const anchor = pinchAnchorRef.current;
 
+    // 모든 포인터 강제 초기화 (아이패드 터치 이벤트 꼬임 방지)
+    activePointersRef.current.clear();
+
     if (!viewer || !container || !viewerRoot || !anchor) {
       resetPinchTransform();
       setPinchInteractionState(false);
@@ -1077,10 +1080,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (e.pointerType === "pen") return;
 
     if (e.pointerType !== "touch") return;
+
+    // 재렌더링 중이거나 핀치가 진행 중이면 이전 상태 강제 초기화 (아이패드 이슈 방지)
+    if (isPinchingRef.current) {
+      activePointersRef.current.clear();
+      pinchStartDistRef.current = null;
+      pinchStartScaleRef.current = null;
+      pinchPreviewScaleRef.current = 1;
+      resetPinchTransform();
+    }
+
     activePointersRef.current.set(e.pointerId, {
       x: e.clientX,
       y: e.clientY,
     });
+
     if (activePointersRef.current.size === 2) {
       // 핀치줌 시작 시 펜 드로잉 중단
       if (isDrawingRef.current) {
@@ -1124,11 +1138,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     if (e.pointerType !== "touch") return;
-    if (!activePointersRef.current.has(e.pointerId)) return;
+
+    // 포인터가 등록되지 않았으면 스킵 (아이패드 터치 이벤트 꼬임 방지)
+    if (!activePointersRef.current.has(e.pointerId)) {
+      return;
+    }
+
     activePointersRef.current.set(e.pointerId, {
       x: e.clientX,
       y: e.clientY,
     });
+
+    // 정확히 2개의 포인터가 있을 때만 핀치 진행
     if (activePointersRef.current.size !== 2) return;
 
     const pts = Array.from(activePointersRef.current.values());
@@ -1167,6 +1188,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const clearPinchPointer = (pointerId: number) => {
     activePointersRef.current.delete(pointerId);
+
+    // 아이패드에서 터치 이벤트가 꼬일 수 있으므로 핀치 중이었다면 즉시 종료
+    if (isPinchingRef.current && activePointersRef.current.size < 2) {
+      finishPinchZoom();
+      return;
+    }
 
     // 모든 포인터가 해제되었을 때만 상태 정리
     if (activePointersRef.current.size === 0) {
@@ -1221,17 +1248,52 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   useEffect(() => {
     const container = viewerContainerRef.current;
     if (!container) return;
+
     const handleTouchMove = (e: TouchEvent) => {
       // 핀치줌 중이거나 펜으로 그리는 중일 때 터치 스크롤 차단
       if (isPinchingRef.current || isDrawingRef.current) {
         e.preventDefault();
       }
     };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      // 아이패드에서 터치가 끝날 때 포인터 상태 정리
+      for (const touch of Array.from(e.changedTouches)) {
+        // touch.identifier를 pointerId로 사용하는 경우가 있으므로 정리
+        activePointersRef.current.delete(touch.identifier);
+      }
+
+      // 모든 터치가 끝났는데 핀치 중이라면 강제 종료
+      if (e.touches.length === 0 && isPinchingRef.current) {
+        finishPinchZoom();
+      }
+    };
+
+    const handleTouchCancel = (e: TouchEvent) => {
+      // 터치 취소 시에도 동일하게 처리
+      for (const touch of Array.from(e.changedTouches)) {
+        activePointersRef.current.delete(touch.identifier);
+      }
+
+      if (e.touches.length === 0 && isPinchingRef.current) {
+        finishPinchZoom();
+      }
+    };
+
     container.addEventListener("touchmove", handleTouchMove, {
       passive: false,
     });
+    container.addEventListener("touchend", handleTouchEnd, {
+      passive: false,
+    });
+    container.addEventListener("touchcancel", handleTouchCancel, {
+      passive: false,
+    });
+
     return () => {
       container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchCancel);
     };
   }, []);
 
