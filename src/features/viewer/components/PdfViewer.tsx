@@ -268,25 +268,29 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     const first = target.rects[0];
     const containerEl = viewerContainerRef.current;
-    const pageEl = viewerRef.current?.querySelector<HTMLElement>(
-      `.page[data-page-number="${first.pageNumber}"]`
-    );
-    if (!containerEl || !pageEl) return;
 
-    const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } = getPageOffsetInfo(
-      containerEl,
-      pageEl,
-      first.pageWidth,
-      first.pageHeight
-    );
+    // 페이지가 완전히 렌더링된 후 스크롤 (확대 상태에서도 정확하게 동작)
+    requestAnimationFrame(() => {
+      const pageEl = viewerRef.current?.querySelector<HTMLElement>(
+        `.page[data-page-number="${first.pageNumber}"]`
+      );
+      if (!containerEl || !pageEl) return;
 
-    const nextTop = Math.max(0, pageOffsetTop + first.top * scaleY - 40);
-    const nextLeft = Math.max(0, pageOffsetLeft + first.left * scaleX - 20);
+      const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } = getPageOffsetInfo(
+        containerEl,
+        pageEl,
+        first.pageWidth,
+        first.pageHeight
+      );
 
-    containerEl.scrollTo({
-      top: nextTop,
-      left: nextLeft,
-      behavior: highlightScrollBehavior,
+      const nextTop = Math.max(0, pageOffsetTop + first.top * scaleY - 40);
+      const nextLeft = Math.max(0, pageOffsetLeft + first.left * scaleX - 20);
+
+      containerEl.scrollTo({
+        top: nextTop,
+        left: nextLeft,
+        behavior: highlightScrollBehavior,
+      });
     });
   }, [activeHighlightId, pdfHighlights, highlightScrollBehavior]);
 
