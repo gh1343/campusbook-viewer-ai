@@ -607,10 +607,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   }, [registerPdfZoomHandler, applyPdfZoom]);
 
   const onPageChangeFiltered = useCallback((page: number) => {
-    // 핀치 줌 중에는 페이지 변경 이벤트 무시
-    if (isPinchingRef.current) {
-      return;
-    }
     onPageChange?.(page);
   }, [onPageChange]);
 
@@ -1044,20 +1040,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     pinchPreviewScaleRef.current = 1;
     pinchAnchorRef.current = null;
 
-    // 핀치 완료 후 플래그 해제하고 실제 페이지 동기화
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        isPinchingRef.current = false;
+    // 핀치 플래그를 즉시 해제하여 페이지 이동이 가능하도록 함
+    isPinchingRef.current = false;
 
-        // PDF.js의 실제 현재 페이지와 동기화
-        const actualPage = viewer?.currentPageNumber;
-        if (actualPage && pinchTargetPageRef.current && actualPage !== pinchTargetPageRef.current) {
-          // 페이지가 달라졌다면 올바른 페이지로 이벤트 발생
-          onPageChange?.(pinchTargetPageRef.current);
-        }
-        pinchTargetPageRef.current = null;
-      });
-    });
+    // PDF.js의 실제 현재 페이지와 동기화
+    const actualPage = viewer?.currentPageNumber;
+    if (actualPage && pinchTargetPageRef.current && actualPage !== pinchTargetPageRef.current) {
+      // 페이지가 달라졌다면 올바른 페이지로 이벤트 발생
+      onPageChange?.(pinchTargetPageRef.current);
+    }
+    pinchTargetPageRef.current = null;
 
     // 핀치줌 완료 후 메모리 정리 및 렌더링
     requestAnimationFrame(() => {
