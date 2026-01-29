@@ -324,13 +324,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   ) => {
     pendingTransformRef.current = { scale, translateX, translateY };
     if (pinchTransformRafRef.current !== null) return;
-    pinchTransformRafRef.current = requestAnimationFrame(() => {
-      pinchTransformRafRef.current = null;
-      const layer = transformLayerRef.current;
-      const pending = pendingTransformRef.current;
-      if (!layer || !pending) return;
-      layer.style.transform = `translate3d(${pending.translateX}px, ${pending.translateY}px, 0) scale(${pending.scale})`;
-    });
+
+    // 즉시 transform 적용 (깜박임 방지)
+    const layer = transformLayerRef.current;
+    if (layer) {
+      layer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
+    }
   };
 
   const resetPinchTransform = () => {
@@ -524,8 +523,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const scheduleRenderRefresh = useCallback(() => {
     if (rafRefreshId.current !== null) return;
-    // 핀치줌 중에는 렌더링 스킵 (메모리 절약)
-    if (isPinchingRef.current) return;
+    // 핀치줌 중에는 렌더링 스킵하지 않고 진행 (깜박임 방지)
     rafRefreshId.current = requestAnimationFrame(() => {
       rafRefreshId.current = null;
       penRuntime.syncPageCanvases();
@@ -973,7 +971,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const baseScale = pinchStartScaleRef.current ?? viewer.currentScale ?? 1;
     const nextScale = baseScale * previewScale;
 
-    // 현재 앵커 포인트의 절대 위치를 미리 계산
+    // 스케일 적용 전 현재 페이지 상태 저장
     const pageElBefore = viewerRoot.querySelector<HTMLElement>(
       `.page[data-page-number="${anchor.pageNumber}"]`
     );
@@ -991,55 +989,45 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       return;
     }
 
+    const containerRect = container.getBoundingClientRect();
+    const pageRectBefore = pageElBefore.getBoundingClientRect();
+
+    // 스케일 적용 전 앵커의 절대 위치 계산
+    const anchorAbsX = (pageRectBefore.left - containerRect.left) + anchor.relX * pageRectBefore.width;
+    const anchorAbsY = (pageRectBefore.top - containerRect.top) + anchor.relY * pageRectBefore.height;
+
     // 스케일 적용
     setPdfScale(nextScale);
 
     // 메모리 정리: 불필요한 transform 제거
     resetPinchTransform();
 
-    // 스크롤 보정을 위한 단일 프레임 로직 (페이지 튀는 현상 최소화)
-    const scheduleScrollCorrection = () => {
-      const pageEl = viewerRoot.querySelector<HTMLElement>(
+    // 스크롤 보정을 단일 프레임에서 즉시 처리 (레이아웃 튀는 현상 방지)
+    requestAnimationFrame(() => {
+      const pageElAfter = viewerRoot.querySelector<HTMLElement>(
         `.page[data-page-number="${anchor.pageNumber}"]`
       );
 
-      if (!pageEl) return;
+      if (!pageElAfter) return;
 
-      const containerRect = container.getBoundingClientRect();
-      const pageRect = pageEl.getBoundingClientRect();
+      const containerRectAfter = container.getBoundingClientRect();
+      const pageRectAfter = pageElAfter.getBoundingClientRect();
 
       // 페이지가 아직 렌더링되지 않았으면 스킵
-      if (pageRect.width <= 0 || pageRect.height <= 0) {
+      if (pageRectAfter.width <= 0 || pageRectAfter.height <= 0) {
         return;
       }
 
-      // 현재 페이지 오프셋 계산
-      const pageOffsetLeft = pageRect.left - containerRect.left + container.scrollLeft;
-      const pageOffsetTop = pageRect.top - containerRect.top + container.scrollTop;
+      // 스케일 적용 후 앵커의 새로운 절대 위치
+      const anchorNewAbsX = (pageRectAfter.left - containerRectAfter.left) + anchor.relX * pageRectAfter.width;
+      const anchorNewAbsY = (pageRectAfter.top - containerRectAfter.top) + anchor.relY * pageRectAfter.height;
 
-      // 앵커 포인트의 목표 위치 계산
-      const targetLeft = pageOffsetLeft + anchor.relX * pageRect.width;
-      const targetTop = pageOffsetTop + anchor.relY * pageRect.height;
+      // 앵커를 원래 뷰포트 위치에 유지하도록 스크롤 조정
+      const scrollDeltaX = anchorNewAbsX - anchorAbsX;
+      const scrollDeltaY = anchorNewAbsY - anchorAbsY;
 
-      // 뷰포트에서 앵커가 있어야 할 위치를 유지하도록 스크롤 조정
-      const nextLeft = targetLeft - anchor.viewportX;
-      const nextTop = targetTop - anchor.viewportY;
-
-      const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-      const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
-
-      const finalLeft = Math.min(maxLeft, Math.max(0, nextLeft));
-      const finalTop = Math.min(maxTop, Math.max(0, nextTop));
-
-      container.scrollLeft = finalLeft;
-      container.scrollTop = finalTop;
-    };
-
-    // 최소한의 프레임 대기 후 스크롤 보정 (페이지 튀는 현상 최소화)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        scheduleScrollCorrection();
-      });
+      container.scrollLeft += scrollDeltaX;
+      container.scrollTop += scrollDeltaY;
     });
 
     setPinchInteractionState(false);

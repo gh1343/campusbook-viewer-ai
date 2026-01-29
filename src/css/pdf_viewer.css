@@ -177,6 +177,11 @@
   transform-origin: 0 0;
   transform: translate3d(0px, 0px, 0) scale(1);
   will-change: transform;
+  /* 하드웨어 가속 및 깜박임 방지 */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
 }
 
 .pdf_viewer_content {
@@ -187,12 +192,20 @@
   position: relative;
   -webkit-user-select: none;
   user-select: none;
+  /* 페이지 레이어 안정화 */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .pdf_highlight_layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* 하이라이트 레이어 안정화 */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .pdf_highlight {
