@@ -38,6 +38,9 @@ interface PdfJsRuntimeOptions {
   scheduleRenderRefresh: () => void;
   disposePageEntry: (pageNumber: number) => void;
   preferSpreadView?: boolean;
+  setPdfLoadTime?: (time: number) => void;
+  setPdfIsLoading?: (isLoading: boolean) => void;
+  setPdfLoadProgress?: (progress: number) => void;
 }
 
 export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
@@ -62,6 +65,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     scheduleRenderRefresh,
     disposePageEntry,
     preferSpreadView,
+    setPdfLoadTime,
+    setPdfIsLoading,
+    setPdfLoadProgress,
   } = opts;
 
   const eventBus = new EventBus();
@@ -88,11 +94,54 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   const INTERNAL_SCALE = 1; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
   let firstPageRendered = false;
+  const loadStartTime = Date.now();
+  let updateTimeInterval: number | null = null;
+  const renderedPages = new Set<number>();
+  let totalPages = 0;
+  let allPagesRendered = false;
+
+  const updateLoadingTime = () => {
+    const elapsed = (Date.now() - loadStartTime) / 1000;
+    setPdfLoadTime?.(elapsed);
+  };
+
+  // Start updating time every 100ms
+  updateTimeInterval = window.setInterval(updateLoadingTime, 100);
+
   const handlePageRendered = (evt?: { pageNumber?: number }) => {
     scheduleRenderRefresh();
     if (!firstPageRendered && evt?.pageNumber) {
       firstPageRendered = true;
       setLoading(false);
+    }
+
+    // Track all rendered pages
+    if (evt?.pageNumber && !allPagesRendered) {
+      renderedPages.add(evt.pageNumber);
+      console.log(`[PDF Load] Page ${evt.pageNumber} rendered. Total: ${renderedPages.size}/${totalPages}`);
+
+      // Update progress based on rendered pages
+      if (totalPages > 0) {
+        const renderProgress = Math.round((renderedPages.size / totalPages) * 100);
+        console.log(`[PDF Load] Progress: ${renderProgress}%`);
+        setPdfLoadProgress?.(renderProgress);
+        setLoadProgress(renderProgress);
+      }
+
+      // Check if all pages are rendered
+      if (totalPages > 0 && renderedPages.size >= totalPages) {
+        console.log(`[PDF Load] All pages rendered! Finalizing...`);
+        allPagesRendered = true;
+        if (updateTimeInterval !== null) {
+          clearInterval(updateTimeInterval);
+          updateTimeInterval = null;
+        }
+        setPdfLoadProgress?.(100);
+        setLoadProgress(100);
+        updateLoadingTime(); // Final update
+        setPdfIsLoading?.(false);
+        console.log(`[PDF Load] Complete!`);
+      }
     }
 
     // 텍스트 레이어 줄 간격 자동 조정 (태블릿 드래그 선택 개선)
@@ -124,7 +173,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   eventBus.on("pagesloaded", (evt: any) => {
     if (evt?.pagesCount) {
+      totalPages = evt.pagesCount;
       onPagesCount?.(evt.pagesCount);
+      console.log(`[PDF Load] Total pages: ${totalPages}`);
     }
     handlePageRendered();
 
@@ -138,6 +189,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         attemptPageNavigation(pageToNavigate);
       }, 100);
     }
+
+    // Note: Loading will complete when text extraction finishes
+    console.log(`[PDF Load] Pages initialized, waiting for text extraction to complete`);
   });
 
   eventBus.on("pagerendered", handlePageRendered);
@@ -204,6 +258,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   linkService.setViewer(pdfViewer);
 
+  setPdfIsLoading?.(true);
   let cancelled = false;
   let loadingTask = getDocument({
     url: file,
@@ -223,7 +278,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   loadingTask.onProgress = ({ loaded = 0, total = 0 }) => {
     if (cancelled) return;
     if (!total) {
+      const newProgress = Math.min(95, Math.max(1, (loaded / 1024 / 1024) * 10)); // estimate based on MB
       setLoadProgress((prev) => Math.min(95, Math.max(1, prev + 1)));
+      setPdfLoadProgress?.(Math.round(newProgress));
       return;
     }
     const percent = Math.min(
@@ -231,6 +288,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       Math.max(1, Math.round((loaded / total) * 100))
     );
     setLoadProgress(percent);
+    setPdfLoadProgress?.(percent);
   };
   // const loadingTimeout = window.setTimeout(
   //   () => {
@@ -248,7 +306,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     .then((pdfDoc) => {
       if (cancelled) return;
       // clearTimeout(loadingTimeout);
+      console.log(`[PDF Load] Document loaded successfully`);
       setLoadProgress(100);
+      setPdfLoadProgress?.(100);
       setErrorMsg(null);
       pdfViewer.setDocument(pdfDoc);
       linkService.setDocument(pdfDoc, null);
@@ -258,6 +318,20 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         isMobileSafari,
         setPdfTextPages,
         isCancelled: () => cancelled,
+        onComplete: () => {
+          // Text extraction completed - finalize loading
+          console.log(`[PDF Load] Text extraction completed`);
+          if (!allPagesRendered) {
+            allPagesRendered = true;
+            if (updateTimeInterval !== null) {
+              clearInterval(updateTimeInterval);
+              updateTimeInterval = null;
+            }
+            updateLoadingTime();
+            setPdfIsLoading?.(false);
+            console.log(`[PDF Load] Complete with text extraction!`);
+          }
+        },
       });
     })
     .catch((err: any) => {
@@ -276,6 +350,10 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   return () => {
     cancelled = true;
     // clearTimeout(loadingTimeout);
+    if (updateTimeInterval !== null) {
+      clearInterval(updateTimeInterval);
+      updateTimeInterval = null;
+    }
     loadingTask.destroy();
     pdfViewerRef.current = null;
     eventBus.off?.("pagerendered", handlePageRendered);

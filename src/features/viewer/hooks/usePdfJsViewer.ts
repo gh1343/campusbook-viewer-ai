@@ -25,6 +25,9 @@ interface UsePdfJsViewerParams {
   scheduleRenderRefresh: () => void;
   disposePageEntry: (pageNumber: number) => void;
   preferSpreadView?: boolean;
+  setPdfLoadTime?: (time: number) => void;
+  setPdfIsLoading?: (isLoading: boolean) => void;
+  setPdfLoadProgress?: (progress: number) => void;
 }
 
 export const usePdfJsViewer = ({
@@ -48,6 +51,9 @@ export const usePdfJsViewer = ({
   scheduleRenderRefresh,
   disposePageEntry,
   preferSpreadView,
+  setPdfLoadTime,
+  setPdfIsLoading,
+  setPdfLoadProgress,
 }: UsePdfJsViewerParams) => {
   useEffect(() => {
     if (!viewerContainerRef.current || !viewerRef.current) return;
@@ -80,6 +86,9 @@ export const usePdfJsViewer = ({
       scheduleRenderRefresh,
       disposePageEntry,
       preferSpreadView,
+      setPdfLoadTime,
+      setPdfIsLoading,
+      setPdfLoadProgress,
     });
 
     return cleanup;

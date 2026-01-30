@@ -237,4 +237,10 @@ export interface BookContextType {
   setCurrentPdfPage: (page: number) => void;
   pdfTotalPages: number;
   setPdfTotalPages: (total: number) => void;
+  pdfLoadProgress: number;
+  setPdfLoadProgress: (progress: number) => void;
+  pdfLoadTime: number;
+  setPdfLoadTime: (time: number) => void;
+  pdfIsLoading: boolean;
+  setPdfIsLoading: (isLoading: boolean) => void;
 }

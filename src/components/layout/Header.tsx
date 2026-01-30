@@ -80,6 +80,9 @@ export const Header: React.FC<HeaderProps> = ({
     getChapterTitleByPage,
     zoomPdfIn,
     zoomPdfOut,
+    pdfLoadProgress,
+    pdfLoadTime,
+    pdfIsLoading,
   } = useBook();
 
   const location = useLocation();
@@ -379,6 +382,19 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 )}
               </div>
+              {(pdfIsLoading || (!pdfIsLoading && pdfLoadTime > 0)) && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: '#64748b',
+                  marginRight: '8px'
+                }}>
+                  {pdfIsLoading && <span>{pdfLoadProgress}%</span>}
+                  {pdfLoadTime > 0 && <span>{pdfLoadTime.toFixed(2)}s</span>}
+                </div>
+              )}
               <button
                 onClick={handleBookmarkClick}
                 className={`bookmark_icon_btn ${isBookmarked ? "on" : "off"}`}

@@ -553,6 +553,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   >([]);
   const [currentPdfPage, setCurrentPdfPage] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
+  const [pdfLoadProgress, setPdfLoadProgress] = useState(0);
+  const [pdfLoadTime, setPdfLoadTime] = useState(0);
+  const [pdfIsLoading, setPdfIsLoading] = useState(false);
   const [pdfNavigator, setPdfNavigator] = useState<
     ((page: number) => void) | null
   >(null);
@@ -2484,6 +2487,12 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         setCurrentPdfPage,
         pdfTotalPages,
         setPdfTotalPages,
+        pdfLoadProgress,
+        setPdfLoadProgress,
+        pdfLoadTime,
+        setPdfLoadTime,
+        pdfIsLoading,
+        setPdfIsLoading,
       }}
     >
       {children}

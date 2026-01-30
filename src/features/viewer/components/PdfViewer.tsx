@@ -98,6 +98,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     requestHighlightNoteEdit,
     getChapterTitleByPage,
     registerPdfZoomHandler,
+    setPdfLoadProgress,
+    setPdfLoadTime,
+    setPdfIsLoading,
   } = useBook();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
@@ -635,6 +638,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     scheduleRenderRefresh,
     disposePageEntry: penRuntime.disposePageEntry,
     preferSpreadView: !isMobileLike && !forceSinglePage,
+    setPdfLoadTime,
+    setPdfIsLoading,
+    setPdfLoadProgress,
   });
 
   usePdfPenLayer({
