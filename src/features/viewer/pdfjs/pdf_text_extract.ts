@@ -3,11 +3,12 @@ interface PdfTextExtractOptions {
   setPdfTextPages: (pages: { page: number; text: string }[]) => void;
   isCancelled: () => boolean;
   onComplete?: () => void;
+  onProgress?: (current: number, total: number) => void;
 }
 
 export const extractPdfText = async (
   pdfDoc: any,
-  { isMobileSafari, setPdfTextPages, isCancelled, onComplete }: PdfTextExtractOptions
+  { isMobileSafari, setPdfTextPages, isCancelled, onComplete, onProgress }: PdfTextExtractOptions
 ) => {
   if (isMobileSafari) {
     onComplete?.();
@@ -24,6 +25,9 @@ export const extractPdfText = async (
         .map((item: any) => ("str" in item ? item.str : ""))
         .join(" ");
       pages.push({ page: i, text: strings });
+
+      // Report progress
+      onProgress?.(i, pdfDoc.numPages);
 
       // Log progress every 50 pages
       if (i % 50 === 0) {

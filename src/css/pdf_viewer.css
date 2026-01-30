@@ -12,6 +12,13 @@
   line-height: 1;
 }
 
+.pdf_viewer_container[data-drawing-mode="pen"] .textLayer :is(span, br),
+.pdf_viewer_container[data-drawing-mode="eraser"] .textLayer :is(span, br) {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
 .pdf_viewer_container[data-pinching="1"] .textLayer :is(span, br) {
   -webkit-user-select: none !important;
   user-select: none !important;

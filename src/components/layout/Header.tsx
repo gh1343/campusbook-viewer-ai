@@ -383,14 +383,16 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
               {(pdfIsLoading || (!pdfIsLoading && pdfLoadTime > 0)) && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '12px',
-                  color: '#64748b',
-                  marginRight: '8px'
-                }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "12px",
+                    color: "#64748b",
+                    marginRight: "8px",
+                  }}
+                >
                   {pdfIsLoading && <span>{pdfLoadProgress}%</span>}
                   {pdfLoadTime > 0 && <span>{pdfLoadTime.toFixed(2)}s</span>}
                 </div>
@@ -663,9 +665,9 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Database size={20} />
             </button>
-            <button onClick={saveProgress} className="save_btn">
+            {/* <button onClick={saveProgress} className="save_btn">
               <Save size={20} />
-            </button>
+            </button> */}
             {/* <button
               onClick={handleExportData}
               className="export_btn"

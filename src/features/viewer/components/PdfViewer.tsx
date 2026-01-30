@@ -1072,8 +1072,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerDown = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
-    // 펜 입력 처리 (펜 모드일 때만)
-    if (e.pointerType === "pen" && drawingMode === "pen") {
+    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
+      e.preventDefault(); // 텍스트 선택 방지
       penRuntime.handlePenStart(e);
       return;
     }
@@ -1127,8 +1128,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerMove = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
-    // 펜 입력 처리 (펜 모드일 때만)
-    if (e.pointerType === "pen" && drawingMode === "pen") {
+    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
+      e.preventDefault(); // 텍스트 선택 방지
       penRuntime.handlePenMove(e);
       return;
     }
@@ -1220,8 +1222,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const handleContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    // 펜 입력 처리 (펜 모드일 때만)
-    if (e.pointerType === "pen" && drawingMode === "pen") {
+    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
       penRuntime.handlePenEnd(e);
       return;
     }
@@ -1237,8 +1239,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerCancel = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
-    // 펜 입력 처리 (펜 모드일 때만)
-    if (e.pointerType === "pen" && drawingMode === "pen") {
+    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
       penRuntime.handlePenEnd(e);
       return;
     }
@@ -1454,6 +1456,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         <div
           ref={viewerContainerRef}
           className="pdf_viewer_container"
+          data-drawing-mode={drawingMode}
+          style={{
+            cursor: drawingMode === "pen" ? "crosshair" : drawingMode === "eraser" ? "crosshair" : "auto",
+            userSelect: drawingMode !== "idle" ? "none" : "auto",
+          }}
           onPointerDown={handleContainerPointerDown}
           onPointerMove={handleContainerPointerMove}
           onPointerUp={handleContainerPointerUp}

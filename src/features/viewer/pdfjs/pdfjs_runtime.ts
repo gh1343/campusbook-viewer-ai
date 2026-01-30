@@ -278,17 +278,16 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   loadingTask.onProgress = ({ loaded = 0, total = 0 }) => {
     if (cancelled) return;
     if (!total) {
-      const newProgress = Math.min(95, Math.max(1, (loaded / 1024 / 1024) * 10)); // estimate based on MB
-      setLoadProgress((prev) => Math.min(95, Math.max(1, prev + 1)));
+      const newProgress = Math.min(85, Math.max(1, (loaded / 1024 / 1024) * 10)); // estimate based on MB, max 85%
+      setLoadProgress((prev) => Math.min(85, Math.max(1, prev + 1)));
       setPdfLoadProgress?.(Math.round(newProgress));
       return;
     }
-    const percent = Math.min(
-      99,
-      Math.max(1, Math.round((loaded / total) * 100))
-    );
-    setLoadProgress(percent);
-    setPdfLoadProgress?.(percent);
+    // Map download progress to 0-90%
+    const downloadPercent = Math.round((loaded / total) * 100);
+    const mappedPercent = Math.min(90, Math.max(1, Math.round(downloadPercent * 0.9)));
+    setLoadProgress(mappedPercent);
+    setPdfLoadProgress?.(mappedPercent);
   };
   // const loadingTimeout = window.setTimeout(
   //   () => {
@@ -307,8 +306,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       if (cancelled) return;
       // clearTimeout(loadingTimeout);
       console.log(`[PDF Load] Document loaded successfully`);
-      setLoadProgress(100);
-      setPdfLoadProgress?.(100);
       setErrorMsg(null);
       pdfViewer.setDocument(pdfDoc);
       linkService.setDocument(pdfDoc, null);
@@ -318,15 +315,24 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         isMobileSafari,
         setPdfTextPages,
         isCancelled: () => cancelled,
+        onProgress: (current, total) => {
+          // Map text extraction progress to 90-100%
+          const extractPercent = (current / total) * 100;
+          const mappedPercent = 90 + Math.round(extractPercent * 0.1);
+          setPdfLoadProgress?.(mappedPercent);
+          setLoadProgress(mappedPercent);
+        },
         onComplete: () => {
           // Text extraction completed - finalize loading
-          console.log(`[PDF Load] Text extraction completed`);
+          console.log(`[PDF Load] Text extraction completed - 100%`);
           if (!allPagesRendered) {
             allPagesRendered = true;
             if (updateTimeInterval !== null) {
               clearInterval(updateTimeInterval);
               updateTimeInterval = null;
             }
+            setPdfLoadProgress?.(100);
+            setLoadProgress(100);
             updateLoadingTime();
             setPdfIsLoading?.(false);
             console.log(`[PDF Load] Complete with text extraction!`);

@@ -40,6 +40,8 @@ import {
   loadBookmarksFromServer,
   saveDrawingsToServer,
   loadDrawingsFromServer,
+  saveNotesToServer,
+  loadNotesFromServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -1411,9 +1413,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         : [];
       const localDrawings =
         data.strokes && typeof data.strokes === "object" ? data.strokes : {};
+      const localNotes = Array.isArray(data.notes) ? data.notes : [];
       let serverHighlights: any[] | null = null;
       let serverBookmarks: any[] | null = null;
       let serverDrawings: Record<string, any[]> | null = null;
+      let serverNotes: any[] | null = null;
 
       // Try to load highlights from server first
       if (config) {
@@ -1520,6 +1524,39 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         }
       } else {
         console.log("[Drawings] No RMS config, skipping server load");
+      }
+
+      // Try to load notes from server
+      if (config) {
+        console.log("[Notes] Attempting to load from server...");
+        try {
+          const notesData = await loadNotesFromServer({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+          });
+          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
+          if (
+            notesData &&
+            notesData.ok &&
+            notesData.result &&
+            Array.isArray(notesData.result.dataList) &&
+            notesData.result.dataList.length > 0
+          ) {
+            // Parse the most recent notes data
+            serverNotes = JSON.parse(notesData.result.dataList[0]);
+            console.log(
+              "[Notes] ✅ Loaded from server:",
+              serverNotes?.length || 0,
+              "notes"
+            );
+          } else {
+            console.warn("[Notes] Invalid server response:", notesData);
+          }
+        } catch (err) {
+          console.error("[Notes] ❌ Failed to load from server:", err);
+        }
+      } else {
+        console.log("[Notes] No RMS config, skipping server load");
       }
 
       // Merge server and local highlights based on timestamps using Web Worker
@@ -1924,9 +1961,97 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         );
       }
 
-      // Load other data from IndexedDB
-      if (Array.isArray(data.notes)) {
-        setGeneralNotes(data.notes);
+      // Merge server and local notes
+      if (serverNotes && Array.isArray(serverNotes) && serverNotes.length > 0) {
+        console.log("[Notes] Merging server and local data...");
+
+        // Merge logic: Use server data and add local notes not in server
+        const serverMap = new Map(serverNotes.map((n: any) => [n.id, n]));
+        const localMap = new Map(localNotes.map((n: any) => [n.id, n]));
+        const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
+
+        const mergedNotes: any[] = [];
+        allIds.forEach((id) => {
+          const serverItem = serverMap.get(id);
+          const localItem = localMap.get(id);
+
+          if (serverItem && localItem) {
+            // Both exist: use the one with the latest updated_at
+            const serverTime = serverItem.updated_at || serverItem.created_at || 0;
+            const localTime = localItem.updated_at || localItem.created_at || 0;
+            mergedNotes.push(localTime > serverTime ? localItem : serverItem);
+          } else {
+            // Only one exists: use it
+            mergedNotes.push(localItem || serverItem);
+          }
+        });
+
+        console.log(
+          `[Notes] Merged ${mergedNotes.length} notes (Server: ${serverNotes.length}, Local: ${localNotes.length})`
+        );
+        setGeneralNotes(mergedNotes);
+
+        // Update IndexedDB with merged notes
+        snapshot.data.notes = mergedNotes;
+
+        // Save merged snapshot to IndexedDB
+        new Promise<void>((resolve, reject) => {
+          const requestId = `${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          const cleanup = () => {
+            worker.removeEventListener("message", handleMessage);
+            worker.removeEventListener("error", handleError);
+          };
+          const handleMessage = (event: MessageEvent) => {
+            const response = event.data as {
+              type?: string;
+              requestId?: string;
+              error?: string;
+            };
+            if (!response || response.requestId !== requestId) return;
+            cleanup();
+            if (response.type === "save_complete") {
+              resolve();
+            } else {
+              reject(new Error(response.error || "IndexedDB save failed."));
+            }
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("IndexedDB worker error."));
+          };
+          worker.addEventListener("message", handleMessage);
+          worker.addEventListener("error", handleError);
+          worker.postMessage({
+            type: "save_bundle",
+            requestId,
+            payload: {
+              storageKey: snapshot.key,
+              data: snapshot.data,
+              meta: snapshot.meta,
+              schema_version: snapshot.schema_version,
+              savedAt: Date.now(),
+            },
+          });
+        })
+          .then(() => {
+            console.log("[Notes] Merged data saved to IndexedDB");
+          })
+          .catch((saveErr) => {
+            console.error(
+              "[Notes] Failed to save merged data to IndexedDB:",
+              saveErr
+            );
+          });
+      } else if (localNotes.length > 0) {
+        // No server data: use local
+        setGeneralNotes(localNotes);
+        console.log(
+          "[Notes] 📦 Using local IndexedDB data:",
+          localNotes.length,
+          "notes"
+        );
       }
 
       // Load progress: Server data takes priority over IndexedDB
@@ -2348,6 +2473,24 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             console.log("[Drawings] No drawings to save");
           }
 
+          // Save notes to server
+          console.log("[Notes] Sending notes to server...");
+          if (
+            Array.isArray(currentSnapshot.data.notes) &&
+            currentSnapshot.data.notes.length > 0
+          ) {
+            await saveNotesToServer({
+              apiBase: config.apiBase,
+              bookCd: config.bookCd,
+              notes: currentSnapshot.data.notes,
+            });
+            console.log(
+              `[Notes] ✅ Saved ${currentSnapshot.data.notes.length} notes to server`
+            );
+          } else {
+            console.log("[Notes] No notes to save");
+          }
+
           // Save progress to server
           console.log("[Progress] Sending progress to server...");
           const progressData = {
@@ -2372,6 +2515,14 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           if (Object.keys(currentSnapshot.data.strokes || {}).length > 0) {
             savedItems.push(
               `필기: ${Object.keys(currentSnapshot.data.strokes || {}).length}페이지`
+            );
+          }
+          if (
+            Array.isArray(currentSnapshot.data.notes) &&
+            currentSnapshot.data.notes.length > 0
+          ) {
+            savedItems.push(
+              `마이노트: ${currentSnapshot.data.notes.length}개`
             );
           }
           savedItems.push("진행도: 저장됨");
