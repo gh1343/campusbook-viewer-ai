@@ -38,6 +38,8 @@ import {
   loadProgressFromServer,
   saveBookmarksToServer,
   loadBookmarksFromServer,
+  saveDrawingsToServer,
+  loadDrawingsFromServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -1404,8 +1406,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const localBookmarks = Array.isArray(data.bookmarks)
         ? data.bookmarks
         : [];
+      const localDrawings =
+        data.strokes && typeof data.strokes === "object" ? data.strokes : {};
       let serverHighlights: any[] | null = null;
       let serverBookmarks: any[] | null = null;
+      let serverDrawings: Record<string, any[]> | null = null;
 
       // Try to load highlights from server first
       if (config) {
@@ -1479,6 +1484,39 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         }
       } else {
         console.log("[Bookmarks] No RMS config, skipping server load");
+      }
+
+      // Try to load drawings from server
+      if (config) {
+        console.log("[Drawings] Attempting to load from server...");
+        try {
+          const drawingData = await loadDrawingsFromServer({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+          });
+          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
+          if (
+            drawingData &&
+            drawingData.ok &&
+            drawingData.result &&
+            Array.isArray(drawingData.result.dataList) &&
+            drawingData.result.dataList.length > 0
+          ) {
+            // Parse the most recent drawings data
+            serverDrawings = JSON.parse(drawingData.result.dataList[0]);
+            console.log(
+              "[Drawings] ✅ Loaded from server:",
+              Object.keys(serverDrawings || {}).length,
+              "pages"
+            );
+          } else {
+            console.warn("[Drawings] Invalid server response:", drawingData);
+          }
+        } catch (err) {
+          console.error("[Drawings] ❌ Failed to load from server:", err);
+        }
+      } else {
+        console.log("[Drawings] No RMS config, skipping server load");
       }
 
       // Merge server and local highlights based on timestamps using Web Worker
@@ -1799,12 +1837,93 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         );
       }
 
+      // Merge server and local drawings
+      if (serverDrawings && Object.keys(serverDrawings).length > 0) {
+        console.log("[Drawings] Merging server and local data...");
+
+        // Simple merge: use all server data and add local pages not in server
+        const mergedDrawings = { ...serverDrawings };
+        Object.keys(localDrawings).forEach((pageKey) => {
+          if (!mergedDrawings[pageKey]) {
+            mergedDrawings[pageKey] = localDrawings[pageKey];
+          }
+        });
+
+        console.log(
+          `[Drawings] Merged ${
+            Object.keys(mergedDrawings).length
+          } pages (Server: ${Object.keys(serverDrawings).length}, Local: ${
+            Object.keys(localDrawings).length
+          })`
+        );
+        setChapterStrokes(mergedDrawings);
+
+        // Update IndexedDB with merged drawings
+        snapshot.data.strokes = mergedDrawings;
+
+        // Save merged snapshot to IndexedDB
+        new Promise<void>((resolve, reject) => {
+          const requestId = `${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          const cleanup = () => {
+            worker.removeEventListener("message", handleMessage);
+            worker.removeEventListener("error", handleError);
+          };
+          const handleMessage = (event: MessageEvent) => {
+            const response = event.data as {
+              type?: string;
+              requestId?: string;
+              error?: string;
+            };
+            if (!response || response.requestId !== requestId) return;
+            cleanup();
+            if (response.type === "save_complete") {
+              resolve();
+            } else {
+              reject(new Error(response.error || "IndexedDB save failed."));
+            }
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("IndexedDB worker error."));
+          };
+          worker.addEventListener("message", handleMessage);
+          worker.addEventListener("error", handleError);
+          worker.postMessage({
+            type: "save_bundle",
+            requestId,
+            payload: {
+              storageKey: snapshot.key,
+              data: snapshot.data,
+              meta: snapshot.meta,
+              schema_version: snapshot.schema_version,
+              savedAt: Date.now(),
+            },
+          });
+        })
+          .then(() => {
+            console.log("[Drawings] Merged data saved to IndexedDB");
+          })
+          .catch((saveErr) => {
+            console.error(
+              "[Drawings] Failed to save merged data to IndexedDB:",
+              saveErr
+            );
+          });
+      } else if (Object.keys(localDrawings).length > 0) {
+        // No server data: use local
+        setChapterStrokes(localDrawings);
+        console.log(
+          "[Drawings] 📦 Using local IndexedDB data:",
+          Object.keys(localDrawings).length,
+          "pages"
+        );
+      }
+
       // Load other data from IndexedDB
       if (Array.isArray(data.notes)) {
         setGeneralNotes(data.notes);
-      }
-      if (data.strokes && typeof data.strokes === "object") {
-        setChapterStrokes(data.strokes);
       }
 
       // Load progress: Server data takes priority over IndexedDB
@@ -2209,6 +2328,23 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             console.log("[Bookmarks] No changes to sync");
           }
 
+          // Save drawings to server
+          console.log("[Drawings] Sending drawings to server...");
+          if (Object.keys(currentSnapshot.data.strokes || {}).length > 0) {
+            await saveDrawingsToServer({
+              apiBase: config.apiBase,
+              bookCd: config.bookCd,
+              drawings: currentSnapshot.data.strokes || {},
+            });
+            console.log(
+              `[Drawings] ✅ Saved ${
+                Object.keys(currentSnapshot.data.strokes || {}).length
+              } pages to server`
+            );
+          } else {
+            console.log("[Drawings] No drawings to save");
+          }
+
           // Save progress to server
           console.log("[Progress] Sending progress to server...");
           const progressData = {
@@ -2229,6 +2365,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           }
           if (changedBookmarks.length > 0) {
             savedItems.push(`북마크: ${changedBookmarks.length}개`);
+          }
+          if (Object.keys(currentSnapshot.data.strokes || {}).length > 0) {
+            savedItems.push(
+              `필기: ${Object.keys(currentSnapshot.data.strokes || {}).length}페이지`
+            );
           }
           savedItems.push("진행도: 저장됨");
 

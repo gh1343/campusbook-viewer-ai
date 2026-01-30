@@ -1365,3 +1365,127 @@ export const loadBookmarksFromServer = async ({
 
   return result;
 };
+
+export const saveDrawingsToServer = async ({
+  apiBase,
+  bookCd,
+  drawings,
+}: {
+  apiBase: string;
+  bookCd: string;
+  drawings: Record<string, unknown[]>;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const payload = {
+    bookCode: bookCd,
+    type: "dr",
+    data: JSON.stringify(drawings),
+  };
+
+  console.log("=== Sending Drawings to Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("Payload:", payload);
+  console.log("Drawings Data (stringified):", JSON.stringify(drawings));
+  console.log("====================================");
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Drawings save failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return result;
+};
+
+export const loadDrawingsFromServer = async ({
+  apiBase,
+  bookCd,
+}: {
+  apiBase: string;
+  bookCd: string;
+}) => {
+  if (typeof window === "undefined") {
+    throw new Error("RMS is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing RMS configuration (apiBase/bookCd).");
+  }
+
+  const authToken = getRmsAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+  };
+
+  if (authToken) {
+    headers.Authorization = /^Bearer\s+/i.test(authToken)
+      ? authToken
+      : `Bearer ${authToken}`;
+  }
+
+  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=dr`;
+
+  console.log("=== Loading Drawings from Server ===");
+  console.log("URL:", url);
+  console.log("Headers:", headers);
+  console.log("======================================");
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Drawings load failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  console.log("=== Loaded Drawings Response ===");
+  console.log("Result:", result);
+  console.log("==================================");
+
+  return result;
+};
