@@ -41,7 +41,7 @@ import {
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
-  "/resources/contents/prod/cms/book/20250318/CT-20250318150313534/source/R1/20250318155912/ebook/OEBPS/nav.xhtml";
+  "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
 const NAV_TOC_ORIGIN =
   import.meta.env.VITE_PDF_PROXY_ORIGIN ||
   "https://d19t5saodanwfx.cloudfront.net";
@@ -558,7 +558,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     ((direction: "in" | "out") => void) | null
   >(null);
   const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
-  const [initialPageToLoad, setInitialPageToLoad] = useState<number | null>(null);
+  const [initialPageToLoad, setInitialPageToLoad] = useState<number | null>(
+    null
+  );
   const [pdfSearchHighlight, setPdfSearchHighlight] = useState<{
     page: number;
     term: string;
@@ -1154,15 +1156,21 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     (fn: (page: number) => void) => {
       const pending = pendingPdfPageRef.current;
       const totalPages = pdfTotalPagesRef.current;
-      console.log(`[registerPdfNavigator] Called with pendingPdfPage: ${pending}, totalPages: ${totalPages}`);
+      console.log(
+        `[registerPdfNavigator] Called with pendingPdfPage: ${pending}, totalPages: ${totalPages}`
+      );
       setPdfNavigator(() => fn);
       if (pending !== null && totalPages > 0) {
-        console.log(`[registerPdfNavigator] Navigating to pending page: ${pending}`);
+        console.log(
+          `[registerPdfNavigator] Navigating to pending page: ${pending}`
+        );
         fn(pending);
         pendingPdfPageRef.current = null;
         setPendingPdfPage(null);
       } else if (pending !== null) {
-        console.log(`[registerPdfNavigator] PDF not ready yet, keeping pending page: ${pending}`);
+        console.log(
+          `[registerPdfNavigator] PDF not ready yet, keeping pending page: ${pending}`
+        );
       }
     },
     []
@@ -1195,7 +1203,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   // PDF가 로드 완료되면 initialPageToLoad로 이동
   useEffect(() => {
     if (pdfTotalPages > 0 && initialPageToLoad !== null && pdfNavigator) {
-      console.log(`[useEffect/initialPageToLoad] PDF loaded (${pdfTotalPages} pages), navigating to initial page: ${initialPageToLoad}`);
+      console.log(
+        `[useEffect/initialPageToLoad] PDF loaded (${pdfTotalPages} pages), navigating to initial page: ${initialPageToLoad}`
+      );
       pdfNavigator(initialPageToLoad);
       setInitialPageToLoad(null);
       setCurrentPdfPage(initialPageToLoad);
@@ -1204,9 +1214,15 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   // PDF가 로드 완료되면 pendingPdfPage로 이동
   useEffect(() => {
-    if (pdfTotalPages > 0 && pendingPdfPageRef.current !== null && pdfNavigator) {
+    if (
+      pdfTotalPages > 0 &&
+      pendingPdfPageRef.current !== null &&
+      pdfNavigator
+    ) {
       const targetPage = pendingPdfPageRef.current;
-      console.log(`[useEffect/pendingPdfPage] PDF loaded (${pdfTotalPages} pages), navigating to pending page: ${targetPage}`);
+      console.log(
+        `[useEffect/pendingPdfPage] PDF loaded (${pdfTotalPages} pages), navigating to pending page: ${targetPage}`
+      );
       pdfNavigator(targetPage);
       pendingPdfPageRef.current = null;
       setPendingPdfPage(null);
@@ -1382,8 +1398,12 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
       // Load highlights: Merge server and IndexedDB based on timestamps
       const config = getRmsConfig();
-      const localHighlights = Array.isArray(data.highlights) ? data.highlights : [];
-      const localBookmarks = Array.isArray(data.bookmarks) ? data.bookmarks : [];
+      const localHighlights = Array.isArray(data.highlights)
+        ? data.highlights
+        : [];
+      const localBookmarks = Array.isArray(data.bookmarks)
+        ? data.bookmarks
+        : [];
       let serverHighlights: any[] | null = null;
       let serverBookmarks: any[] | null = null;
 
@@ -1464,7 +1484,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       // Merge server and local highlights based on timestamps using Web Worker
       let mergedHighlights: any[] = [];
       if (serverHighlights && serverHighlights.length > 0) {
-        console.log("[Highlights] Merging server and local data using Web Worker...");
+        console.log(
+          "[Highlights] Merging server and local data using Web Worker..."
+        );
 
         try {
           // Use Web Worker for merge operation to avoid blocking main thread
@@ -1522,10 +1544,15 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             `[Highlights] Merge summary: ${localNewer} local newer, ${serverNewer} server newer, ${localOnly} local only, ${serverOnly} server only`
           );
         } catch (err) {
-          console.error("[Highlights] Web Worker merge failed, falling back to sync merge:", err);
+          console.error(
+            "[Highlights] Web Worker merge failed, falling back to sync merge:",
+            err
+          );
 
           // Fallback to synchronous merge if worker fails
-          const serverMap = new Map(serverHighlights.map((h: any) => [h.id, h]));
+          const serverMap = new Map(
+            serverHighlights.map((h: any) => [h.id, h])
+          );
           const localMap = new Map(localHighlights.map((h: any) => [h.id, h]));
           const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
 
@@ -1534,9 +1561,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             const localItem = localMap.get(id);
 
             if (serverItem && localItem) {
-              const serverTime = serverItem.updated_at || serverItem.created_at || 0;
-              const localTime = localItem.updated_at || localItem.created_at || 0;
-              mergedHighlights.push(localTime > serverTime ? localItem : serverItem);
+              const serverTime =
+                serverItem.updated_at || serverItem.created_at || 0;
+              const localTime =
+                localItem.updated_at || localItem.created_at || 0;
+              mergedHighlights.push(
+                localTime > serverTime ? localItem : serverItem
+              );
             } else {
               mergedHighlights.push(localItem || serverItem);
             }
@@ -1613,7 +1644,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       // Merge bookmarks: Same logic as highlights
       let mergedBookmarks: any[] = [];
       if (serverBookmarks && serverBookmarks.length > 0) {
-        console.log("[Bookmarks] Merging server and local data using Web Worker...");
+        console.log(
+          "[Bookmarks] Merging server and local data using Web Worker..."
+        );
 
         try {
           // Use Web Worker for merge operation to avoid blocking main thread
@@ -1671,7 +1704,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             `[Bookmarks] Merge summary: ${localNewer} local newer, ${serverNewer} server newer, ${localOnly} local only, ${serverOnly} server only`
           );
         } catch (err) {
-          console.error("[Bookmarks] Web Worker merge failed, falling back to sync merge:", err);
+          console.error(
+            "[Bookmarks] Web Worker merge failed, falling back to sync merge:",
+            err
+          );
 
           // Fallback to synchronous merge if worker fails
           const serverMap = new Map(serverBookmarks.map((b: any) => [b.id, b]));
@@ -1683,9 +1719,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             const localItem = localMap.get(id);
 
             if (serverItem && localItem) {
-              const serverTime = serverItem.updated_at || serverItem.created_at || 0;
-              const localTime = localItem.updated_at || localItem.created_at || 0;
-              mergedBookmarks.push(localTime > serverTime ? localItem : serverItem);
+              const serverTime =
+                serverItem.updated_at || serverItem.created_at || 0;
+              const localTime =
+                localItem.updated_at || localItem.created_at || 0;
+              mergedBookmarks.push(
+                localTime > serverTime ? localItem : serverItem
+              );
             } else {
               mergedBookmarks.push(localItem || serverItem);
             }
@@ -1819,14 +1859,21 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         }
 
         // Use server progress if available, otherwise use IndexedDB
-        const targetPage = serverProgressPage !== null ? serverProgressPage : savedPage;
+        const targetPage =
+          serverProgressPage !== null ? serverProgressPage : savedPage;
         if (typeof targetPage === "number" && Number.isFinite(targetPage)) {
-          console.log(`[Progress] Setting initial page to load: ${targetPage} (source: ${serverProgressPage !== null ? 'server' : 'IndexedDB'})`);
+          console.log(
+            `[Progress] Setting initial page to load: ${targetPage} (source: ${
+              serverProgressPage !== null ? "server" : "IndexedDB"
+            })`
+          );
           setInitialPageToLoad(targetPage);
         }
       } else if (serverProgressPage !== null) {
         // No IndexedDB progress, but server has data
-        console.log(`[Progress] Setting initial page to load: ${serverProgressPage} (source: server)`);
+        console.log(
+          `[Progress] Setting initial page to load: ${serverProgressPage} (source: server)`
+        );
         setInitialPageToLoad(serverProgressPage);
       }
       indexedDbSnapshotRef.current = snapshot;
@@ -1966,7 +2013,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
           if (changedHighlights.length > 0) {
             console.log(
-              `[Highlights] Sending ${changedHighlights.length} changed items to server (Total: ${(snapshot.data.highlights || []).length})`
+              `[Highlights] Sending ${
+                changedHighlights.length
+              } changed items to server (Total: ${
+                (snapshot.data.highlights || []).length
+              })`
             );
 
             await saveHighlightsToServer({
@@ -2057,13 +2108,17 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           }
 
           // Filter only changed bookmarks (syncStatus === "pending")
-          const changedBookmarks = (currentSnapshot.data.bookmarks || []).filter(
-            (b: any) => b.syncStatus === "pending"
-          );
+          const changedBookmarks = (
+            currentSnapshot.data.bookmarks || []
+          ).filter((b: any) => b.syncStatus === "pending");
 
           if (changedBookmarks.length > 0) {
             console.log(
-              `[Bookmarks] Sending ${changedBookmarks.length} changed items to server (Total: ${(currentSnapshot.data.bookmarks || []).length})`
+              `[Bookmarks] Sending ${
+                changedBookmarks.length
+              } changed items to server (Total: ${
+                (currentSnapshot.data.bookmarks || []).length
+              })`
             );
 
             await saveBookmarksToServer({
@@ -2071,7 +2126,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
               bookCd: config.bookCd,
               bookmarks: changedBookmarks,
             });
-            console.log(`[Bookmarks] ✅ Saved ${changedBookmarks.length} items to server`);
+            console.log(
+              `[Bookmarks] ✅ Saved ${changedBookmarks.length} items to server`
+            );
 
             // Mark saved bookmarks as synced and remove deleted ones
             const updatedBookmarks = (currentSnapshot.data.bookmarks || [])

@@ -186,7 +186,7 @@ export const ReaderPage: React.FC = () => {
         runtimeConfig.pdfPath.trim()) ||
       "";
     const fallbackPdfUrl =
-      "https://d19t5saodanwfx.cloudfront.net/resources/contents/prod/cms/book/20250318/CT-20250318150313534/source/CT-20250318150313534_source_1742281150590.pdf";
+      "https://d19t5saodanwfx.cloudfront.net/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/CT-20260130090170748_source_1769734180619.pdf";
     const raw = runtimePdfUrl || fallbackPdfUrl;
     const base = import.meta.env.BASE_URL || "/";
 

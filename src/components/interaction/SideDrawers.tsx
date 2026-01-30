@@ -171,57 +171,60 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
             </button>
           ))}
         {activeTab === "bookmarks" &&
-          bookmarks.map((bm) => (
-            <div
-              key={bm.id}
-              className={`bookmark_item_row ${
-                bm.page === currentPdfPage ? "active" : ""
-              }`}
-            >
-              <button
-                onClick={() => {
-                  goToPdfPage(bm.page);
-                  if (window.innerWidth < 768) onClose();
-                }}
-                className="bookmark_item_button"
+          bookmarks
+            .filter((bm) => !bm.deleted)
+            .map((bm) => (
+              <div
+                key={bm.id}
+                className={`bookmark_item_row ${
+                  bm.page === currentPdfPage ? "active" : ""
+                }`}
               >
-                <div className="bookmark_page_badge">
-                  {/* <Bookmark size={14} />
+                <button
+                  onClick={() => {
+                    goToPdfPage(bm.page);
+                    if (window.innerWidth < 768) onClose();
+                  }}
+                  className="bookmark_item_button"
+                >
+                  <div className="bookmark_page_badge">
+                    {/* <Bookmark size={14} />
                     <span>Page {bm.page}</span> */}
-                  <span className="bookmark_label line_clamp_1">
-                    {`P. ${bm.page}`}
-                  </span>
-                </div>
-                <div className="bookmark_item_text">
-                  {/* <span className="bookmark_label line_clamp_1">
+                    <span className="bookmark_label line_clamp_1">
+                      {`P. ${bm.page}`}
+                    </span>
+                  </div>
+                  <div className="bookmark_item_text">
+                    {/* <span className="bookmark_label line_clamp_1">
                       {bm.label || `Page ${bm.page}`}
                     </span> */}
-                  <span className="bookmark_meta">
-                    Saved {new Date(bm.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removePdfBookmark(bm.id);
-                }}
-                className="bookmark_remove_btn"
-                title="Delete bookmark"
-              >
-                <Trash2 size={14} />
-              </button>
+                    <span className="bookmark_meta">
+                      Saved {new Date(bm.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removePdfBookmark(bm.id);
+                  }}
+                  className="bookmark_remove_btn"
+                  title="Delete bookmark"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+        {activeTab === "bookmarks" &&
+          bookmarks.filter((bm) => !bm.deleted).length === 0 && (
+            <div className="non_book_mark">
+              <Bookmark size={24} className="mx-auto mb-2 text-slate-400" />
+              <p className="text_sm">No bookmarks yet</p>
+              <p className="text_sm">
+                Use the bookmark icon near Search to save a page.
+              </p>
             </div>
-          ))}
-        {activeTab === "bookmarks" && bookmarks.length === 0 && (
-          <div className="non_book_mark">
-            <Bookmark size={24} className="mx-auto mb-2 text-slate-400" />
-            <p className="text_sm">No bookmarks yet</p>
-            <p className="text_sm">
-              Use the bookmark icon near Search to save a page.
-            </p>
-          </div>
-        )}
+          )}
       </div>
     </PanelWrapper>
   );
