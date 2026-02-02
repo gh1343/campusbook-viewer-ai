@@ -117,6 +117,8 @@ export interface TTSConfig {
   continuous: boolean;
 }
 
+export type SyncStatus = "UNSAVED" | "SYNCING" | "SAVED" | "LOCAL_ONLY" | "BLOCKED";
+
 export interface BookContextType {
   chapters: Chapter[];
   ragChunks: RagChunk[];
@@ -223,6 +225,10 @@ export interface BookContextType {
 
   saveProgress: () => Promise<void>;
   saveLocalDataToIndexedDb: () => Promise<void>;
+  saveAll: () => Promise<void>;
+
+  syncStatus: SyncStatus;
+  lastSavedAt: string | null;
 
   pdfTextPages: { page: number; text: string }[];
   setPdfTextPages: (pages: { page: number; text: string }[]) => void;
@@ -231,6 +237,9 @@ export interface BookContextType {
   registerPdfZoomHandler: (fn: (direction: "in" | "out") => void) => void;
   zoomPdfIn: () => void;
   zoomPdfOut: () => void;
+  pdfZoom: number;
+  setPdfZoom: (zoom: number) => void;
+  resetPdfZoom: () => void;
   pdfSearchHighlight: { page: number; term: string } | null;
   setPdfSearchHighlight: (value: { page: number; term: string } | null) => void;
   currentPdfPage: number;

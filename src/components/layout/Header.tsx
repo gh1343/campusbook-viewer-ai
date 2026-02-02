@@ -1,122 +1,34 @@
-import React, { useState, useRef } from "react";
-import { useBook } from "../../contexts/BookContext";
+import React, { useState } from 'react';
+import { useBook } from '../../contexts/BookContext';
 import {
-  Type,
-  Book,
-  Sidebar,
-  PanelRight,
-  Pen,
-  Eraser,
-  LogOut,
-  Save,
-  FileDown,
-  Eye,
-  Settings2,
-  X,
-  Bookmark,
-  BookmarkCheck,
-  BookmarkPlus,
-  FileUp,
-  Loader2,
-  Search,
-  MoreVertical,
-  Columns,
-  Minus,
-  Plus,
-  Volume2,
-  Play,
-  Pause,
-  Square,
-  Database,
-} from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { DrawingColor, TTSVoice } from "../../../types";
-import "../../css/header.css";
-interface HeaderProps {
-  toggleSidebar: () => void;
-  isSidebarOpen?: boolean;
-}
+  Book, Sidebar, PanelRight, Pen, Eraser, LogOut, CheckCircle2,
+  Bookmark, CloudUpload, ZoomIn, ZoomOut, Save, X,
+  Columns2, Square, AlertCircle, RefreshCw, Minus, Plus
+} from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { DrawingColor } from '../../../types';
+import '../../css/header.css';
 
-export const Header: React.FC<HeaderProps> = ({
-  toggleSidebar,
-  isSidebarOpen,
-}) => {
+export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boolean; }> = ({ toggleSidebar, isSidebarOpen }) => {
   const {
-    fontSize,
-    setFontSize,
-    viewMode,
-    setViewMode,
-    drawingMode,
-    setDrawingMode,
-    penColor,
-    setPenColor,
-    penWidth,
-    setPenWidth,
-    penOpacity,
-    setPenOpacity,
-    saveProgress,
-    saveLocalDataToIndexedDb,
-    showAnnotations,
-    toggleAnnotations,
-    isToolsOpen,
-    setToolsOpen,
-    bookmarks,
-    addPdfBookmark,
-    removePdfBookmark,
-    currentPdfPage,
-    uploadBook,
-    isProcessing,
-    isTtsPlaying,
-    startTts,
-    stopTts,
-    pauseTts,
-    ttsConfig,
-    setTtsConfig,
-    setActiveToolTab,
-    highlights,
-    chapterStrokes,
-    chapters,
-    bookTitle,
-    getChapterTitleByPage,
-    zoomPdfIn,
-    zoomPdfOut,
-    pdfLoadProgress,
-    pdfLoadTime,
-    pdfIsLoading,
+    drawingMode, setDrawingMode,
+    penColor, setPenColor, penWidth, setPenWidth,
+    viewMode, setViewMode,
+    isToolsOpen, setToolsOpen, bookmarks, currentPdfPage,
+    syncStatus, lastSavedAt, saveAll,
+    addPdfBookmark, removePdfBookmark,
+    zoomPdfIn, zoomPdfOut, pdfZoom, resetPdfZoom
   } = useBook();
 
-  const location = useLocation();
   const navigate = useNavigate();
-  const isReader = location.pathname === "/";
+  const location = useLocation();
+  const isReader = location.pathname === '/';
+
   const [showPenSettings, setShowPenSettings] = useState(false);
-  const [showViewSettings, setShowViewSettings] = useState(false);
-  const [showTtsSettings, setShowTtsSettings] = useState(false);
-  const [showSysMenu, setShowSysMenu] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const currentPageBookmark = bookmarks.find((b) => b.page === currentPdfPage);
+  const currentPageBookmark = bookmarks.find(b => b.page === currentPdfPage);
   const isBookmarked = Boolean(currentPageBookmark);
-
-  const handleExit = () => {
-    if (confirm("Are you sure you want to close the viewer?")) {
-      navigate("/report");
-    }
-  };
-
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      uploadBook(e.target.files[0]);
-    }
-  };
-
-  const handleSearchClick = () => {
-    setToolsOpen(true);
-    setActiveToolTab("search");
-  };
+  const colors: DrawingColor[] = ['#000000', '#ef4444', '#3b82f6', '#22c55e', '#eab308'];
 
   const handleBookmarkClick = () => {
     if (!currentPdfPage) return;
@@ -127,123 +39,18 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const getHighlightChapterLabel = (
-    chapterId?: string,
-    pageNumber?: number
-  ) => {
-    if (chapterId === "reference-doc" || chapterId === "pdf-main") {
-      if (!pageNumber) return "Reference PDF";
-      const title = getChapterTitleByPage(pageNumber);
-      return title || "Reference PDF";
-    }
-    const chapterIndex = chapters.findIndex((c) => c.id === chapterId);
-    if (chapterIndex === -1) return "Chapter";
-    const chapterTitle = chapters[chapterIndex]?.title?.trim();
-    return chapterTitle || `Chapter ${chapterIndex + 1}`;
-  };
-
-  const downloadTextFile = (filename: string, content: string) => {
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  };
-
-  const buildHighlightExport = () => {
-    const items = highlights
-      .filter((hl) => !hl.deleted)
-      .map((hl) => ({
-        id: hl.id,
-        chapterId: hl.chapterId,
-        chapterLabel: getHighlightChapterLabel(hl.chapterId, hl.pageNumber),
-        pageNumber: hl.pageNumber ?? null,
-        text: hl.text,
-        note: hl.note || "",
-        color: hl.color,
-        created_at: hl.created_at,
-      }));
-    return {
-      exportedAt: new Date().toISOString(),
-      bookTitle,
-      totalCount: items.length,
-      highlights: items,
-    };
-  };
-
-  const buildStrokeExport = () => {
-    const items = Object.entries(chapterStrokes).map(
-      ([chapterId, strokes]) => ({
-        chapterId,
-        chapterLabel: getHighlightChapterLabel(chapterId),
-        totalCount: strokes.length,
-        strokes: strokes.map((stroke) => ({
-          id: stroke.id,
-          pageNumber: stroke.pageNumber ?? null,
-          anchorIndex:
-            stroke.anchorIndex === undefined ? null : stroke.anchorIndex,
-          color: stroke.color,
-          width: stroke.width,
-          opacity: stroke.opacity,
-          isEraser: stroke.isEraser || false,
-          points: stroke.points,
-        })),
-      })
-    );
-    const totalCount = items.reduce((sum, item) => sum + item.totalCount, 0);
-    return {
-      exportedAt: new Date().toISOString(),
-      bookTitle,
-      totalCount,
-      chapters: items,
-    };
-  };
-
-  const handleExportData = () => {
-    const stamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .replace("T", "_");
-    const highlightData = buildHighlightExport();
-    const strokeData = buildStrokeExport();
-    downloadTextFile(`highlights_${stamp}.txt`, JSON.stringify(highlightData));
-    downloadTextFile(`strokes_${stamp}.txt`, JSON.stringify(strokeData));
-  };
-
-  const cycleFontSize = (dir: "up" | "down") => {
-    const sizes = ["small", "medium", "large", "xlarge"] as const;
-    const currentIndex = sizes.indexOf(fontSize);
-    let nextIndex = dir === "up" ? currentIndex + 1 : currentIndex - 1;
-    if (nextIndex < 0) nextIndex = 0;
-    if (nextIndex >= sizes.length) nextIndex = sizes.length - 1;
-    setFontSize(sizes[nextIndex]);
-  };
-
-  const voices: TTSVoice[] = ["Kore", "Puck", "Charon", "Fenrir", "Zephyr"];
-  const speeds = [0.75, 1.0, 1.2, 1.5, 2.0];
-
-  const colors: DrawingColor[] = [
-    "#000000",
-    "#ef4444",
-    "#3b82f6",
-    "#22c55e",
-    "#eab308",
-  ];
-
   return (
     <header className="header">
+      {syncStatus === 'SYNCING' && <div className="sync_progress_bar"></div>}
+
       <div className="header_inner">
-        {/* Left: Branding & TOC */}
+        {/* 좌측: 로고 및 내비게이션 */}
         <div className="header_main">
           {isReader && (
             <button
               onClick={toggleSidebar}
-              className={`left_toggle ${isSidebarOpen ? "open" : "off"}`}
-              title="Table of Contents"
+              className={`left_toggle ${isSidebarOpen ? 'open' : 'off'}`}
+              title="콘텐츠 목록"
             >
               <Sidebar size={20} />
             </button>
@@ -256,453 +63,176 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center: View Switcher & Upload */}
-        <div className="header_nav">
-          <div className="mode_select">
-            <Link to="/" className={`reader ${isReader ? "on" : "off"}`}>
-              Reader
-            </Link>
-            <Link to="/report" className={`report ${!isReader ? "on" : "off"}`}>
-              Report
-            </Link>
-          </div>
-          {/* <div className="separate_bar"></div> */}
-          {/* <button
-            onClick={handleUploadClick}
-            disabled={isProcessing}
-            className="add_file"
-            title="Add Reference Material (PDF)"
-          >
-            {isProcessing ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <FileUp size={16} />
-            )}
-            <span>Add Reference</span>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="application/pdf"
-              onChange={handleFileChange}
-            />
-          </button> */}
-        </div>
+        {/* 중앙: 통합 인터랙션 허브 */}
+        {isReader && (
+          <div className="center_hub">
+            {/* 확대/축소 그룹 */}
+            <div className="hub_group zoom_group">
+              <button onClick={zoomPdfOut} className="hub_btn" title="축소">
+                <ZoomOut size={17} />
+              </button>
+              <button onClick={resetPdfZoom} className="zoom_percent" title="기본 크기">
+                {Math.round(pdfZoom * 100)}%
+              </button>
+              <button onClick={zoomPdfIn} className="hub_btn" title="확대">
+                <ZoomIn size={17} />
+              </button>
+            </div>
 
-        {/* Right: Tools */}
+            {/* 보기 모드 그룹 */}
+            <div className="hub_group view_group">
+              <button
+                onClick={() => setViewMode('single')}
+                className={`hub_btn ${viewMode === 'single' ? 'active' : ''}`}
+                title="1쪽 보기"
+              >
+                <Square size={17} />
+              </button>
+              <button
+                onClick={() => setViewMode('double')}
+                className={`hub_btn ${viewMode === 'double' ? 'active' : ''}`}
+                title="2쪽 보기"
+              >
+                <Columns2 size={17} />
+              </button>
+            </div>
+
+            {/* 필기 도구 그룹 */}
+            <div className="hub_group pen_group">
+              <button
+                onClick={() => setDrawingMode(drawingMode === 'pen' ? 'idle' : 'pen')}
+                className={`hub_btn ${drawingMode === 'pen' ? 'active pen_active' : ''}`}
+                title="펜"
+              >
+                <Pen size={17} />
+              </button>
+              <button
+                onClick={() => setDrawingMode(drawingMode === 'eraser' ? 'idle' : 'eraser')}
+                className={`hub_btn ${drawingMode === 'eraser' ? 'active eraser_active' : ''}`}
+                title="지우개"
+              >
+                <Eraser size={17} />
+              </button>
+              <button
+                onClick={() => setShowPenSettings(!showPenSettings)}
+                className={`hub_btn pen_color_btn ${showPenSettings ? 'settings_open' : ''}`}
+                title="펜 설정"
+              >
+                <div className="color_circle" style={{ backgroundColor: penColor }}></div>
+              </button>
+            </div>
+
+            {/* 북마크 */}
+            <div className="hub_group bookmark_group">
+              <button
+                onClick={handleBookmarkClick}
+                className={`hub_btn ${isBookmarked ? 'active bookmark_active' : ''}`}
+                title="북마크"
+              >
+                <Bookmark size={18} fill={isBookmarked ? "currentColor" : "none"} />
+              </button>
+            </div>
+
+            {showPenSettings && (
+              <div className="pen_settings_panel">
+                <div className="pen_settings_header">
+                  <span className="pen_settings_title">Pen Palette</span>
+                  <button onClick={() => setShowPenSettings(false)} className="close_btn">
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="color_palette">
+                  {colors.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => { setPenColor(c); setDrawingMode('pen'); }}
+                      className={`color_btn ${penColor === c ? 'selected' : ''}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                <div className="pen_width_control">
+                  <div className="control_label">
+                    <span>두께 설정</span>
+                    <span>{penWidth}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="15"
+                    value={penWidth}
+                    onChange={e => setPenWidth(parseInt(e.target.value))}
+                    className="width_slider"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 우측: 상태 및 도구함 */}
         <div className="header_tools">
           {isReader && (
             <>
-              {/* TTS Control Area */}
-              <div className="relative">
-                {/* <button
-                  onClick={() => setShowTtsSettings(!showTtsSettings)}
-                  className={`p-2 rounded-lg transition-all ${
-                    isTtsPlaying
-                      ? 'text-blue-600 bg-blue-50'
-                      : 'text-slate-500 hover:bg-slate-100'
-                  }`}
-                  title="AI Voice"
-                >
-                  <Volume2 size={20} />
-                </button> */}
-                {showTtsSettings && (
-                  <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border p-5 z-[70]">
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        AI Reading Assistant
-                      </span>
-                      <button
-                        onClick={() => setShowTtsSettings(false)}
-                        className="text-slate-400"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <div className="flex justify-center gap-4 mb-5 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                      <button
-                        onClick={stopTts}
-                        className="p-2.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"
-                      >
-                        <Square size={16} fill="currentColor" />
-                      </button>
-                      <button
-                        onClick={() => (isTtsPlaying ? pauseTts() : startTts())}
-                        className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-transform"
-                      >
-                        {isTtsPlaying ? (
-                          <Pause size={24} fill="white" />
-                        ) : (
-                          <Play size={24} className="ml-1" fill="white" />
-                        )}
-                      </button>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-[10px] font-bold block mb-2 text-slate-400 uppercase">
-                          Voice Tone
-                        </label>
-                        <div className="grid grid-cols-3 gap-1">
-                          {voices.map((v) => (
-                            <button
-                              key={v}
-                              onClick={() => setTtsConfig({ voice: v })}
-                              className={`px-2 py-1 rounded text-[10px] border transition-all ${
-                                ttsConfig.voice === v
-                                  ? "bg-blue-600 border-blue-600 text-white"
-                                  : "bg-slate-50 dark:bg-slate-800 text-slate-500 border-transparent hover:bg-slate-200"
-                              }`}
-                            >
-                              {v}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold block mb-2 text-slate-400 uppercase">
-                          Speed
-                        </label>
-                        <div className="flex justify-between gap-1">
-                          {speeds.map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => setTtsConfig({ speed: s })}
-                              className={`flex-1 py-1 rounded text-[10px] border transition-all ${
-                                ttsConfig.speed === s
-                                  ? "bg-blue-600 border-blue-600 text-white font-bold"
-                                  : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent hover:bg-slate-200"
-                              }`}
-                            >
-                              {s}x
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {(pdfIsLoading || (!pdfIsLoading && pdfLoadTime > 0)) && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    fontSize: "12px",
-                    color: "#64748b",
-                    marginRight: "8px",
-                  }}
-                >
-                  {pdfIsLoading && <span>{pdfLoadProgress}%</span>}
-                  {pdfLoadTime > 0 && <span>{pdfLoadTime.toFixed(2)}s</span>}
-                </div>
-              )}
-              <button
-                onClick={handleBookmarkClick}
-                className={`bookmark_icon_btn ${isBookmarked ? "on" : "off"}`}
-                title={
-                  isBookmarked
-                    ? "Remove bookmark for this page"
-                    : "Bookmark this page"
-                }
-              >
-                {isBookmarked ? (
-                  <BookmarkCheck size={20} />
-                ) : (
-                  <BookmarkPlus size={20} />
-                )}
-              </button>
-              <div className="pdf_zoom_controls">
-                <button
-                  onClick={zoomPdfOut}
-                  className="pdf_zoom_btn"
-                  title="Zoom Out"
-                >
-                  <Minus size={18} />
-                </button>
-                <button
-                  onClick={zoomPdfIn}
-                  className="pdf_zoom_btn"
-                  title="Zoom In"
-                >
-                  <Plus size={18} />
-                </button>
-              </div>
-              {/* Pen Tools */}
-              <div className="draw_icon_wrap">
-                <div className="draw_icon_inner">
-                  <button
-                    onClick={() =>
-                      setDrawingMode(drawingMode === "pen" ? "idle" : "pen")
-                    }
-                    className={`pen_tool ${
-                      drawingMode === "pen" ? "on" : "off"
-                    }`}
-                    title="Pen Tool"
-                  >
-                    <Pen size={18} />
+              {/* 저장 상태 인터페이스 */}
+              <div className="save_status_wrap">
+                {syncStatus === 'UNSAVED' && (
+                  <button onClick={saveAll} className="save_btn unsaved">
+                    <Save size={14} />
+                    <span>저장 필요</span>
                   </button>
-                  {drawingMode === "pen" && (
-                    <button
-                      onClick={() => setShowPenSettings(!showPenSettings)}
-                      className="detail_select"
-                      title="Pen Settings"
-                    >
-                      <Settings2 size={12} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setDrawingMode(
-                        drawingMode === "eraser" ? "idle" : "eraser"
-                      );
-                      setShowPenSettings(false);
-                    }}
-                    className={`eraser_tool ${
-                      drawingMode === "eraser" ? "on" : "off"
-                    }`}
-                    title="Eraser"
-                  >
-                    <Eraser size={18} />
+                )}
+                {syncStatus === 'SYNCING' && (
+                  <div className="save_btn syncing">
+                    <CloudUpload size={14} />
+                    <span>동기화 중...</span>
+                  </div>
+                )}
+                {syncStatus === 'SAVED' && (
+                  <button onClick={saveAll} className="save_btn_group saved">
+                    <div className="save_btn saved_btn">
+                      <CheckCircle2 size={12} />
+                      <span>저장 완료</span>
+                    </div>
+                    {lastSavedAt && <span className="saved_time">최근 저장: {lastSavedAt}</span>}
                   </button>
-                </div>
-                {showPenSettings && drawingMode === "pen" && (
-                  <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-4 animate-fade-in z-[70]">
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-xs font-bold text-slate-500 uppercase">
-                        Pen Settings
-                      </span>
-                      <button
-                        onClick={() => setShowPenSettings(false)}
-                        className="text-slate-400 hover:text-slate-600"
-                      >
-                        <X size={14} />
-                      </button>
+                )}
+                {syncStatus === 'LOCAL_ONLY' && (
+                  <button onClick={saveAll} className="save_btn_group local_only">
+                    <div className="save_btn local_btn">
+                      <AlertCircle size={12} />
+                      <span>로컬 저장됨</span>
                     </div>
-                    <div className="flex justify-between mb-4">
-                      {colors.map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => setPenColor(c)}
-                          className={`w-6 h-6 rounded-full transition-transform hover:scale-110 border border-slate-200 dark:border-slate-700 ${
-                            penColor === c
-                              ? "ring-2 ring-offset-2 ring-blue-500 scale-110"
-                              : ""
-                          }`}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </div>
-                    <div className="mb-3">
-                      <div className="flex justify-between text-xs text-slate-500 mb-1">
-                        <span>Thickness</span>
-                        <span>{penWidth}px</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="1"
-                        max="15"
-                        step="1"
-                        value={penWidth}
-                        onChange={(e) => setPenWidth(parseInt(e.target.value))}
-                        className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs text-slate-500 mb-1">
-                        <span>Opacity</span>
-                        <span>{Math.round(penOpacity * 100)}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.1"
-                        max="1"
-                        step="0.1"
-                        value={penOpacity}
-                        onChange={(e) =>
-                          setPenOpacity(parseFloat(e.target.value))
-                        }
-                        className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                      />
-                    </div>
-                  </div>
+                    <span className="retry_hint">
+                      <RefreshCw size={8}/>
+                      클릭하여 재시도
+                    </span>
+                  </button>
+                )}
+                {syncStatus === 'BLOCKED' && (
+                  <button onClick={saveAll} className="save_btn blocked">
+                    <X size={14} />
+                    <span>동기화 차단됨</span>
+                  </button>
                 )}
               </div>
 
-              {/* Appearance Menu */}
-              <div className="relative">
-                {/* <button
-                  onClick={() => setShowViewSettings(!showViewSettings)}
-                  className="appearance"
-                  title="Appearance"
-                >
-                  <Type size={20} />
-                </button> */}
-                {showViewSettings && (
-                  <div className="absolute top-full right-0 mt-2 w-60 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-4 animate-fade-in z-[70]">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">
-                      View Settings
-                    </h4>
+              <div className="separate_bar"></div>
 
-                    {/* Font Size */}
-                    <div className="flex items-center justify-between mb-4 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-                      <button
-                        onClick={() => cycleFontSize("down")}
-                        className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded shadow-sm"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="text-sm font-medium">
-                        {fontSize === "medium"
-                          ? "100%"
-                          : fontSize === "small"
-                          ? "85%"
-                          : fontSize === "large"
-                          ? "115%"
-                          : "130%"}
-                      </span>
-                      <button
-                        onClick={() => cycleFontSize("up")}
-                        className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded shadow-sm"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-
-                    {/* Toggle Options */}
-                    <div className="space-y-2">
-                      <button
-                        onClick={() =>
-                          setViewMode(
-                            viewMode === "single" ? "double" : "single"
-                          )
-                        }
-                        className="w-full flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Columns size={16} /> Two-Page View
-                        </span>
-                        <div
-                          className={`w-8 h-4 rounded-full relative transition-colors ${
-                            viewMode === "double"
-                              ? "bg-blue-500"
-                              : "bg-slate-300"
-                          }`}
-                        >
-                          <div
-                            className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                              viewMode === "double" ? "translate-x-4" : ""
-                            }`}
-                          ></div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={toggleAnnotations}
-                        className="w-full flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Eye size={16} /> Annotations
-                        </span>
-                        <div
-                          className={`w-8 h-4 rounded-full relative transition-colors ${
-                            showAnnotations ? "bg-blue-500" : "bg-slate-300"
-                          }`}
-                        >
-                          <div
-                            className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                              showAnnotations ? "translate-x-4" : ""
-                            }`}
-                          ></div>
-                        </div>
-                      </button>
-                      {/* <button
-                        onClick={handleBookmarkClick}
-                        className="w-full flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Bookmark size={16} /> Bookmark Page
-                        </span>
-                        <div
-                          className={`w-8 h-4 rounded-full relative transition-colors ${
-                            isBookmarked ? 'bg-blue-500' : 'bg-slate-300'
-                          }`}
-                        >
-                          <div
-                            className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
-                              isBookmarked ? 'translate-x-4' : ''
-                            }`}
-                          ></div>
-                        </div>
-                      </button> */}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Side Panel */}
               <button
                 onClick={() => setToolsOpen(!isToolsOpen)}
-                className={`toggle_ai_notes ${isToolsOpen ? "on" : "off"}`}
-                title="Toggle AI & Notes"
+                className={`toggle_ai_notes ${isToolsOpen ? 'on' : 'off'}`}
+                title="학습 도구함"
               >
-                <PanelRight size={20} />
+                <PanelRight size={22} />
               </button>
             </>
           )}
-
-          {/* System Menu */}
-          <div className="relative ml-1">
-            {/* <button
-              onClick={() => setShowSysMenu(!showSysMenu)}
-              className="more"
-            >
-              <MoreVertical size={20} />
-            </button> */}
-            <button
-              onClick={saveLocalDataToIndexedDb}
-              className="idb_save_btn"
-              title="Save annotations to IndexedDB"
-            >
-              <Database size={20} />
+          {!isReader && (
+            <button onClick={() => navigate('/')} className="exit_btn" title="나가기">
+              <LogOut size={22} />
             </button>
-            {/* <button onClick={saveProgress} className="save_btn">
-              <Save size={20} />
-            </button> */}
-            {/* <button
-              onClick={handleExportData}
-              className="export_btn"
-              title="Export highlight & stroke data"
-            >
-              <FileDown size={20} />
-            </button> */}
-            {/* {showSysMenu && (
-              <div className="more_list">
-                <button onClick={handleUploadClick} className="">
-                  {isProcessing ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <FileUp size={14} />
-                  )}{' '}
-                  Add Reference PDF
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept="application/pdf"
-                  onChange={handleFileChange}
-                />
-
-                <button onClick={saveProgress} className="">
-                  <Save size={14} /> Save Progress
-                </button>
-                <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
-                <button onClick={handleExit} className="exit_viewer">
-                  <LogOut size={14} /> Exit Viewer
-                </button>
-              </div>
-            )} */}
-          </div>
+          )}
         </div>
       </div>
     </header>

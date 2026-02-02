@@ -23,6 +23,7 @@ import {
   ViewMode,
   PdfBookmark,
   TTSConfig,
+  SyncStatus,
 } from "../../types";
 import { generateExplanation } from "../services/geminiService";
 import { processPdf, findRelevantChunks } from "../services/pdfRagService";
@@ -378,6 +379,8 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [chapterPageMap, setChapterPageMap] = useState<Record<string, number>>(
     {}
   );
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("SAVED");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
@@ -564,6 +567,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [pdfZoomHandler, setPdfZoomHandler] = useState<
     ((direction: "in" | "out") => void) | null
   >(null);
+  const [pdfZoom, setPdfZoom] = useState(1.0);
   const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
   const [initialPageToLoad, setInitialPageToLoad] = useState<number | null>(
     null
@@ -734,6 +738,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const addPdfBookmark = (page: number, label?: string) => {
     if (!page || page < 1) return;
+    setSyncStatus("UNSAVED");
     setBookmarks((prev) => {
       if (prev.some((b) => b.page === page)) return prev;
       const now = Date.now();
@@ -752,6 +757,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const removePdfBookmark = (id: string) => {
     const now = Date.now();
+    setSyncStatus("UNSAVED");
     setBookmarks((prev) =>
       prev.map((b) =>
         b.id === id
@@ -833,6 +839,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   ): string => {
     const chapterId = targetChapterId || currentChapter.id;
     const now = Date.now();
+    setSyncStatus("UNSAVED");
     const newHighlight: Highlight = {
       id: now.toString(),
       chapterId: chapterId,
@@ -894,6 +901,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     data: Partial<Highlight> & { note?: string }
   ) => {
     const now = Date.now();
+    setSyncStatus("UNSAVED");
     setHighlights((prev) =>
       prev.map((hl) =>
         hl.id === id
@@ -905,6 +913,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const removeHighlight = (id: string) => {
     const now = Date.now();
+    setSyncStatus("UNSAVED");
     setHighlights((prev) =>
       prev.map((h) =>
         h.id === id
@@ -955,6 +964,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const addStroke = (chapterId: string, stroke: Stroke) => {
     const itemBytes = getJsonBytes(stroke);
+    setSyncStatus("UNSAVED");
     setChapterStrokes((prev) => {
       const nextList = [...(prev[chapterId] || []), stroke];
       const next = { ...prev, [chapterId]: nextList };
@@ -977,6 +987,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const removeStroke = (chapterId: string, strokeId: string) => {
+    setSyncStatus("UNSAVED");
     setChapterStrokes((prev) => ({
       ...prev,
       [chapterId]: (prev[chapterId] || []).filter((s) => s.id !== strokeId),
@@ -989,6 +1000,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const addGeneralNote = (title: string, content: string) => {
     const now = Date.now();
+    setSyncStatus("UNSAVED");
     const newNote: GeneralNote = {
       id: now.toString(),
       title: title || "Untitled Note",
@@ -1004,6 +1016,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const updateGeneralNote = (id: string, title: string, content: string) => {
     const now = Date.now();
+    setSyncStatus("UNSAVED");
     setGeneralNotes((prev) =>
       prev.map((note) =>
         note.id === id ? { ...note, title, content, updated_at: now } : note
@@ -1012,6 +1025,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const removeGeneralNote = (id: string) => {
+    setSyncStatus("UNSAVED");
     setGeneralNotes((prev) => prev.filter((n) => n.id !== id));
   };
 
@@ -1194,12 +1208,18 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (pdfZoomHandler) {
       pdfZoomHandler("in");
     }
+    setPdfZoom((prev) => Math.min(3, prev + 0.1));
   };
 
   const zoomPdfOut = () => {
     if (pdfZoomHandler) {
       pdfZoomHandler("out");
     }
+    setPdfZoom((prev) => Math.max(1.0, prev - 0.1));
+  };
+
+  const resetPdfZoom = () => {
+    setPdfZoom(1.0);
   };
 
   // pdfTotalPages 변경 시 ref 업데이트
@@ -2545,6 +2565,29 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
+  const saveAll = async () => {
+    try {
+      setSyncStatus("SYNCING");
+      await saveLocalDataToIndexedDb();
+      setSyncStatus("SAVED");
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = (now.getMonth() + 1).toString().padStart(2, "0");
+      const day = now.getDate().toString().padStart(2, "0");
+      const hours = now.getHours();
+      const minutes = now.getMinutes().toString().padStart(2, "0");
+      const ampm = hours >= 12 ? "오후" : "오전";
+      const displayHours = hours % 12 || 12;
+
+      setLastSavedAt(
+        `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`
+      );
+    } catch (err) {
+      console.error("Save all failed", err);
+      setSyncStatus("LOCAL_ONLY");
+    }
+  };
+
   return (
     <BookContext.Provider
       value={{
@@ -2624,6 +2667,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         updateReadingTime,
         saveProgress,
         saveLocalDataToIndexedDb,
+        saveAll,
+        syncStatus,
+        lastSavedAt,
         pdfTextPages,
         setPdfTextPages: updatePdfTextPages,
         goToPdfPage,
@@ -2632,6 +2678,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         registerPdfZoomHandler,
         zoomPdfIn,
         zoomPdfOut,
+        pdfZoom,
+        setPdfZoom,
+        resetPdfZoom,
         pdfSearchHighlight,
         setPdfSearchHighlight,
         currentPdfPage,
