@@ -351,9 +351,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
   const [penWidth, setPenWidth] = useState<number>(3);
   const [penOpacity, setPenOpacity] = useState<number>(1.0);
-  const [chapterStrokes, setChapterStrokes] = useState<
-    Record<string, Stroke[]>
-  >({});
+  const [chapterStrokes, setChapterStrokes] = useState<Stroke[]>([]);
 
   const [generalNotes, setGeneralNotes] = useState<GeneralNote[]>([]);
   const [isCaptureMode, setCaptureMode] = useState(false);
@@ -962,22 +960,17 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     focusHighlight(hl.id);
   };
 
-  const addStroke = (chapterId: string, stroke: Stroke) => {
+  const addStroke = (stroke: Stroke) => {
     const itemBytes = getJsonBytes(stroke);
     setSyncStatus("UNSAVED");
     setChapterStrokes((prev) => {
-      const nextList = [...(prev[chapterId] || []), stroke];
-      const next = { ...prev, [chapterId]: nextList };
-      const chapterBytes = getJsonBytes(nextList);
+      const next = [...prev, stroke];
       const totalBytes = getJsonBytes(next);
       if (enable_debug_log) {
         console.log("[stroke/size]", {
-          chapterId,
           pageNumber: stroke.pageNumber,
           itemBytes,
           itemMb: bytesToMb(itemBytes),
-          chapterBytes,
-          chapterMb: bytesToMb(chapterBytes),
           totalBytes,
           totalMb: bytesToMb(totalBytes),
         });
@@ -986,16 +979,15 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  const removeStroke = (chapterId: string, strokeId: string) => {
+  const removeStroke = (strokeId: string) => {
     setSyncStatus("UNSAVED");
-    setChapterStrokes((prev) => ({
-      ...prev,
-      [chapterId]: (prev[chapterId] || []).filter((s) => s.id !== strokeId),
-    }));
+    setChapterStrokes((prev) =>
+      prev.map((s) => (s.id === strokeId ? { ...s, deleted: true } : s))
+    );
   };
 
-  const hasStrokes = (chapterId: string) => {
-    return (chapterStrokes[chapterId] || []).length > 0;
+  const hasStrokes = () => {
+    return chapterStrokes.filter((s) => !s.deleted).length > 0;
   };
 
   const addGeneralNote = (title: string, content: string) => {
@@ -1026,7 +1018,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const removeGeneralNote = (id: string) => {
     setSyncStatus("UNSAVED");
-    setGeneralNotes((prev) => prev.filter((n) => n.id !== id));
+    setGeneralNotes((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, deleted: true } : n))
+    );
   };
 
   const exportNoteAsMarkdown = (note: GeneralNote) => {
@@ -1122,6 +1116,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     generalNotes.forEach((note) => {
+      if (note.deleted) return;
       const plainContent = note.content.replace(/<[^>]+>/g, " ");
       if (
         note.title.toLowerCase().includes(lowerQuery) ||
@@ -1368,13 +1363,33 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         }
       );
 
-      if (!result || !result.data) {
-        indexedDbSnapshotRef.current = null;
-        return;
+      // Create empty snapshot if IndexedDB is empty
+      let snapshot: IndexedDbSnapshot;
+      let needsMigrationSave = false;
+
+      if (result && result.data) {
+        const migrated = migrate_snapshot(result);
+        snapshot = migrated.snapshot || result;
+        needsMigrationSave = migrated.changed;
+        console.log("[IndexedDB] Loaded snapshot from IndexedDB");
+      } else {
+        snapshot = {
+          key: storageKey,
+          savedAt: Date.now(),
+          schema_version: 1,
+          data: {
+            bookmarks: [],
+            highlights: [],
+            notes: [],
+            strokes: [],
+            progress: undefined,
+          },
+          meta: {},
+        };
+        console.log("[IndexedDB] Empty, will create from server data");
       }
-      const migrated = migrate_snapshot(result);
-      const snapshot = migrated.snapshot || result;
-      if (migrated.changed) {
+
+      if (needsMigrationSave) {
         try {
           await new Promise<void>((resolve, reject) => {
             const requestId = `${Date.now()}_${Math.random()
@@ -1425,18 +1440,33 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
       // Load highlights: Merge server and IndexedDB based on timestamps
       const config = getRmsConfig();
+      console.log("[RMS Config Debug]", config);
+      console.log("[IndexedDB Data Debug]", {
+        hasHighlights: Array.isArray(data.highlights) && data.highlights.length > 0,
+        hasBookmarks: Array.isArray(data.bookmarks) && data.bookmarks.length > 0,
+        hasStrokes: data.strokes ? true : false,
+        hasNotes: Array.isArray(data.notes) && data.notes.length > 0,
+        hasProgress: data.progress ? true : false,
+      });
       const localHighlights = Array.isArray(data.highlights)
         ? data.highlights
         : [];
       const localBookmarks = Array.isArray(data.bookmarks)
         ? data.bookmarks
         : [];
-      const localDrawings =
-        data.strokes && typeof data.strokes === "object" ? data.strokes : {};
+      // Migrate old format { "pdf-main": [...] } to new format [...]
+      let localDrawings: Stroke[] = [];
+      if (Array.isArray(data.strokes)) {
+        localDrawings = data.strokes;
+      } else if (data.strokes && typeof data.strokes === "object") {
+        // Old format: { "pdf-main": [...] }
+        const strokesObj = data.strokes as Record<string, unknown[]>;
+        localDrawings = (strokesObj["pdf-main"] || []) as Stroke[];
+      }
       const localNotes = Array.isArray(data.notes) ? data.notes : [];
       let serverHighlights: any[] | null = null;
       let serverBookmarks: any[] | null = null;
-      let serverDrawings: Record<string, any[]> | null = null;
+      let serverDrawings: Stroke[] | null = null;
       let serverNotes: any[] | null = null;
 
       // Try to load highlights from server first
@@ -1455,13 +1485,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             Array.isArray(serverData.result.dataList)
           ) {
             // Parse each JSON string in dataList and mark as synced
-            serverHighlights = serverData.result.dataList.map(
-              (jsonStr: string) => {
+            serverHighlights = serverData.result.dataList
+              .map((jsonStr: string) => {
                 const parsed = JSON.parse(jsonStr);
                 // Mark server data as synced (already on server)
                 return { ...parsed, syncStatus: "synced" };
-              }
-            );
+              })
+              .filter((hl: any) => !hl.deleted);
             console.log(
               "[Highlights] ✅ Loaded from server:",
               serverHighlights.length
@@ -1492,13 +1522,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             Array.isArray(bookmarkData.result.dataList)
           ) {
             // Parse each JSON string in dataList and mark as synced
-            serverBookmarks = bookmarkData.result.dataList.map(
-              (jsonStr: string) => {
+            serverBookmarks = bookmarkData.result.dataList
+              .map((jsonStr: string) => {
                 const parsed = JSON.parse(jsonStr);
                 // Mark server data as synced (already on server)
                 return { ...parsed, syncStatus: "synced" };
-              }
-            );
+              })
+              .filter((bm: any) => !bm.deleted);
             console.log(
               "[Bookmarks] ✅ Loaded from server:",
               serverBookmarks.length
@@ -1530,11 +1560,19 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             drawingData.result.dataList.length > 0
           ) {
             // Parse the most recent drawings data
-            serverDrawings = JSON.parse(drawingData.result.dataList[0]);
+            const parsedDrawings = JSON.parse(drawingData.result.dataList[0]);
+            // Handle both old format { "pdf-main": [...] } and new format [...]
+            if (Array.isArray(parsedDrawings)) {
+              serverDrawings = parsedDrawings.filter((d: any) => !d.deleted);
+            } else if (parsedDrawings && typeof parsedDrawings === "object") {
+              serverDrawings = (parsedDrawings["pdf-main"] || []).filter(
+                (d: any) => !d.deleted
+              );
+            }
             console.log(
               "[Drawings] ✅ Loaded from server:",
-              Object.keys(serverDrawings || {}).length,
-              "pages"
+              serverDrawings?.length || 0,
+              "strokes"
             );
           } else {
             console.warn("[Drawings] Invalid server response:", drawingData);
@@ -1563,7 +1601,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             notesData.result.dataList.length > 0
           ) {
             // Parse the most recent notes data
-            serverNotes = JSON.parse(notesData.result.dataList[0]);
+            const parsedNotes = JSON.parse(notesData.result.dataList[0]);
+            serverNotes = Array.isArray(parsedNotes)
+              ? parsedNotes.filter((n: any) => !n.deleted)
+              : [];
             console.log(
               "[Notes] ✅ Loaded from server:",
               serverNotes?.length || 0,
@@ -1898,23 +1939,16 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       // Merge server and local drawings
-      if (serverDrawings && Object.keys(serverDrawings).length > 0) {
+      if (serverDrawings && serverDrawings.length > 0) {
         console.log("[Drawings] Merging server and local data...");
 
-        // Simple merge: use all server data and add local pages not in server
-        const mergedDrawings = { ...serverDrawings };
-        Object.keys(localDrawings).forEach((pageKey) => {
-          if (!mergedDrawings[pageKey]) {
-            mergedDrawings[pageKey] = localDrawings[pageKey];
-          }
-        });
+        // Simple merge: use all server data and add local strokes not in server
+        const serverIds = new Set(serverDrawings.map((s) => s.id));
+        const localOnly = localDrawings.filter((s) => !serverIds.has(s.id));
+        const mergedDrawings = [...serverDrawings, ...localOnly];
 
         console.log(
-          `[Drawings] Merged ${
-            Object.keys(mergedDrawings).length
-          } pages (Server: ${Object.keys(serverDrawings).length}, Local: ${
-            Object.keys(localDrawings).length
-          })`
+          `[Drawings] Merged ${mergedDrawings.length} strokes (Server: ${serverDrawings.length}, Local: ${localDrawings.length}, Local-only: ${localOnly.length})`
         );
         setChapterStrokes(mergedDrawings);
 
@@ -1971,13 +2005,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
               saveErr
             );
           });
-      } else if (Object.keys(localDrawings).length > 0) {
+      } else if (localDrawings.length > 0) {
         // No server data: use local
         setChapterStrokes(localDrawings);
         console.log(
           "[Drawings] 📦 Using local IndexedDB data:",
-          Object.keys(localDrawings).length,
-          "pages"
+          localDrawings.length,
+          "strokes"
         );
       }
 
@@ -2478,16 +2512,74 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
           // Save drawings to server
           console.log("[Drawings] Sending drawings to server...");
-          if (Object.keys(currentSnapshot.data.strokes || {}).length > 0) {
+          const strokes = currentSnapshot.data.strokes || [];
+          if (Array.isArray(strokes) && strokes.length > 0) {
             await saveDrawingsToServer({
               apiBase: config.apiBase,
               bookCd: config.bookCd,
-              drawings: currentSnapshot.data.strokes || {},
+              drawings: strokes,
             });
             console.log(
-              `[Drawings] ✅ Saved ${
-                Object.keys(currentSnapshot.data.strokes || {}).length
-              } pages to server`
+              `[Drawings] ✅ Saved ${strokes.length} strokes to server`
+            );
+
+            // Remove deleted strokes after successful sync
+            const updatedStrokes = strokes.filter((s: any) => !s.deleted);
+            currentSnapshot = {
+              ...currentSnapshot,
+              data: {
+                ...currentSnapshot.data,
+                strokes: updatedStrokes,
+              },
+            };
+
+            // Save cleaned snapshot to IndexedDB
+            await new Promise<void>((resolve, reject) => {
+              const requestId = `${Date.now()}_${Math.random()
+                .toString(36)
+                .slice(2)}`;
+              const cleanup = () => {
+                worker.removeEventListener("message", handleMessage);
+                worker.removeEventListener("error", handleError);
+              };
+              const handleMessage = (event: MessageEvent) => {
+                const response = event.data as {
+                  type?: string;
+                  requestId?: string;
+                  error?: string;
+                };
+                if (!response || response.requestId !== requestId) return;
+                cleanup();
+                if (response.type === "save_complete") {
+                  resolve();
+                } else {
+                  reject(new Error(response.error || "IndexedDB save failed."));
+                }
+              };
+              const handleError = () => {
+                cleanup();
+                reject(new Error("IndexedDB worker error."));
+              };
+              worker.addEventListener("message", handleMessage);
+              worker.addEventListener("error", handleError);
+              worker.postMessage({
+                type: "save_bundle",
+                requestId,
+                payload: {
+                  storageKey: currentSnapshot.key,
+                  schema_version: currentSnapshot.schema_version,
+                  savedAt: currentSnapshot.savedAt,
+                  data: currentSnapshot.data,
+                  meta: currentSnapshot.meta,
+                },
+              });
+            });
+
+            indexedDbSnapshotRef.current = currentSnapshot;
+            // Also update the local state to remove deleted strokes
+            setChapterStrokes((prev) => prev.filter((s) => !s.deleted));
+            console.log(
+              `[Drawings] Deleted items removed from IndexedDB and state`
             );
           } else {
             console.log("[Drawings] No drawings to save");
@@ -2506,6 +2598,67 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             });
             console.log(
               `[Notes] ✅ Saved ${currentSnapshot.data.notes.length} notes to server`
+            );
+
+            // Remove deleted notes after successful sync
+            const updatedNotes = currentSnapshot.data.notes.filter(
+              (n: any) => !n.deleted
+            );
+            currentSnapshot = {
+              ...currentSnapshot,
+              data: {
+                ...currentSnapshot.data,
+                notes: updatedNotes,
+              },
+            };
+
+            // Save cleaned snapshot to IndexedDB
+            await new Promise<void>((resolve, reject) => {
+              const requestId = `${Date.now()}_${Math.random()
+                .toString(36)
+                .slice(2)}`;
+              const cleanup = () => {
+                worker.removeEventListener("message", handleMessage);
+                worker.removeEventListener("error", handleError);
+              };
+              const handleMessage = (event: MessageEvent) => {
+                const response = event.data as {
+                  type?: string;
+                  requestId?: string;
+                  error?: string;
+                };
+                if (!response || response.requestId !== requestId) return;
+                cleanup();
+                if (response.type === "save_complete") {
+                  resolve();
+                } else {
+                  reject(new Error(response.error || "IndexedDB save failed."));
+                }
+              };
+              const handleError = () => {
+                cleanup();
+                reject(new Error("IndexedDB worker error."));
+              };
+              worker.addEventListener("message", handleMessage);
+              worker.addEventListener("error", handleError);
+              worker.postMessage({
+                type: "save_bundle",
+                requestId,
+                payload: {
+                  storageKey: currentSnapshot.key,
+                  schema_version: currentSnapshot.schema_version,
+                  savedAt: currentSnapshot.savedAt,
+                  data: currentSnapshot.data,
+                  meta: currentSnapshot.meta,
+                },
+              });
+            });
+
+            indexedDbSnapshotRef.current = currentSnapshot;
+            // Also update the local state to remove deleted notes
+            setGeneralNotes((prev) => prev.filter((n) => !n.deleted));
+            console.log(
+              `[Notes] Deleted items removed from IndexedDB and state`
             );
           } else {
             console.log("[Notes] No notes to save");

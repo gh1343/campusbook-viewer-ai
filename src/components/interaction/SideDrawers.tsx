@@ -162,11 +162,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                   </span>
                   <span className="line_clamp_1">{chapter.title}</span>
                 </div>
-                {hasStrokes(chapter.id) && (
-                  <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 p-1 rounded-full">
-                    <PenTool size={10} />
-                  </div>
-                )}
+                {/* Note: Strokes are now stored globally, not per chapter */}
               </div>
             </button>
           ))}
@@ -372,11 +368,13 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     [filteredHighlights, visibleHighlightCount]
   );
 
-  const filteredNotes = generalNotes.filter(
-    (note) =>
-      note.title.toLowerCase().includes(localFilter.toLowerCase()) ||
-      note.content.toLowerCase().includes(localFilter.toLowerCase())
-  );
+  const filteredNotes = generalNotes
+    .filter((note) => !note.deleted)
+    .filter(
+      (note) =>
+        note.title.toLowerCase().includes(localFilter.toLowerCase()) ||
+        note.content.toLowerCase().includes(localFilter.toLowerCase())
+    );
 
   // Handle scroll for lazy loading highlights
   useEffect(() => {
@@ -975,7 +973,7 @@ ${contextString}
                 <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-3 bg-slate-50 dark:bg-slate-900">
                   <div className="flex justify-between items-center">
                     <h3 className="text-xs font-bold uppercase text-slate-500 tracking-wider">
-                      My Notes ({generalNotes.length})
+                      My Notes ({generalNotes.filter((n) => !n.deleted).length})
                     </h3>
                     <div className="flex gap-2">
                       <label

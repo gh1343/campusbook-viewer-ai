@@ -14,7 +14,7 @@ interface PenLayerRuntimeDeps {
   penColorRef: MutableRef<string>;
   penWidthRef: MutableRef<number>;
   penOpacityRef: MutableRef<number>;
-  chapterStrokesRef: MutableRef<Record<string, any[]>>;
+  chapterStrokesRef: MutableRef<any[]>;
   showAnnotationsRef: MutableRef<boolean>;
   livePointsRef: MutableRef<{ x: number; y: number }[]>;
   isDrawingRef: MutableRef<boolean>;
@@ -31,8 +31,8 @@ interface PenLayerRuntimeDeps {
     width: number,
     opacity: number
   ) => void;
-  addStroke: (chapterId: string, stroke: any) => void;
-  removeStroke: (chapterId: string, strokeId: string) => void;
+  addStroke: (stroke: any) => void;
+  removeStroke: (strokeId: string) => void;
 }
 
 export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
@@ -341,7 +341,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
               Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
               16 * scaleX
           );
-          if (hit) removeStroke("pdf-main", stroke.id);
+          if (hit) removeStroke(stroke.id);
         });
       }
       return;
@@ -400,7 +400,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
             Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
             16 * scaleX
         );
-        if (hit) removeStroke("pdf-main", stroke.id);
+        if (hit) removeStroke(stroke.id);
       });
     }
   };
@@ -464,7 +464,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
         pageWidth: pageSize?.width,
         pageHeight: pageSize?.height,
       };
-      addStroke("pdf-main", newStroke);
+      addStroke(newStroke);
     }
     isDrawingRef.current = false;
     livePointsRef.current = [];
@@ -605,8 +605,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const getPageStrokes = (pageNumber: number) =>
-    (chapterStrokesRef.current["pdf-main"] || []).filter((s) =>
-      strokeMatchesPage(s, pageNumber)
+    (chapterStrokesRef.current || []).filter(
+      (s) => strokeMatchesPage(s, pageNumber) && !s.deleted
     );
 
   const renderStaticCanvases = () => {

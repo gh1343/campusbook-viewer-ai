@@ -27,7 +27,7 @@ export type IndexedDbBundlePayload = {
     bookmarks?: unknown[];
     highlights?: unknown[];
     notes?: unknown[];
-    strokes?: Record<string, unknown[]>;
+    strokes?: unknown[];
     progress?: {
       currentPdfPage?: number;
       viewMode?: string;
@@ -1373,7 +1373,7 @@ export const saveDrawingsToServer = async ({
 }: {
   apiBase: string;
   bookCd: string;
-  drawings: Record<string, unknown[]>;
+  drawings: unknown[];
 }) => {
   if (typeof window === "undefined") {
     throw new Error("RMS is only available in the browser.");
@@ -1394,6 +1394,7 @@ export const saveDrawingsToServer = async ({
   }
 
   const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+
   const payload = {
     bookCode: bookCd,
     type: "dr",

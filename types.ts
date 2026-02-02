@@ -179,10 +179,10 @@ export interface BookContextType {
   penOpacity: number;
   setPenOpacity: (opacity: number) => void;
 
-  chapterStrokes: Record<string, Stroke[]>;
-  addStroke: (chapterId: string, stroke: Stroke) => void;
-  removeStroke: (chapterId: string, strokeId: string) => void;
-  hasStrokes: (chapterId: string) => boolean;
+  chapterStrokes: Stroke[];
+  addStroke: (stroke: Stroke) => void;
+  removeStroke: (strokeId: string) => void;
+  hasStrokes: () => boolean;
 
   generalNotes: GeneralNote[];
   addGeneralNote: (title: string, content: string) => void;
