@@ -96,6 +96,42 @@ export const ReaderPage: React.FC = () => {
     }
   }, [isToolsOpen, isNarrow]);
 
+  // Prevent pinch-to-zoom on side panels (tablet/mobile)
+  const leftPanelRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const panels = [leftPanelRef.current, rightPanelRef.current].filter(Boolean) as HTMLDivElement[];
+    if (panels.length === 0) return;
+
+    const preventZoom = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const preventTouchZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    panels.forEach(panel => {
+      panel.addEventListener("wheel", preventZoom, { passive: false });
+      panel.addEventListener("touchstart", preventTouchZoom, { passive: false });
+      panel.addEventListener("touchmove", preventTouchZoom, { passive: false });
+    });
+
+    return () => {
+      panels.forEach(panel => {
+        panel.removeEventListener("wheel", preventZoom);
+        panel.removeEventListener("touchstart", preventTouchZoom);
+        panel.removeEventListener("touchmove", preventTouchZoom);
+      });
+    };
+  }, []);
+
   // Drag Logic for Resizing
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -230,6 +266,7 @@ export const ReaderPage: React.FC = () => {
       <div ref={containerRef} className="split_container">
         {/* 왼쪽 사이드바 */}
         <aside
+          ref={leftPanelRef}
           className={`left_side_wrap ${!isTocOpen ? "off" : "on"}`}
           style={{
             width: isTocOpen
@@ -268,6 +305,7 @@ export const ReaderPage: React.FC = () => {
 
         {/* Right Panel Area */}
         <aside
+          ref={rightPanelRef}
           className={`right_panel_wrap ${!isToolsOpen ? "off" : "on"}`}
           style={{
             width: isToolsOpen

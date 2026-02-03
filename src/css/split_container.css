@@ -20,6 +20,7 @@
   border-right: 1px solid rgb(226 232 240);
   -webkit-user-select: none;
   user-select: none;
+  touch-action: none;
 }
 .left_side_wrap.on {
 }
