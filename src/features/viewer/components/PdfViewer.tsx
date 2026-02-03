@@ -98,9 +98,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     requestHighlightNoteEdit,
     getChapterTitleByPage,
     registerPdfZoomHandler,
+    setPdfZoom,
     setPdfLoadProgress,
     setPdfLoadTime,
     setPdfIsLoading,
+    currentPdfPage,
   } = useBook();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
@@ -551,10 +553,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       pdfZoomManualRef.current = true;
       viewer.currentScale = clampedScale;
+      setPdfZoom(clampedScale); // 헤더와 연동
       scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
     },
-    [scheduleRenderRefresh, setLayoutTick]
+    [scheduleRenderRefresh, setLayoutTick, setPdfZoom]
   );
 
   const applyPdfZoom = useCallback(
@@ -574,38 +577,39 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       if (Math.abs(clampedScale - currentScale) < 0.001) return;
 
-      // 마우스 위치가 제공된 경우, 해당 위치를 앵커로 사용
-      if (mouseX !== undefined && mouseY !== undefined) {
-        const containerRect = container.getBoundingClientRect();
-        const viewportX = mouseX - containerRect.left;
-        const viewportY = mouseY - containerRect.top;
+      const containerRect = container.getBoundingClientRect();
 
-        // 현재 스크롤 위치 + 뷰포트 내 마우스 위치 = 컨텐츠 상의 절대 위치
-        const contentX = container.scrollLeft + viewportX;
-        const contentY = container.scrollTop + viewportY;
+      // 마우스 위치가 없으면 화면 중앙을 앵커로 사용
+      const viewportX = mouseX !== undefined
+        ? mouseX - containerRect.left
+        : container.clientWidth / 2;
+      const viewportY = mouseY !== undefined
+        ? mouseY - containerRect.top
+        : container.clientHeight / 2;
 
-        // 스케일 비율 미리 계산
-        const scaleRatio = clampedScale / currentScale;
-        const newContentX = contentX * scaleRatio;
-        const newContentY = contentY * scaleRatio;
+      // 현재 스크롤 위치 + 뷰포트 내 앵커 위치 = 컨텐츠 상의 절대 위치
+      const contentX = container.scrollLeft + viewportX;
+      const contentY = container.scrollTop + viewportY;
 
-        // 스케일 변경 (이 과정에서 setLayoutTick이 호출됨)
-        pdfZoomManualRef.current = true;
-        viewer.currentScale = clampedScale;
+      // 스케일 비율 미리 계산
+      const scaleRatio = clampedScale / currentScale;
+      const newContentX = contentX * scaleRatio;
+      const newContentY = contentY * scaleRatio;
 
-        // 스크롤 조정을 즉시 수행 (하이라이트 튀는 현상 방지)
-        container.scrollLeft = newContentX - viewportX;
-        container.scrollTop = newContentY - viewportY;
+      // 스케일 변경 (이 과정에서 setLayoutTick이 호출됨)
+      pdfZoomManualRef.current = true;
+      viewer.currentScale = clampedScale;
+      setPdfZoom(clampedScale); // 헤더와 연동
 
-        // 렌더링 및 레이아웃 업데이트
-        scheduleRenderRefresh();
-        setLayoutTick((prev) => prev + 1);
-      } else {
-        // 마우스 위치가 없으면 기존 방식대로
-        setPdfScale(clampedScale);
-      }
+      // 스크롤 조정을 즉시 수행 (하이라이트 튀는 현상 방지)
+      container.scrollLeft = newContentX - viewportX;
+      container.scrollTop = newContentY - viewportY;
+
+      // 렌더링 및 레이아웃 업데이트
+      scheduleRenderRefresh();
+      setLayoutTick((prev) => prev + 1);
     },
-    [setPdfScale, scheduleRenderRefresh, setLayoutTick]
+    [scheduleRenderRefresh, setLayoutTick, setPdfZoom]
   );
 
   useEffect(() => {

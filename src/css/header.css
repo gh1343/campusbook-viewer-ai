@@ -14,7 +14,7 @@
   border-bottom: 1px solid rgb(226 232 240);
   user-select: none;
   -webkit-user-select: none;
-  touch-action: none;
+  touch-action: manipulation; /* 더블탭 줌 방지, 일반 탭은 허용 */
 }
 .header_inner {
   display: flex;
@@ -450,6 +450,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .hub_btn:hover {

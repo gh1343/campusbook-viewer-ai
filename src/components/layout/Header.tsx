@@ -40,6 +40,13 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
     }
   };
 
+  // 더블탭 줌 방지: 버튼 클릭 시 preventDefault
+  const handleButtonClick = (callback: () => void) => (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    callback();
+  };
+
   return (
     <header className="header">
       {syncStatus === 'SYNCING' && <div className="sync_progress_bar"></div>}
@@ -80,13 +87,28 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
           <div className="center_hub">
             {/* 확대/축소 그룹 */}
             <div className="hub_group zoom_group">
-              <button onClick={zoomPdfOut} className="hub_btn" title="축소">
+              <button
+                onClick={handleButtonClick(zoomPdfOut)}
+                onTouchEnd={handleButtonClick(zoomPdfOut)}
+                className="hub_btn"
+                title="축소"
+              >
                 <ZoomOut size={17} />
               </button>
-              <button onClick={resetPdfZoom} className="zoom_percent" title="기본 크기">
+              <button
+                onClick={handleButtonClick(resetPdfZoom)}
+                onTouchEnd={handleButtonClick(resetPdfZoom)}
+                className="zoom_percent"
+                title="기본 크기"
+              >
                 {Math.round(pdfZoom * 100)}%
               </button>
-              <button onClick={zoomPdfIn} className="hub_btn" title="확대">
+              <button
+                onClick={handleButtonClick(zoomPdfIn)}
+                onTouchEnd={handleButtonClick(zoomPdfIn)}
+                className="hub_btn"
+                title="확대"
+              >
                 <ZoomIn size={17} />
               </button>
             </div>
@@ -94,14 +116,16 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
             {/* 보기 모드 그룹 */}
             <div className="hub_group view_group">
               <button
-                onClick={() => setViewMode('single')}
+                onClick={handleButtonClick(() => setViewMode('single'))}
+                onTouchEnd={handleButtonClick(() => setViewMode('single'))}
                 className={`hub_btn ${viewMode === 'single' ? 'active' : ''}`}
                 title="1쪽 보기"
               >
                 <Square size={17} />
               </button>
               <button
-                onClick={() => setViewMode('double')}
+                onClick={handleButtonClick(() => setViewMode('double'))}
+                onTouchEnd={handleButtonClick(() => setViewMode('double'))}
                 className={`hub_btn ${viewMode === 'double' ? 'active' : ''}`}
                 title="2쪽 보기"
               >
@@ -112,21 +136,24 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
             {/* 필기 도구 그룹 */}
             <div className="hub_group pen_group">
               <button
-                onClick={() => setDrawingMode(drawingMode === 'pen' ? 'idle' : 'pen')}
+                onClick={handleButtonClick(() => setDrawingMode(drawingMode === 'pen' ? 'idle' : 'pen'))}
+                onTouchEnd={handleButtonClick(() => setDrawingMode(drawingMode === 'pen' ? 'idle' : 'pen'))}
                 className={`hub_btn ${drawingMode === 'pen' ? 'active pen_active' : ''}`}
                 title="펜"
               >
                 <Pen size={17} />
               </button>
               <button
-                onClick={() => setDrawingMode(drawingMode === 'eraser' ? 'idle' : 'eraser')}
+                onClick={handleButtonClick(() => setDrawingMode(drawingMode === 'eraser' ? 'idle' : 'eraser'))}
+                onTouchEnd={handleButtonClick(() => setDrawingMode(drawingMode === 'eraser' ? 'idle' : 'eraser'))}
                 className={`hub_btn ${drawingMode === 'eraser' ? 'active eraser_active' : ''}`}
                 title="지우개"
               >
                 <Eraser size={17} />
               </button>
               <button
-                onClick={() => setShowPenSettings(!showPenSettings)}
+                onClick={handleButtonClick(() => setShowPenSettings(!showPenSettings))}
+                onTouchEnd={handleButtonClick(() => setShowPenSettings(!showPenSettings))}
                 className={`hub_btn pen_color_btn ${showPenSettings ? 'settings_open' : ''}`}
                 title="펜 설정"
               >
@@ -137,7 +164,8 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
             {/* 북마크 */}
             <div className="hub_group bookmark_group">
               <button
-                onClick={handleBookmarkClick}
+                onClick={handleButtonClick(handleBookmarkClick)}
+                onTouchEnd={handleButtonClick(handleBookmarkClick)}
                 className={`hub_btn ${isBookmarked ? 'active bookmark_active' : ''}`}
                 title="북마크"
               >
