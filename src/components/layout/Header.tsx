@@ -17,7 +17,8 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
     isToolsOpen, setToolsOpen, bookmarks, currentPdfPage,
     syncStatus, lastSavedAt, saveAll,
     addPdfBookmark, removePdfBookmark,
-    zoomPdfIn, zoomPdfOut, pdfZoom, resetPdfZoom
+    zoomPdfIn, zoomPdfOut, pdfZoom, resetPdfZoom,
+    pdfLoadProgress, pdfLoadTime, pdfIsLoading
   } = useBook();
 
   const navigate = useNavigate();
@@ -42,6 +43,11 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
   return (
     <header className="header">
       {syncStatus === 'SYNCING' && <div className="sync_progress_bar"></div>}
+      {pdfIsLoading && (
+        <div className="pdf_load_progress_bar">
+          <div className="pdf_load_progress_fill" style={{ width: `${pdfLoadProgress}%` }}></div>
+        </div>
+      )}
 
       <div className="header_inner">
         {/* 좌측: 로고 및 내비게이션 */}
@@ -61,6 +67,12 @@ export const Header: React.FC<{ toggleSidebar: () => void; isSidebarOpen?: boole
             </div>
             <span className="logo_text">CampusBook</span>
           </div>
+          {pdfIsLoading && (
+            <div className="pdf_load_status">
+              <span className="load_percent">{pdfLoadProgress}%</span>
+              <span className="load_time">{pdfLoadTime.toFixed(1)}초</span>
+            </div>
+          )}
         </div>
 
         {/* 중앙: 통합 인터랙션 허브 */}
