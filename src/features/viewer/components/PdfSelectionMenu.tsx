@@ -44,7 +44,7 @@ export const PdfSelectionMenu: React.FC<PdfSelectionMenuProps> = ({
       {/* <div className="pdf_selection_menu_copy_block">
         <button onClick={onCopy}>Copy</button>
       </div> */}
-      <button onClick={onAskAi}>AI</button>
+      {/* <button onClick={onAskAi}>AI</button> */}
       <button onClick={onMemo}>Memo</button>
       <button onClick={onCancel}>Cancel</button>
     </div>

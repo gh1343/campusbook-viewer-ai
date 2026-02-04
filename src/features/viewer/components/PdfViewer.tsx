@@ -197,6 +197,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const overlaySelectionRangeRef = useRef<Range | null>(null);
   const overlayIsSelectingRef = useRef(false);
   const overlayLongPressTimerRef = useRef<number | null>(null);
+  const [tempSelectionRects, setTempSelectionRects] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  }[]>([]);
 
   useEffect(() => {
     drawingModeRef.current = drawingMode;
@@ -1434,6 +1440,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const cancelSelection = () => {
     window.getSelection()?.removeAllRanges();
     setSelection((prev) => ({ ...prev, show: false }));
+    selectionCacheRef.current = null;
+    overlaySelectionRangeRef.current = null;
   };
 
   const handleAskAi = () => {
@@ -1448,6 +1456,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   // 오버레이 터치 핸들러
   const handleOverlayTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length !== 1) return;
+
+    // 선택 메뉴가 표시 중이면 터치 무시 (네이티브 메뉴 방지)
+    if (selection.show) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
 
     const touch = e.touches[0];
     overlayTouchStartRef.current = {
@@ -1537,7 +1552,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
         overlaySelectionRangeRef.current = range;
 
-        // 시각적 선택 표시 (선택 영역을 하이라이트)
+        // 시각적 선택 표시
         const sel = window.getSelection();
         sel?.removeAllRanges();
         sel?.addRange(range);
@@ -1673,7 +1688,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           data-drawing-mode={drawingMode}
           style={{
             cursor: drawingMode === "pen" ? "crosshair" : drawingMode === "eraser" ? "crosshair" : "auto",
-            userSelect: "none",
+            // PC에서는 기본 선택 허용, 모바일에서는 오버레이가 처리
+            userSelect: drawingMode !== "idle" ? "none" : "auto",
           }}
           onPointerDown={handleContainerPointerDown}
           onPointerMove={handleContainerPointerMove}
@@ -1688,7 +1704,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           >
             <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
 
-            {/* 투명 오버레이 - 터치 이벤트를 가로채서 텍스트 선택 처리 */}
+            {/* 투명 오버레이 - 터치 이벤트를 가로채서 텍스트 선택 처리 (터치 디바이스에서만 활성화) */}
             <div
               ref={overlayRef}
               className="pdf_touch_overlay"
@@ -1703,7 +1719,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
                 width: "100%",
                 height: "100%",
                 zIndex: 10,
-                pointerEvents: "auto",
+                pointerEvents: isTouchDevice ? "auto" : "none", // 터치 디바이스에서만 활성화
                 touchAction: "pan-y pan-x", // 스크롤 허용
               }}
             />
