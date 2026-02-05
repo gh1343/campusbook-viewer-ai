@@ -738,7 +738,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (!page || page < 1) return;
     setSyncStatus("UNSAVED");
     setBookmarks((prev) => {
-      if (prev.some((b) => b.page === page)) return prev;
+      if (prev.some((b) => b.page === page && !b.deleted)) return prev;
       const now = Date.now();
       const bookmark: PdfBookmark = {
         id: now.toString(),

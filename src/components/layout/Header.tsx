@@ -62,7 +62,9 @@ export const Header: React.FC<{
 
   const [showPenSettings, setShowPenSettings] = useState(false);
 
-  const currentPageBookmark = bookmarks.find((b) => b.page === currentPdfPage);
+  const currentPageBookmark = bookmarks.find(
+    (b) => b.page === currentPdfPage && !b.deleted
+  );
   const isBookmarked = Boolean(currentPageBookmark);
   const colors: DrawingColor[] = [
     "#000000",
