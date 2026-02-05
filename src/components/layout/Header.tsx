@@ -87,6 +87,8 @@ export const Header: React.FC<{
       e.preventDefault();
       e.stopPropagation();
       callback();
+      // 터치 후 포커스 제거하여 :active 상태 제거
+      (e.currentTarget as HTMLElement).blur();
     };
 
   return (

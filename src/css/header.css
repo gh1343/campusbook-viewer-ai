@@ -462,9 +462,17 @@
   user-select: none;
 }
 
-.hub_btn:hover {
-  background-color: rgb(255 255 255);
-  color: rgb(71 85 105);
+.hub_btn:active:not(.active),
+.hub_btn:focus:not(.active) {
+  background-color: transparent;
+  outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hub_btn:hover {
+    background-color: rgb(255 255 255);
+    color: rgb(71 85 105);
+  }
 }
 
 .hub_btn.active {
