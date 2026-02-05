@@ -14,7 +14,7 @@
   border-bottom: 1px solid rgb(226 232 240);
   user-select: none;
   -webkit-user-select: none;
-  touch-action: manipulation; /* 더블탭 줌 방지, 일반 탭은 허용 */
+  touch-action: none; /* 더블탭 줌 방지, 일반 탭은 허용 */
 }
 .header_inner {
   display: flex;
@@ -327,7 +327,7 @@
   overflow: hidden;
 }
 .sync_progress_bar::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -337,8 +337,12 @@
   animation: progress 2s infinite linear;
 }
 @keyframes progress {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
 }
 
 /* PDF 로딩 프로그레스 바 */
@@ -373,7 +377,8 @@
 }
 
 @keyframes pulse_glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 5px rgba(245, 158, 11, 0.3);
   }
   50% {
@@ -518,7 +523,8 @@
   width: 256px;
   background-color: rgb(255 255 255);
   border-radius: 16px;
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+    0 8px 10px -6px rgb(0 0 0 / 0.1);
   border: 1px solid rgb(226 232 240);
   padding: 16px;
   z-index: 70;
@@ -665,8 +671,13 @@
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
 }
 
 .save_btn.syncing {
@@ -681,8 +692,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .save_btn_group {

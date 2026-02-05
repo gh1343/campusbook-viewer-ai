@@ -99,6 +99,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     getChapterTitleByPage,
     registerPdfZoomHandler,
     setPdfZoom,
+    pdfZoom,
     setPdfLoadProgress,
     setPdfLoadTime,
     setPdfIsLoading,
@@ -127,10 +128,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const pdfViewerRef = useRef<PDFViewer | null>(null);
   const pdfZoomInitialScaleRef = useRef<number | null>(null);
   const pdfZoomManualRef = useRef(false);
+  const lastManualZoomTimeRef = useRef<number>(0); // 마지막 수동 줌 시점 기록
   const PDF_ZOOM_STEP = 0.1;
   const PDF_ZOOM_MIN_SCALE = 0.5;
   const PDF_ZOOM_MAX_SCALE = 3;
   const PINCH_SELECTION_COOLDOWN_MS = 200;
+  const MANUAL_ZOOM_COOLDOWN_MS = 300; // 수동 줌 후 자동 조정 대기 시간
 
   const {
     loading,
@@ -552,6 +555,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       if (Math.abs(clampedScale - viewer.currentScale) < 0.001) return;
 
       pdfZoomManualRef.current = true;
+      lastManualZoomTimeRef.current = Date.now(); // 수동 줌 시점 기록
       viewer.currentScale = clampedScale;
       setPdfZoom(clampedScale); // 헤더와 연동
       scheduleRenderRefresh();
@@ -598,6 +602,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       // 스케일 변경 (이 과정에서 setLayoutTick이 호출됨)
       pdfZoomManualRef.current = true;
+      lastManualZoomTimeRef.current = Date.now(); // 수동 줌 시점 기록
       viewer.currentScale = clampedScale;
       setPdfZoom(clampedScale); // 헤더와 연동
 
@@ -616,6 +621,25 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (!registerPdfZoomHandler) return;
     registerPdfZoomHandler(applyPdfZoom);
   }, [registerPdfZoomHandler, applyPdfZoom]);
+
+  // pdfZoom 상태가 외부에서 변경되었을 때 (예: resetPdfZoom 버튼 클릭) viewer에 반영
+  useEffect(() => {
+    const viewer = pdfViewerRef.current;
+    if (!viewer) return;
+
+    // 수동 줌 변경 중이 아니고, 현재 스케일과 다를 때만 적용
+    if (pdfZoomManualRef.current) {
+      pdfZoomManualRef.current = false;
+      return;
+    }
+
+    const currentScale = viewer.currentScale || 1;
+    if (Math.abs(currentScale - pdfZoom) > 0.001) {
+      viewer.currentScale = pdfZoom;
+      scheduleRenderRefresh();
+      setLayoutTick((prev) => prev + 1);
+    }
+  }, [pdfZoom, scheduleRenderRefresh, setLayoutTick]);
 
   const onPageChangeFiltered = useCallback((page: number) => {
     onPageChange?.(page);
@@ -674,7 +698,17 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         return;
       }
 
-      if (pdfZoomManualRef.current) return;
+      // 수동 줌 변경 후 일정 시간 동안 자동 스케일 조정 건너뛰기
+      const timeSinceManualZoom = Date.now() - lastManualZoomTimeRef.current;
+      if (timeSinceManualZoom < MANUAL_ZOOM_COOLDOWN_MS) {
+        return;
+      }
+
+      // pdfZoomManualRef 플래그도 확인 (추가 안전장치)
+      if (pdfZoomManualRef.current) {
+        pdfZoomManualRef.current = false;
+        return;
+      }
 
       const pageEl = contentEl.querySelector<HTMLElement>(".page");
       if (!pageEl) return;
@@ -990,6 +1024,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     );
 
     if (!pageElBefore) {
+      pdfZoomManualRef.current = true; // 자동 스케일 조정 방지
       setPdfScale(nextScale);
       resetPinchTransform();
       setPinchInteractionState(false);
@@ -1009,7 +1044,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const anchorAbsX = (pageRectBefore.left - containerRect.left) + anchor.relX * pageRectBefore.width;
     const anchorAbsY = (pageRectBefore.top - containerRect.top) + anchor.relY * pageRectBefore.height;
 
-    // 스케일 적용
+    // 스케일 적용 (핀치 줌이므로 수동 변경으로 표시)
+    pdfZoomManualRef.current = true;
     setPdfScale(nextScale);
 
     // 메모리 정리: 불필요한 transform 제거
