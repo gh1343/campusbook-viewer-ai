@@ -46,7 +46,7 @@ export const PdfSelectionMenu: React.FC<PdfSelectionMenuProps> = ({
       </div> */}
       {/* <button onClick={onAskAi}>AI</button> */}
       <button onClick={onMemo}>Memo</button>
-      <button onClick={onCancel}>Cancel</button>
+      {/* <button onClick={onCancel}>Cancel</button> */}
     </div>
   );
 };

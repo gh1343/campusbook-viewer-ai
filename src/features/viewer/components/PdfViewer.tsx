@@ -191,19 +191,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const containerTouchActionRef = useRef<string | null>(null);
   const containerUserSelectRef = useRef<string | null>(null);
 
-  // 오버레이 터치 선택 상태
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const overlayTouchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-  const overlaySelectionRangeRef = useRef<Range | null>(null);
-  const overlayIsSelectingRef = useRef(false);
-  const overlayLongPressTimerRef = useRef<number | null>(null);
-  const [tempSelectionRects, setTempSelectionRects] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    height: number;
-  }[]>([]);
-
   useEffect(() => {
     drawingModeRef.current = drawingMode;
     penColorRef.current = penColor;
@@ -1440,8 +1427,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const cancelSelection = () => {
     window.getSelection()?.removeAllRanges();
     setSelection((prev) => ({ ...prev, show: false }));
-    selectionCacheRef.current = null;
-    overlaySelectionRangeRef.current = null;
   };
 
   const handleAskAi = () => {
@@ -1451,216 +1436,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (success) {
       window.getSelection()?.removeAllRanges();
     }
-  };
-
-  // 오버레이 터치 핸들러
-  const handleOverlayTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (e.touches.length !== 1) return;
-
-    // 선택 메뉴가 표시 중이면 터치 무시 (네이티브 메뉴 방지)
-    if (selection.show) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    const touch = e.touches[0];
-    overlayTouchStartRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-      time: Date.now(),
-    };
-    overlaySelectionRangeRef.current = null;
-    overlayIsSelectingRef.current = false;
-
-    // 500ms 후 롱프레스로 간주하고 선택 모드 진입
-    if (overlayLongPressTimerRef.current) {
-      clearTimeout(overlayLongPressTimerRef.current);
-    }
-    overlayLongPressTimerRef.current = window.setTimeout(() => {
-      overlayIsSelectingRef.current = true;
-
-      // iOS에서 스크롤 완전히 막기
-      const container = viewerContainerRef.current;
-      const overlay = overlayRef.current;
-      if (container) {
-        container.style.overflow = "hidden";
-        container.style.touchAction = "none";
-      }
-      if (overlay) {
-        overlay.style.touchAction = "none";
-      }
-
-      // iOS pull-to-refresh 막기 (body와 html 레벨)
-      document.body.style.overscrollBehavior = "none";
-      document.body.style.touchAction = "none";
-      document.documentElement.style.overscrollBehavior = "none";
-      document.documentElement.style.touchAction = "none";
-
-      // 롱프레스 시작 시 햅틱 피드백 (지원 시)
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    }, 500);
-  };
-
-  const handleOverlayTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!overlayTouchStartRef.current || e.touches.length !== 1) return;
-
-    const touch = e.touches[0];
-    const startPos = overlayTouchStartRef.current;
-
-    // 선택 모드가 활성화되었으면 무조건 스크롤 막기 (iOS용)
-    if (overlayIsSelectingRef.current) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    // 이동 거리 계산
-    const distance = Math.hypot(touch.clientX - startPos.x, touch.clientY - startPos.y);
-
-    // 이동 거리가 크면 스크롤로 간주하고 롱프레스 타이머 취소
-    if (distance > 30 && !overlayIsSelectingRef.current) {
-      if (overlayLongPressTimerRef.current) {
-        clearTimeout(overlayLongPressTimerRef.current);
-        overlayLongPressTimerRef.current = null;
-      }
-      return; // 스크롤 허용
-    }
-
-    // 선택 모드가 활성화된 경우에만 텍스트 선택 처리
-    if (!overlayIsSelectingRef.current) return;
-
-    // 오버레이를 일시적으로 비활성화하여 elementFromPoint가 텍스트 레이어를 찾도록 함
-    const overlay = e.currentTarget as HTMLElement;
-    overlay.style.pointerEvents = "none";
-
-    try {
-      const startEl = document.elementFromPoint(startPos.x, startPos.y);
-      const endEl = document.elementFromPoint(touch.clientX, touch.clientY);
-
-      if (!startEl || !endEl) return;
-
-      // textLayer 내부의 텍스트 노드 찾기
-      const startTextNode = findTextNodeAtPoint(startEl, startPos.x, startPos.y);
-      const endTextNode = findTextNodeAtPoint(endEl, touch.clientX, touch.clientY);
-
-      if (startTextNode && endTextNode) {
-        const range = document.createRange();
-        range.setStart(startTextNode.node, startTextNode.offset);
-        range.setEnd(endTextNode.node, endTextNode.offset);
-
-        overlaySelectionRangeRef.current = range;
-
-        // 시각적 선택 표시
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      }
-    } finally {
-      overlay.style.pointerEvents = "auto";
-    }
-  };
-
-  const handleOverlayTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    // 타이머 정리
-    if (overlayLongPressTimerRef.current) {
-      clearTimeout(overlayLongPressTimerRef.current);
-      overlayLongPressTimerRef.current = null;
-    }
-
-    // iOS 스크롤 복원
-    const container = viewerContainerRef.current;
-    const overlay = overlayRef.current;
-    if (container && overlayIsSelectingRef.current) {
-      container.style.overflow = "";
-      container.style.touchAction = "";
-    }
-    if (overlay && overlayIsSelectingRef.current) {
-      overlay.style.touchAction = "pan-y pan-x";
-    }
-
-    // iOS pull-to-refresh 복원 (body와 html 레벨)
-    if (overlayIsSelectingRef.current) {
-      document.body.style.overscrollBehavior = "";
-      document.body.style.touchAction = "";
-      document.documentElement.style.overscrollBehavior = "";
-      document.documentElement.style.touchAction = "";
-    }
-
-    if (!overlayTouchStartRef.current) return;
-
-    // 선택 모드가 활성화되지 않았으면 아무것도 안 함 (스크롤 허용)
-    if (!overlayIsSelectingRef.current) {
-      overlayTouchStartRef.current = null;
-      overlaySelectionRangeRef.current = null;
-      return;
-    }
-
-    // 선택된 범위가 있으면 커스텀 툴팁 표시
-    if (overlaySelectionRangeRef.current) {
-      const range = overlaySelectionRangeRef.current;
-      const text = range.toString().trim();
-
-      if (text) {
-        const rect = range.getBoundingClientRect();
-        const pageEl = getPageElFromRange(range);
-        const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber) || null : null;
-        const visualScale = getVisualScale();
-        const rects = pageEl && pageNumber
-          ? buildHighlightRectsFromSelection(range, pageEl, visualScale)
-          : [];
-
-        selectionCacheRef.current = {
-          range: range.cloneRange(),
-          pageEl,
-          pageNumber,
-          text,
-          visualScale,
-          rects,
-        };
-
-        const menuWidth = 210;
-        const margin = 10;
-        const top = rect.bottom + margin;
-        const left = rect.left + rect.width / 2 - menuWidth / 2;
-
-        const clampedTop = top < margin ? rect.bottom + margin : top;
-        const clampedLeft = Math.min(
-          Math.max(left, margin),
-          window.innerWidth - menuWidth - margin
-        );
-
-        setSelection({
-          text,
-          top: clampedTop,
-          left: clampedLeft,
-          show: true,
-        });
-      }
-    }
-
-    overlayTouchStartRef.current = null;
-    overlayIsSelectingRef.current = false;
-  };
-
-  // elementFromPoint로 찾은 요소에서 텍스트 노드와 오프셋 찾기
-  const findTextNodeAtPoint = (element: Element, x: number, y: number): { node: Node; offset: number } | null => {
-    // textLayer span 내부의 텍스트 노드 찾기
-    const textSpan = element.closest(".textLayer span");
-    if (!textSpan) return null;
-
-    const textNode = textSpan.firstChild;
-    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null;
-
-    // 간단한 오프셋 계산 (정확도를 위해서는 더 복잡한 로직 필요)
-    const text = textNode.textContent || "";
-    const spanRect = textSpan.getBoundingClientRect();
-    const relativeX = x - spanRect.left;
-    const charWidth = spanRect.width / text.length;
-    const offset = Math.min(text.length, Math.max(0, Math.round(relativeX / charWidth)));
-
-    return { node: textNode, offset };
   };
 
   return (
@@ -1688,7 +1463,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           data-drawing-mode={drawingMode}
           style={{
             cursor: drawingMode === "pen" ? "crosshair" : drawingMode === "eraser" ? "crosshair" : "auto",
-            // PC에서는 기본 선택 허용, 모바일에서는 오버레이가 처리
             userSelect: drawingMode !== "idle" ? "none" : "auto",
           }}
           onPointerDown={handleContainerPointerDown}
@@ -1703,27 +1477,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             className="pdf_viewer_transform_layer"
           >
             <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
-
-            {/* 투명 오버레이 - 터치 이벤트를 가로채서 텍스트 선택 처리 (터치 디바이스에서만 활성화) */}
-            <div
-              ref={overlayRef}
-              className="pdf_touch_overlay"
-              onTouchStart={handleOverlayTouchStart}
-              onTouchMove={handleOverlayTouchMove}
-              onTouchEnd={handleOverlayTouchEnd}
-              onTouchCancel={handleOverlayTouchEnd}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                zIndex: 10,
-                pointerEvents: isTouchDevice ? "auto" : "none", // 터치 디바이스에서만 활성화
-                touchAction: "pan-y pan-x", // 스크롤 허용
-              }}
-            />
-
             {/* 커스텀 하이라이트 오버레이 */}
             <div
               className="pdf_highlight_layer"
