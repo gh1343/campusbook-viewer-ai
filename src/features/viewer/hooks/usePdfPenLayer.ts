@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { PageCanvasEntry } from "../utils/pdfUtils";
+import { useDrawing } from "../../../contexts/DrawingContext";
 
 type MutableRef<T> = { current: T };
 
@@ -12,12 +13,7 @@ interface UsePdfPenLayerParams {
   viewerRef: MutableRef<HTMLElement | null>;
   viewerContainerRef: MutableRef<HTMLElement | null>;
   pageCanvasMapRef: MutableRef<Map<number, PageCanvasEntry>>;
-  drawingMode: string;
   showAnnotations: boolean;
-  chapterStrokes: any;
-  penColor: string;
-  penWidth: number;
-  penOpacity: number;
   scheduleRenderRefresh: () => void;
   setLayoutTick: (updater: (t: number) => number) => void;
 }
@@ -27,15 +23,13 @@ export const usePdfPenLayer = ({
   viewerRef,
   viewerContainerRef,
   pageCanvasMapRef,
-  drawingMode,
   showAnnotations,
-  chapterStrokes,
-  penColor,
-  penWidth,
-  penOpacity,
   scheduleRenderRefresh,
   setLayoutTick,
 }: UsePdfPenLayerParams) => {
+  const { drawingMode, chapterStrokes, penColor, penWidth, penOpacity } =
+    useDrawing();
+
   useEffect(() => {
     penRuntime.refreshCanvases();
   }, [penRuntime, drawingMode, showAnnotations]);

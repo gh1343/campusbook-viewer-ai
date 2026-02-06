@@ -1,6 +1,7 @@
 import React from "react";
 import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { BookProvider } from "./contexts/BookContext";
+import { DrawingProvider } from "./contexts/DrawingContext";
 import { ReaderPage } from "./pages/ReaderPage";
 import { ReportPage } from "./pages/ReportPage";
 
@@ -55,7 +56,9 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <BookProvider>
-        <AppRoutes />
+        <DrawingProvider>
+          <AppRoutes />
+        </DrawingProvider>
       </BookProvider>
     </HashRouter>
   );

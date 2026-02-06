@@ -86,6 +86,7 @@ export interface Stroke {
   color: string;
   width: number;
   opacity: number;
+  deleted?: boolean;
   isEraser?: boolean;
   anchorIndex?: number;
   pageNumber?: number;
@@ -168,21 +169,6 @@ export interface BookContextType {
   requestHighlightNoteEdit: (id: string) => void;
   clearHighlightNoteEditRequest: () => void;
   goToHighlight: (hl: Highlight | string) => void;
-
-  drawingMode: DrawingMode;
-  setDrawingMode: (mode: DrawingMode) => void;
-
-  penColor: DrawingColor;
-  setPenColor: (color: DrawingColor) => void;
-  penWidth: number;
-  setPenWidth: (width: number) => void;
-  penOpacity: number;
-  setPenOpacity: (opacity: number) => void;
-
-  chapterStrokes: Stroke[];
-  addStroke: (stroke: Stroke) => void;
-  removeStroke: (strokeId: string) => void;
-  hasStrokes: () => boolean;
 
   generalNotes: GeneralNote[];
   addGeneralNote: (title: string, content: string) => void;

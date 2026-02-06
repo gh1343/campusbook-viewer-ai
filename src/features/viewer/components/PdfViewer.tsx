@@ -24,6 +24,7 @@ import {
   usePdfViewerUiState,
 } from "..";
 import { useBook } from "../../../contexts/BookContext";
+import { useDrawing } from "../../../contexts/DrawingContext";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
@@ -85,13 +86,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     triggerSmartExplain,
     setPdfTextPages,
     pdfSearchHighlight,
-    drawingMode,
-    penColor,
-    penWidth,
-    penOpacity,
-    chapterStrokes,
-    addStroke,
-    removeStroke,
     showAnnotations,
     setToolsOpen,
     setActiveToolTab,
@@ -105,6 +99,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfIsLoading,
     currentPdfPage,
   } = useBook();
+  const {
+    drawingMode,
+    penColor,
+    penWidth,
+    penOpacity,
+    chapterStrokes,
+    addStroke,
+    removeStroke,
+  } = useDrawing();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
     /iP(hone|od|ad)/.test(ua) &&
@@ -682,12 +685,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     viewerRef,
     viewerContainerRef,
     pageCanvasMapRef,
-    drawingMode,
     showAnnotations,
-    chapterStrokes,
-    penColor,
-    penWidth,
-    penOpacity,
     scheduleRenderRefresh,
     setLayoutTick,
   });

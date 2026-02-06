@@ -12,10 +12,7 @@ import {
   FontSize,
   Theme,
   ReadingStats,
-  DrawingMode,
-  Stroke,
   GeneralNote,
-  DrawingColor,
   ChatMessage,
   BookContextType,
   RagChunk,
@@ -39,8 +36,6 @@ import {
   loadProgressFromServer,
   saveBookmarksToServer,
   loadBookmarksFromServer,
-  saveDrawingsToServer,
-  loadDrawingsFromServer,
   saveNotesToServer,
   loadNotesFromServer,
 } from "../services/rmsService";
@@ -318,12 +313,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [pendingHighlightEditId, setPendingHighlightEditId] = useState<
     string | null
   >(null);
-
-  const [drawingMode, setDrawingMode] = useState<DrawingMode>("idle");
-  const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
-  const [penWidth, setPenWidth] = useState<number>(3);
-  const [penOpacity, setPenOpacity] = useState<number>(1.0);
-  const [chapterStrokes, setChapterStrokes] = useState<Stroke[]>([]);
 
   const [generalNotes, setGeneralNotes] = useState<GeneralNote[]>([]);
   const [isCaptureMode, setCaptureMode] = useState(false);
@@ -937,29 +926,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     focusHighlight(hl.id);
   };
 
-  const addStroke = (stroke: Stroke) => {
-    const itemBytes = getJsonBytes(stroke);
-    markAsUnsaved();
-    setChapterStrokes((prev) => {
-      const next = [...prev, stroke];
-      const totalBytes = getJsonBytes(next);
-      if (enable_debug_log) {
-      }
-      return next;
-    });
-  };
-
-  const removeStroke = (strokeId: string) => {
-    markAsUnsaved();
-    setChapterStrokes((prev) =>
-      prev.map((s) => (s.id === strokeId ? { ...s, deleted: true } : s))
-    );
-  };
-
-  const hasStrokes = () => {
-    return chapterStrokes.filter((s) => !s.deleted).length > 0;
-  };
-
   const addGeneralNote = (title: string, content: string) => {
     const now = Date.now();
     markAsUnsaved();
@@ -1235,7 +1201,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       bookmarks,
       highlights,
       notes: generalNotes,
-      strokes: chapterStrokes,
+      strokes: [],
       progress: {
         currentPdfPage,
         viewMode,
@@ -1397,19 +1363,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const localBookmarks = Array.isArray(data.bookmarks)
         ? data.bookmarks
         : [];
-      // Migrate old format { "pdf-main": [...] } to new format [...]
-      let localDrawings: Stroke[] = [];
-      if (Array.isArray(data.strokes)) {
-        localDrawings = data.strokes;
-      } else if (data.strokes && typeof data.strokes === "object") {
-        // Old format: { "pdf-main": [...] }
-        const strokesObj = data.strokes as Record<string, unknown[]>;
-        localDrawings = (strokesObj["pdf-main"] || []) as Stroke[];
-      }
       const localNotes = Array.isArray(data.notes) ? data.notes : [];
       let serverHighlights: any[] | null = null;
       let serverBookmarks: any[] | null = null;
-      let serverDrawings: Stroke[] | null = null;
       let serverNotes: any[] | null = null;
 
       // Try to load highlights from server first
@@ -1470,40 +1426,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           }
         } catch (err) {
           console.error("[Bookmarks] ❌ Failed to load from server:", err);
-        }
-      } else {
-      }
-
-      // Try to load drawings from server
-      if (config) {
-        try {
-          const drawingData = await loadDrawingsFromServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-          });
-          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
-          if (
-            drawingData &&
-            drawingData.ok &&
-            drawingData.result &&
-            Array.isArray(drawingData.result.dataList) &&
-            drawingData.result.dataList.length > 0
-          ) {
-            // Parse the most recent drawings data
-            const parsedDrawings = JSON.parse(drawingData.result.dataList[0]);
-            // Handle both old format { "pdf-main": [...] } and new format [...]
-            if (Array.isArray(parsedDrawings)) {
-              serverDrawings = parsedDrawings.filter((d: any) => !d.deleted);
-            } else if (parsedDrawings && typeof parsedDrawings === "object") {
-              serverDrawings = (parsedDrawings["pdf-main"] || []).filter(
-                (d: any) => !d.deleted
-              );
-            }
-          } else {
-            console.warn("[Drawings] Invalid server response:", drawingData);
-          }
-        } catch (err) {
-          console.error("[Drawings] ❌ Failed to load from server:", err);
         }
       } else {
       }
@@ -1825,73 +1747,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       } else if (localBookmarks.length > 0) {
         // No server data: use local
         setBookmarks(localBookmarks);
-      }
-
-      // Merge server and local drawings
-      if (serverDrawings && serverDrawings.length > 0) {
-
-        // Simple merge: use all server data and add local strokes not in server
-        const serverIds = new Set(serverDrawings.map((s) => s.id));
-        const localOnly = localDrawings.filter((s) => !serverIds.has(s.id));
-        const mergedDrawings = [...serverDrawings, ...localOnly];
-
-        setChapterStrokes(mergedDrawings);
-
-        // Update IndexedDB with merged drawings
-        snapshot.data.strokes = mergedDrawings;
-
-        // Save merged snapshot to IndexedDB
-        new Promise<void>((resolve, reject) => {
-          const requestId = `${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}`;
-          const cleanup = () => {
-            worker.removeEventListener("message", handleMessage);
-            worker.removeEventListener("error", handleError);
-          };
-          const handleMessage = (event: MessageEvent) => {
-            const response = event.data as {
-              type?: string;
-              requestId?: string;
-              error?: string;
-            };
-            if (!response || response.requestId !== requestId) return;
-            cleanup();
-            if (response.type === "save_complete") {
-              resolve();
-            } else {
-              reject(new Error(response.error || "IndexedDB save failed."));
-            }
-          };
-          const handleError = () => {
-            cleanup();
-            reject(new Error("IndexedDB worker error."));
-          };
-          worker.addEventListener("message", handleMessage);
-          worker.addEventListener("error", handleError);
-          worker.postMessage({
-            type: "save_bundle",
-            requestId,
-            payload: {
-              storageKey: snapshot.key,
-              data: snapshot.data,
-              meta: snapshot.meta,
-              schema_version: snapshot.schema_version,
-              savedAt: Date.now(),
-            },
-          });
-        })
-          .then(() => {
-          })
-          .catch((saveErr) => {
-            console.error(
-              "[Drawings] Failed to save merged data to IndexedDB:",
-              saveErr
-            );
-          });
-      } else if (localDrawings.length > 0) {
-        // No server data: use local
-        setChapterStrokes(localDrawings);
       }
 
       // Merge server and local notes
@@ -2341,73 +2196,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           } else {
           }
 
-          // Save drawings to server
-          const strokes = currentSnapshot.data.strokes || [];
-          if (Array.isArray(strokes) && strokes.length > 0) {
-            await saveDrawingsToServer({
-              apiBase: config.apiBase,
-              bookCd: config.bookCd,
-              drawings: strokes,
-            });
-
-            // Remove deleted strokes after successful sync
-            const updatedStrokes = strokes.filter((s: any) => !s.deleted);
-            currentSnapshot = {
-              ...currentSnapshot,
-              data: {
-                ...currentSnapshot.data,
-                strokes: updatedStrokes,
-              },
-            };
-
-            // Save cleaned snapshot to IndexedDB
-            await new Promise<void>((resolve, reject) => {
-              const requestId = `${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2)}`;
-              const cleanup = () => {
-                worker.removeEventListener("message", handleMessage);
-                worker.removeEventListener("error", handleError);
-              };
-              const handleMessage = (event: MessageEvent) => {
-                const response = event.data as {
-                  type?: string;
-                  requestId?: string;
-                  error?: string;
-                };
-                if (!response || response.requestId !== requestId) return;
-                cleanup();
-                if (response.type === "save_complete") {
-                  resolve();
-                } else {
-                  reject(new Error(response.error || "IndexedDB save failed."));
-                }
-              };
-              const handleError = () => {
-                cleanup();
-                reject(new Error("IndexedDB worker error."));
-              };
-              worker.addEventListener("message", handleMessage);
-              worker.addEventListener("error", handleError);
-              worker.postMessage({
-                type: "save_bundle",
-                requestId,
-                payload: {
-                  storageKey: currentSnapshot.key,
-                  schema_version: currentSnapshot.schema_version,
-                  savedAt: currentSnapshot.savedAt,
-                  data: currentSnapshot.data,
-                  meta: currentSnapshot.meta,
-                },
-              });
-            });
-
-            indexedDbSnapshotRef.current = currentSnapshot;
-            // Also update the local state to remove deleted strokes
-            setChapterStrokes((prev) => prev.filter((s) => !s.deleted));
-          } else {
-          }
-
           // Save notes to server
           if (
             Array.isArray(currentSnapshot.data.notes) &&
@@ -2497,11 +2285,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           }
           if (changedBookmarks.length > 0) {
             savedItems.push(`북마크: ${changedBookmarks.length}개`);
-          }
-          if (Object.keys(currentSnapshot.data.strokes || {}).length > 0) {
-            savedItems.push(
-              `필기: ${Object.keys(currentSnapshot.data.strokes || {}).length}페이지`
-            );
           }
           if (
             Array.isArray(currentSnapshot.data.notes) &&
@@ -2617,18 +2400,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         pendingHighlightEditId,
         requestHighlightNoteEdit,
         clearHighlightNoteEditRequest,
-        drawingMode,
-        setDrawingMode,
-        penColor,
-        setPenColor,
-        penWidth,
-        setPenWidth,
-        penOpacity,
-        setPenOpacity,
-        chapterStrokes,
-        addStroke,
-        removeStroke,
-        hasStrokes,
         generalNotes,
         addGeneralNote,
         updateGeneralNote,

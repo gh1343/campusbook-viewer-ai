@@ -85,7 +85,6 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     chapters,
     currentChapterIndex,
     goToChapter,
-    hasStrokes,
     bookmarks,
     goToPdfPage,
     removePdfBookmark,

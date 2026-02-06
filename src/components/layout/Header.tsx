@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useBook } from "../../contexts/BookContext";
+import { useDrawing } from "../../contexts/DrawingContext";
 import {
   Book,
   Sidebar,
@@ -30,12 +31,6 @@ export const Header: React.FC<{
   isSidebarOpen?: boolean;
 }> = ({ toggleSidebar, isSidebarOpen }) => {
   const {
-    drawingMode,
-    setDrawingMode,
-    penColor,
-    setPenColor,
-    penWidth,
-    setPenWidth,
     viewMode,
     setViewMode,
     isToolsOpen,
@@ -55,6 +50,14 @@ export const Header: React.FC<{
     pdfLoadTime,
     pdfIsLoading,
   } = useBook();
+  const {
+    drawingMode,
+    setDrawingMode,
+    penColor,
+    setPenColor,
+    penWidth,
+    setPenWidth,
+  } = useDrawing();
 
   const navigate = useNavigate();
   const location = useLocation();

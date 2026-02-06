@@ -1,5 +1,6 @@
 import React, {useRef, useState, useEffect, useMemo} from 'react';
 import {useBook} from '../../../contexts/BookContext';
+import {useDrawing} from '../../../contexts/DrawingContext';
 import {Highlighter, MessageCircleQuestion, StickyNote} from 'lucide-react';
 import {Point, Stroke, Chapter} from '../../../types';
 import html2canvas from 'html2canvas';
@@ -18,13 +19,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     fontSize,
     viewMode, // From context
     addHighlight,
-    drawingMode,
-    penColor,
-    penWidth,
-    penOpacity,
-    chapterStrokes,
-    addStroke,
-    removeStroke,
     highlights,
     activeHighlightId,
     showAnnotations,
@@ -33,6 +27,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     setCaptureMode,
     setCapturedImage,
   } = useBook();
+  const {drawingMode, penColor, penWidth, penOpacity, chapterStrokes, addStroke, removeStroke} =
+    useDrawing();
 
   const targetChapter = customChapter || contextChapter;
   const canCapture = variant === 'main';
@@ -281,7 +277,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     if (drawingMode === 'pen') {
       setCurrentPoints(prev => [...prev, point]);
     } else if (drawingMode === 'eraser') {
-      const strokes = chapterStrokes[targetChapter.id] || [];
+      const strokes = chapterStrokes.filter(s => !s.deleted);
       const children = contentRef.current
         ? (Array.from(contentRef.current.children) as HTMLElement[])
         : [];
@@ -294,7 +290,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         const hit = strokePoints.some(
           p => Math.hypot(p.x - point.x, p.y - point.y) < 20
         );
-        if (hit) removeStroke(targetChapter.id, stroke.id);
+        if (hit) removeStroke(stroke.id);
       });
     }
   };
@@ -325,7 +321,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         opacity: penOpacity,
         anchorIndex: anchorIdx,
       };
-      addStroke(targetChapter.id, newStroke);
+      addStroke(newStroke);
     }
     setCurrentPoints([]);
   };
@@ -446,7 +442,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     };
 
     const children = Array.from(contentRef.current.children) as HTMLElement[];
-    const strokes = chapterStrokes[targetChapter.id] || [];
+    const strokes = chapterStrokes.filter(s => !s.deleted);
     strokes.forEach(s => {
       let pts = s.points;
       if (s.anchorIndex !== undefined && children[s.anchorIndex]) {
