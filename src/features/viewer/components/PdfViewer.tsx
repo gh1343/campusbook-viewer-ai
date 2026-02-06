@@ -129,6 +129,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const pdfZoomInitialScaleRef = useRef<number | null>(null);
   const pdfZoomManualRef = useRef(false);
   const lastManualZoomTimeRef = useRef<number>(0); // 마지막 수동 줌 시점 기록
+  const userHasZoomedRef = useRef(false); // 사용자가 핀치/버튼으로 줌을 변경한 상태
   const PDF_ZOOM_STEP = 0.1;
   const PDF_ZOOM_MIN_SCALE = 0.5;
   const PDF_ZOOM_MAX_SCALE = 3;
@@ -213,6 +214,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   useEffect(() => {
     pdfZoomInitialScaleRef.current = null;
     pdfZoomManualRef.current = false;
+    userHasZoomedRef.current = false;
   }, [file]);
 
   useEffect(() => {
@@ -556,6 +558,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       pdfZoomManualRef.current = true;
       lastManualZoomTimeRef.current = Date.now(); // 수동 줌 시점 기록
+      userHasZoomedRef.current = true; // 사용자 줌 상태 기록
       viewer.currentScale = clampedScale;
       setPdfZoom(clampedScale); // 헤더와 연동
       scheduleRenderRefresh();
@@ -603,6 +606,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       // 스케일 변경 (이 과정에서 setLayoutTick이 호출됨)
       pdfZoomManualRef.current = true;
       lastManualZoomTimeRef.current = Date.now(); // 수동 줌 시점 기록
+      userHasZoomedRef.current = true; // 사용자 줌 상태 기록
       viewer.currentScale = clampedScale;
       setPdfZoom(clampedScale); // 헤더와 연동
 
@@ -635,6 +639,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     const currentScale = viewer.currentScale || 1;
     if (Math.abs(currentScale - pdfZoom) > 0.001) {
+      // 외부에서 줌이 리셋되면 사용자 줌 상태도 초기화
+      userHasZoomedRef.current = false;
       viewer.currentScale = pdfZoom;
       scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
@@ -698,6 +704,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         return;
       }
 
+      // 사용자가 핀치/버튼으로 줌을 변경한 상태이면 자동 스케일 조정 건너뛰기
+      if (userHasZoomedRef.current) {
+        return;
+      }
+
       // 수동 줌 변경 후 일정 시간 동안 자동 스케일 조정 건너뛰기
       const timeSinceManualZoom = Date.now() - lastManualZoomTimeRef.current;
       if (timeSinceManualZoom < MANUAL_ZOOM_COOLDOWN_MS) {
@@ -754,9 +765,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   }, [loading, layoutTick]);
 
   // 사이드바가 열리면 단일 페이지, 닫히면 2페이지 스프레드(데스크톱)로 전환
+  // 패널 토글 시 현재 보고 있는 페이지의 스크롤 위치를 보존
   useEffect(() => {
     const viewer = pdfViewerRef.current;
+    const container = viewerContainerRef.current;
+    const viewerRoot = viewerRef.current;
     if (!viewer) return;
+
+    // 현재 보고 있는 페이지 번호 저장
+    const currentPage = viewer.currentPageNumber;
+
     const preferSpreadView = !isMobileLike;
     const nextMode = forceSinglePage
       ? SpreadMode.NONE
@@ -766,6 +784,39 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (viewer.spreadMode !== nextMode) {
       viewer.spreadMode = nextMode;
       scheduleRenderRefresh();
+    }
+
+    // 패널 토글로 인한 레이아웃 변경 후 현재 페이지로 스크롤 복원
+    if (container && viewerRoot && currentPage) {
+      requestAnimationFrame(() => {
+        const pageEl = viewerRoot.querySelector<HTMLElement>(
+          `.page[data-page-number="${currentPage}"]`
+        );
+        if (!pageEl) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const pageRect = pageEl.getBoundingClientRect();
+
+        // 페이지의 상단이 컨테이너 뷰포트 밖으로 벗어났으면 복원
+        const pageTopInView = pageRect.top - containerRect.top;
+        const pageBottomInView = pageRect.bottom - containerRect.top;
+        const isPageVisible =
+          pageTopInView < containerRect.height && pageBottomInView > 0;
+
+        if (!isPageVisible) {
+          // 페이지가 보이지 않으면 페이지 상단으로 스크롤
+          container.scrollTop +=
+            pageTopInView - 4; // 4px 여유
+        }
+
+        // 수평 스크롤이 컨텐츠 범위를 벗어났으면 보정
+        if (container.scrollLeft > container.scrollWidth - container.clientWidth) {
+          container.scrollLeft = Math.max(
+            0,
+            container.scrollWidth - container.clientWidth
+          );
+        }
+      });
     }
   }, [forceSinglePage, isMobileLike]);
 
