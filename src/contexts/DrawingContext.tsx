@@ -3,10 +3,10 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useState,
 } from "react";
 import { DrawingColor, DrawingMode, Stroke, SyncStatus } from "../../types";
+import { useAnnotation } from "./AnnotationContext";
 
 interface DrawingContextType {
   chapterStrokes: Stroke[];
@@ -26,87 +26,43 @@ interface DrawingContextType {
 }
 
 const DrawingContext = createContext<DrawingContextType | undefined>(undefined);
-const DRAWING_STORAGE_KEY = "campusbook_drawing_strokes";
 
-export const DrawingProvider: React.FC<{ children: ReactNode }> = ({
+// DrawingProvider는 이제 AnnotationContext를 래핑하는 중간 컴포넌트입니다
+// AnnotationContext가 strokes 데이터를 관리합니다
+const DrawingProviderInner: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [chapterStrokes, setChapterStrokes] = useState<Stroke[]>([]);
+  const annotation = useAnnotation();
   const [drawingMode, setDrawingMode] = useState<DrawingMode>("idle");
   const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
   const [penWidth, setPenWidth] = useState<number>(3);
   const [penOpacity, setPenOpacity] = useState<number>(1.0);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("SAVED");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(DRAWING_STORAGE_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setChapterStrokes(parsed as Stroke[]);
-      }
-    } catch (err) {
-      console.error("Failed to load local drawings", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(
-      DRAWING_STORAGE_KEY,
-      JSON.stringify(chapterStrokes)
-    );
-  }, [chapterStrokes]);
-
-  const addStroke = useCallback((stroke: Stroke) => {
-    setChapterStrokes((prev) => [...prev, stroke]);
-    setSyncStatus("UNSAVED");
-  }, []);
-
-  const removeStroke = useCallback((strokeId: string) => {
-    setChapterStrokes((prev) =>
-      prev.map((s) => (s.id === strokeId ? { ...s, deleted: true } : s))
-    );
-    setSyncStatus("UNSAVED");
-  }, []);
 
   const hasStrokes = useCallback(
-    () => chapterStrokes.some((s) => !s.deleted),
-    [chapterStrokes]
+    () => annotation.strokes.some((s) => !s.deleted),
+    [annotation.strokes]
   );
 
   const saveDrawings = useCallback(async () => {
-    setSyncStatus("SYNCING");
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          DRAWING_STORAGE_KEY,
-          JSON.stringify(chapterStrokes)
-        );
-      }
-      setSyncStatus("SAVED");
-    } catch (err) {
-      setSyncStatus("LOCAL_ONLY");
-    }
-  }, [chapterStrokes]);
+    // AnnotationContext의 saveAnnotations를 호출하여 모든 데이터 저장
+    await annotation.saveAnnotations();
+  }, [annotation]);
 
   return (
     <DrawingContext.Provider
       value={{
-        chapterStrokes,
+        chapterStrokes: annotation.strokes,
         drawingMode,
         penColor,
         penWidth,
         penOpacity,
-        syncStatus,
+        syncStatus: annotation.syncStatus,
         setDrawingMode,
         setPenColor,
         setPenWidth,
         setPenOpacity,
-        addStroke,
-        removeStroke,
+        addStroke: annotation.addStroke,
+        removeStroke: annotation.removeStroke,
         hasStrokes,
         saveDrawings,
       }}
@@ -114,6 +70,13 @@ export const DrawingProvider: React.FC<{ children: ReactNode }> = ({
       {children}
     </DrawingContext.Provider>
   );
+};
+
+// 실제로 export하는 Provider는 AnnotationContext가 필요하므로 래핑
+export const DrawingProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
+  return <DrawingProviderInner>{children}</DrawingProviderInner>;
 };
 
 export const useDrawing = (): DrawingContextType => {

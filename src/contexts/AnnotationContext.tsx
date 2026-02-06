@@ -13,6 +13,7 @@ import {
   Highlight,
   PdfBookmark,
   SearchResult,
+  Stroke,
   SyncStatus,
 } from "../../types";
 import { useBook } from "./BookContext";
@@ -33,6 +34,7 @@ interface AnnotationContextType {
   bookmarks: PdfBookmark[];
   highlights: Highlight[];
   generalNotes: GeneralNote[];
+  strokes: Stroke[];
   activeHighlightId: string | null;
   pendingHighlightEditId: string | null;
   showAnnotations: boolean;
@@ -62,52 +64,14 @@ interface AnnotationContextType {
   importNotes: (file: File) => Promise<void>;
   exportNoteAsMarkdown: (note: GeneralNote) => void;
   performAnnotationSearch: (query: string) => SearchResult[];
+  addStroke: (stroke: Stroke) => void;
+  removeStroke: (strokeId: string) => void;
   saveAnnotations: () => Promise<void>;
 }
 
 const AnnotationContext = createContext<AnnotationContextType | undefined>(
   undefined
 );
-
-const getTimestamp = (item: Record<string, unknown>) => {
-  const updated =
-    typeof item.updated_at === "number" ? item.updated_at : Number(item.updated_at);
-  const created =
-    typeof item.created_at === "number" ? item.created_at : Number(item.created_at);
-  if (Number.isFinite(updated)) return updated;
-  if (Number.isFinite(created)) return created;
-  return 0;
-};
-
-const mergeItemsByUpdatedAt = <T extends { id: string }>(
-  serverItems: T[],
-  localItems: T[]
-) => {
-  const serverMap = new Map(serverItems.map((item) => [item.id, item]));
-  const localMap = new Map(localItems.map((item) => [item.id, item]));
-  const merged: T[] = [];
-  const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
-
-  allIds.forEach((id) => {
-    const serverItem = serverMap.get(id);
-    const localItem = localMap.get(id);
-    if (serverItem && localItem) {
-      const serverTime = getTimestamp(serverItem as Record<string, unknown>);
-      const localTime = getTimestamp(localItem as Record<string, unknown>);
-      merged.push(localTime > serverTime ? localItem : serverItem);
-      return;
-    }
-    if (localItem) {
-      merged.push(localItem);
-      return;
-    }
-    if (serverItem) {
-      merged.push(serverItem);
-    }
-  });
-
-  return merged;
-};
 
 const formatSavedAt = (date: Date) => {
   const year = date.getFullYear();
@@ -123,12 +87,13 @@ const formatSavedAt = (date: Date) => {
 export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { chapters, currentChapter, goToChapter, bookTitle } = useBook();
+  const { chapters, currentChapter, goToChapter, bookTitle, viewMode, pdfTotalPages } = useBook();
   const { goToPdfPage, currentPdfPage } = usePdfViewer();
 
   const [bookmarks, setBookmarks] = useState<PdfBookmark[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [generalNotes, setGeneralNotes] = useState<GeneralNote[]>([]);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
   const [pendingHighlightEditId, setPendingHighlightEditId] = useState<
     string | null
@@ -251,6 +216,62 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       });
     },
     [getIndexedDbWorker]
+  );
+
+  const mergeAndSaveInWorker = useCallback(
+    async (
+      storageKey: string,
+      serverData: {
+        highlights: Highlight[];
+        bookmarks: PdfBookmark[];
+        notes: GeneralNote[];
+      }
+    ) => {
+      const worker = getIndexedDbWorker();
+      if (!worker) return null;
+
+      return await new Promise<IndexedDbSnapshot | null>((resolve, reject) => {
+        const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const cleanup = () => {
+          worker.removeEventListener("message", handleMessage);
+          worker.removeEventListener("error", handleError);
+        };
+        const handleMessage = (event: MessageEvent) => {
+          const response = event.data as {
+            type?: string;
+            requestId?: string;
+            error?: string;
+            payload?: unknown;
+          };
+          if (!response || response.requestId !== requestId) return;
+          cleanup();
+          if (response.type === "merge_complete") {
+            resolve((response.payload as IndexedDbSnapshot) || null);
+          } else {
+            reject(new Error(response.error || "Worker merge failed."));
+          }
+        };
+        const handleError = () => {
+          cleanup();
+          reject(new Error("IndexedDB worker error."));
+        };
+        worker.addEventListener("message", handleMessage);
+        worker.addEventListener("error", handleError);
+        worker.postMessage({
+          type: "merge_and_save",
+          requestId,
+          payload: {
+            storageKey,
+            serverData,
+            currentPdfPage,
+            viewMode,
+            pdfTotalPages,
+            bookTitle,
+          },
+        });
+      });
+    },
+    [getIndexedDbWorker, currentPdfPage, viewMode, pdfTotalPages, bookTitle]
   );
 
   const markAsUnsaved = useCallback(() => {
@@ -428,6 +449,24 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     [markAsUnsaved]
   );
 
+  const addStroke = useCallback(
+    (stroke: Stroke) => {
+      markAsUnsaved();
+      setStrokes((prev) => [...prev, stroke]);
+    },
+    [markAsUnsaved]
+  );
+
+  const removeStroke = useCallback(
+    (strokeId: string) => {
+      markAsUnsaved();
+      setStrokes((prev) =>
+        prev.map((s) => (s.id === strokeId ? { ...s, deleted: true } : s))
+      );
+    },
+    [markAsUnsaved]
+  );
+
   const importNotes = useCallback(
     async (file: File) => {
       const text = await file.text();
@@ -509,11 +548,16 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       savedAt,
       schema_version: base?.schema_version || 1,
       data: {
-        bookmarks,
-        highlights,
-        notes: generalNotes,
-        strokes: base?.data?.strokes || [],
-        progress: base?.data?.progress,
+        bookmarks: bookmarks.filter((item) => !item.deleted),
+        highlights: highlights.filter((item) => !item.deleted),
+        notes: generalNotes.filter((item) => !item.deleted),
+        strokes: strokes.filter((item) => !item.deleted),
+        progress: typeof currentPdfPage === 'number' && typeof pdfTotalPages === 'number' ? {
+          currentPdfPage,
+          viewMode: viewMode || 'single',
+          pdfTotalPages,
+          updatedAt: savedAt,
+        } : base?.data?.progress,
       },
       meta: {
         ...(base?.meta || {}),
@@ -525,7 +569,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     await saveSnapshot(finalSnapshot);
     indexedDbSnapshotRef.current = finalSnapshot;
     return finalSnapshot;
-  }, [buildIndexedDbKey, bookmarks, highlights, generalNotes, bookTitle, loadSnapshot, saveSnapshot]);
+  }, [buildIndexedDbKey, bookmarks, highlights, generalNotes, strokes, bookTitle, currentPdfPage, viewMode, pdfTotalPages, loadSnapshot, saveSnapshot]);
 
   const saveAnnotations = useCallback(async () => {
     try {
@@ -602,6 +646,13 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           bookmarks: updatedBookmarks,
           highlights: updatedHighlights,
           notes: updatedNotes,
+          strokes: strokes.filter((item) => !item.deleted),
+          progress: typeof currentPdfPage === 'number' && typeof pdfTotalPages === 'number' ? {
+            currentPdfPage,
+            viewMode: viewMode || 'single',
+            pdfTotalPages,
+            updatedAt: Date.now(),
+          } : currentSnapshot.data.progress,
         },
       };
       await saveSnapshot(postSyncSnapshot);
@@ -613,50 +664,17 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       setSyncStatus("LOCAL_ONLY");
       setLastSavedAt(formatSavedAt(new Date()));
     }
-  }, [persistCurrentAnnotationToIndexedDb, highlights, bookmarks, generalNotes, saveSnapshot]);
+  }, [persistCurrentAnnotationToIndexedDb, highlights, bookmarks, generalNotes, strokes, currentPdfPage, viewMode, pdfTotalPages, saveSnapshot]);
 
   const loadAnnotationFromIndexedDb = useCallback(
     async (storageKey: string) => {
       try {
-        let snapshot = await loadSnapshot(storageKey);
-        if (snapshot) {
-          const migrated = migrate_snapshot(snapshot);
-          snapshot = migrated.snapshot || snapshot;
-          if (migrated.changed) {
-            await saveSnapshot(snapshot);
-          }
-        } else {
-          snapshot = {
-            key: storageKey,
-            savedAt: Date.now(),
-            schema_version: 1,
-            data: {
-              bookmarks: [],
-              highlights: [],
-              notes: [],
-              strokes: [],
-              progress: undefined,
-            },
-            meta: {},
-          };
-        }
-
-        const data = snapshot.data || {};
-        const localHighlights = Array.isArray(data.highlights)
-          ? (data.highlights as Highlight[])
-          : [];
-        const localBookmarks = Array.isArray(data.bookmarks)
-          ? (data.bookmarks as PdfBookmark[])
-          : [];
-        const localNotes = Array.isArray(data.notes)
-          ? (data.notes as GeneralNote[])
-          : [];
-
         const config = getRmsConfig();
-        let mergedHighlights = localHighlights;
-        let mergedBookmarks = localBookmarks;
-        let mergedNotes = localNotes;
+        let serverHighlights: Highlight[] = [];
+        let serverBookmarks: PdfBookmark[] = [];
+        let serverNotes: GeneralNote[] = [];
 
+        // 1. 서버에서 데이터 로드 (있으면)
         if (config) {
           try {
             const [highlightRes, bookmarkRes, noteRes] = await Promise.all([
@@ -674,7 +692,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
               }),
             ]);
 
-            const serverHighlights =
+            serverHighlights =
               highlightRes &&
               highlightRes.ok &&
               highlightRes.result &&
@@ -687,7 +705,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                     .filter((item: Highlight) => !item.deleted)
                 : [];
 
-            const serverBookmarks =
+            serverBookmarks =
               bookmarkRes &&
               bookmarkRes.ok &&
               bookmarkRes.result &&
@@ -700,7 +718,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                     .filter((item: PdfBookmark) => !item.deleted)
                 : [];
 
-            const serverNotes =
+            serverNotes =
               noteRes &&
               noteRes.ok &&
               noteRes.result &&
@@ -710,43 +728,47 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                     (item) => !item.deleted
                   )
                 : [];
-
-            if (serverHighlights.length > 0) {
-              mergedHighlights = mergeItemsByUpdatedAt(
-                serverHighlights,
-                localHighlights
-              );
-            }
-            if (serverBookmarks.length > 0) {
-              mergedBookmarks = mergeItemsByUpdatedAt(
-                serverBookmarks,
-                localBookmarks
-              );
-            }
-            if (serverNotes.length > 0) {
-              mergedNotes = mergeItemsByUpdatedAt(serverNotes, localNotes);
-            }
           } catch (err) {
             console.error("annotation server load failed", err);
           }
         }
 
-        const hasPending =
-          mergedHighlights.some((item) => item.syncStatus === "pending") ||
-          mergedBookmarks.some((item) => item.syncStatus === "pending");
+        // 2. Worker에서 병합 및 저장 (병합 로직이 worker에서 실행됨)
+        const mergedSnapshot = await mergeAndSaveInWorker(storageKey, {
+          highlights: serverHighlights,
+          bookmarks: serverBookmarks,
+          notes: serverNotes,
+        });
 
-        // 초기 로드 시 pending 항목이 있고 온라인이면 자동 동기화 시도
-        let finalHighlights = mergedHighlights;
-        let finalBookmarks = mergedBookmarks;
-        let finalNotes = mergedNotes;
+        if (!mergedSnapshot) {
+          console.error("Worker merge failed, using empty state");
+          setHighlights([]);
+          setBookmarks([]);
+          setGeneralNotes([]);
+          setStrokes([]);
+          setSyncStatus("SAVED");
+          return;
+        }
+
+        const data = mergedSnapshot.data || {};
+        let finalHighlights = Array.isArray(data.highlights) ? (data.highlights as Highlight[]) : [];
+        let finalBookmarks = Array.isArray(data.bookmarks) ? (data.bookmarks as PdfBookmark[]) : [];
+        let finalNotes = Array.isArray(data.notes) ? (data.notes as GeneralNote[]) : [];
+        const finalStrokes = Array.isArray(data.strokes) ? (data.strokes as Stroke[]) : [];
+
+        // 3. pending 항목이 있으면 서버 동기화
+        const hasPending =
+          finalHighlights.some((item) => item.syncStatus === "pending") ||
+          finalBookmarks.some((item) => item.syncStatus === "pending");
+
         let finalSyncStatus: SyncStatus = hasPending ? "UNSAVED" : "SAVED";
 
         if (hasPending && navigator.onLine && config) {
           try {
-            const changedHighlights = mergedHighlights.filter(
+            const changedHighlights = finalHighlights.filter(
               (item) => item.syncStatus === "pending"
             );
-            const changedBookmarks = mergedBookmarks.filter(
+            const changedBookmarks = finalBookmarks.filter(
               (item) => item.syncStatus === "pending"
             );
 
@@ -756,7 +778,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                 bookCd: config.bookCd,
                 highlights: changedHighlights,
               });
-              finalHighlights = mergedHighlights
+              finalHighlights = finalHighlights
                 .map((item) =>
                   item.syncStatus === "pending"
                     ? { ...item, syncStatus: "synced" as const }
@@ -771,7 +793,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                 bookCd: config.bookCd,
                 bookmarks: changedBookmarks,
               });
-              finalBookmarks = mergedBookmarks
+              finalBookmarks = finalBookmarks
                 .map((item) =>
                   item.syncStatus === "pending"
                     ? { ...item, syncStatus: "synced" as const }
@@ -787,28 +809,18 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           }
         }
 
+        // 4. State 업데이트
         setHighlights(finalHighlights);
         setBookmarks(finalBookmarks);
         setGeneralNotes(finalNotes);
+        setStrokes(finalStrokes);
         setSyncStatus(finalSyncStatus);
-
-        const mergedSnapshot: IndexedDbSnapshot = {
-          ...snapshot,
-          savedAt: Date.now(),
-          data: {
-            ...snapshot.data,
-            highlights: finalHighlights,
-            bookmarks: finalBookmarks,
-            notes: finalNotes,
-          },
-        };
-        await saveSnapshot(mergedSnapshot);
         indexedDbSnapshotRef.current = mergedSnapshot;
       } catch (err) {
         console.error("annotation indexeddb load failed", err);
       }
     },
-    [loadSnapshot, saveSnapshot]
+    [mergeAndSaveInWorker]
   );
 
   useEffect(() => {
@@ -842,9 +854,10 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
   const value = useMemo(
     () => ({
-      bookmarks,
-      highlights,
-      generalNotes,
+      bookmarks: bookmarks.filter((item: PdfBookmark) => !item.deleted),
+      highlights: highlights.filter((item: Highlight) => !item.deleted),
+      generalNotes: generalNotes.filter((item: GeneralNote) => !item.deleted),
+      strokes: strokes.filter((item: Stroke) => !item.deleted),
       activeHighlightId,
       pendingHighlightEditId,
       showAnnotations,
@@ -866,12 +879,15 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       importNotes,
       exportNoteAsMarkdown,
       performAnnotationSearch,
+      addStroke,
+      removeStroke,
       saveAnnotations,
     }),
     [
       bookmarks,
       highlights,
       generalNotes,
+      strokes,
       activeHighlightId,
       pendingHighlightEditId,
       showAnnotations,
@@ -892,6 +908,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       importNotes,
       exportNoteAsMarkdown,
       performAnnotationSearch,
+      addStroke,
+      removeStroke,
       saveAnnotations,
     ]
   );
