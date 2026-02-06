@@ -310,35 +310,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [viewMode, setViewMode] = useState<ViewMode>("single");
 
   const [showAnnotations, setShowAnnotations] = useState(true);
-  const [bookmarks, setBookmarks] = useState<PdfBookmark[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("pdfBookmarks");
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) => {
-            if (item && typeof item === "object" && "page" in item) {
-              return item as PdfBookmark;
-            }
-            if (typeof item === "number") {
-              return {
-                id: `migrated-${item}`,
-                page: item,
-                label: `Page ${item}`,
-                created_at: Date.now(),
-              } as PdfBookmark;
-            }
-            return null;
-          })
-          .filter(Boolean) as PdfBookmark[];
-      }
-    } catch (e) {
-      console.error("Failed to parse stored pdfBookmarks", e);
-    }
-    return [];
-  });
+  const [bookmarks, setBookmarks] = useState<PdfBookmark[]>([]);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
     null
@@ -638,13 +610,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }));
   }, [currentChapter.id]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("pdfBookmarks", JSON.stringify(bookmarks));
-    } catch (e) {
-      console.error("Failed to persist pdfBookmarks", e);
-    }
-  }, [bookmarks]);
 
   useEffect(() => {
     let cancelled = false;
