@@ -560,17 +560,14 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      console.log("네트워크 연결됨");
       // 네트워크 재연결 시 로컬에 저장된 데이터가 있으면 동기화 시도
       if (syncStatus === "LOCAL_ONLY") {
-        console.log("네트워크 재연결, 자동 동기화 시도");
         saveAll();
       }
     };
 
     const handleOffline = () => {
       setIsOnline(false);
-      console.log("네트워크 끊김");
     };
 
     window.addEventListener("online", handleOnline);
@@ -867,18 +864,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const next = [newHighlight, ...prev];
       const totalBytes = getJsonBytes(next);
       if (enable_debug_log) {
-        console.log("[highlight/size]", {
-          chapterId: newHighlight.chapterId,
-          pageNumber: newHighlight.pageNumber,
-          itemBytes,
-          itemMb: bytesToMb(itemBytes),
-          listBytes,
-          listMb: bytesToMb(listBytes),
-          combinedBytes,
-          combinedMb: bytesToMb(combinedBytes),
-          totalBytes,
-          totalMb: bytesToMb(totalBytes),
-        });
       }
       return next;
     });
@@ -959,13 +944,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       const next = [...prev, stroke];
       const totalBytes = getJsonBytes(next);
       if (enable_debug_log) {
-        console.log("[stroke/size]", {
-          pageNumber: stroke.pageNumber,
-          itemBytes,
-          itemMb: bytesToMb(itemBytes),
-          totalBytes,
-          totalMb: bytesToMb(totalBytes),
-        });
       }
       return next;
     });
@@ -1151,10 +1129,8 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     clearHighlightFocus();
     setCurrentPdfPage(safePage);
     if (pdfNavigator) {
-      console.log(`[goToPdfPage] Navigating immediately to page ${safePage}`);
       pdfNavigator(safePage);
     } else {
-      console.log(`[goToPdfPage] Setting pending page to ${safePage}`);
       pendingPdfPageRef.current = safePage;
       setPendingPdfPage(safePage);
     }
@@ -1164,21 +1140,12 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     (fn: (page: number) => void) => {
       const pending = pendingPdfPageRef.current;
       const totalPages = pdfTotalPagesRef.current;
-      console.log(
-        `[registerPdfNavigator] Called with pendingPdfPage: ${pending}, totalPages: ${totalPages}`
-      );
       setPdfNavigator(() => fn);
       if (pending !== null && totalPages > 0) {
-        console.log(
-          `[registerPdfNavigator] Navigating to pending page: ${pending}`
-        );
         fn(pending);
         pendingPdfPageRef.current = null;
         setPendingPdfPage(null);
       } else if (pending !== null) {
-        console.log(
-          `[registerPdfNavigator] PDF not ready yet, keeping pending page: ${pending}`
-        );
       }
     },
     []
@@ -1217,9 +1184,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   // PDF가 로드 완료되면 initialPageToLoad로 이동
   useEffect(() => {
     if (pdfTotalPages > 0 && initialPageToLoad !== null && pdfNavigator) {
-      console.log(
-        `[useEffect/initialPageToLoad] PDF loaded (${pdfTotalPages} pages), navigating to initial page: ${initialPageToLoad}`
-      );
       pdfNavigator(initialPageToLoad);
       setInitialPageToLoad(null);
       setCurrentPdfPage(initialPageToLoad);
@@ -1234,9 +1198,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       pdfNavigator
     ) {
       const targetPage = pendingPdfPageRef.current;
-      console.log(
-        `[useEffect/pendingPdfPage] PDF loaded (${pdfTotalPages} pages), navigating to pending page: ${targetPage}`
-      );
       pdfNavigator(targetPage);
       pendingPdfPageRef.current = null;
       setPendingPdfPage(null);
@@ -1363,7 +1324,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         const migrated = migrate_snapshot(result);
         snapshot = migrated.snapshot || result;
         needsMigrationSave = migrated.changed;
-        console.log("[IndexedDB] Loaded snapshot from IndexedDB");
       } else {
         snapshot = {
           key: storageKey,
@@ -1378,7 +1338,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           },
           meta: {},
         };
-        console.log("[IndexedDB] Empty, will create from server data");
       }
 
       if (needsMigrationSave) {
@@ -1432,14 +1391,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
       // Load highlights: Merge server and IndexedDB based on timestamps
       const config = getRmsConfig();
-      console.log("[RMS Config Debug]", config);
-      console.log("[IndexedDB Data Debug]", {
-        hasHighlights: Array.isArray(data.highlights) && data.highlights.length > 0,
-        hasBookmarks: Array.isArray(data.bookmarks) && data.bookmarks.length > 0,
-        hasStrokes: data.strokes ? true : false,
-        hasNotes: Array.isArray(data.notes) && data.notes.length > 0,
-        hasProgress: data.progress ? true : false,
-      });
       const localHighlights = Array.isArray(data.highlights)
         ? data.highlights
         : [];
@@ -1463,7 +1414,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
       // Try to load highlights from server first
       if (config) {
-        console.log("[Highlights] Attempting to load from server...");
         try {
           const serverData = await loadHighlightsFromServer({
             apiBase: config.apiBase,
@@ -1484,10 +1434,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
                 return { ...parsed, syncStatus: "synced" };
               })
               .filter((hl: any) => !hl.deleted);
-            console.log(
-              "[Highlights] ✅ Loaded from server:",
-              serverHighlights.length
-            );
           } else {
             console.warn("[Highlights] Invalid server response:", serverData);
           }
@@ -1495,12 +1441,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           console.error("[Highlights] ❌ Failed to load from server:", err);
         }
       } else {
-        console.log("[Highlights] No RMS config, skipping server load");
       }
 
       // Try to load bookmarks from server
       if (config) {
-        console.log("[Bookmarks] Attempting to load from server...");
         try {
           const bookmarkData = await loadBookmarksFromServer({
             apiBase: config.apiBase,
@@ -1521,10 +1465,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
                 return { ...parsed, syncStatus: "synced" };
               })
               .filter((bm: any) => !bm.deleted);
-            console.log(
-              "[Bookmarks] ✅ Loaded from server:",
-              serverBookmarks.length
-            );
           } else {
             console.warn("[Bookmarks] Invalid server response:", bookmarkData);
           }
@@ -1532,12 +1472,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           console.error("[Bookmarks] ❌ Failed to load from server:", err);
         }
       } else {
-        console.log("[Bookmarks] No RMS config, skipping server load");
       }
 
       // Try to load drawings from server
       if (config) {
-        console.log("[Drawings] Attempting to load from server...");
         try {
           const drawingData = await loadDrawingsFromServer({
             apiBase: config.apiBase,
@@ -1561,11 +1499,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
                 (d: any) => !d.deleted
               );
             }
-            console.log(
-              "[Drawings] ✅ Loaded from server:",
-              serverDrawings?.length || 0,
-              "strokes"
-            );
           } else {
             console.warn("[Drawings] Invalid server response:", drawingData);
           }
@@ -1573,12 +1506,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           console.error("[Drawings] ❌ Failed to load from server:", err);
         }
       } else {
-        console.log("[Drawings] No RMS config, skipping server load");
       }
 
       // Try to load notes from server
       if (config) {
-        console.log("[Notes] Attempting to load from server...");
         try {
           const notesData = await loadNotesFromServer({
             apiBase: config.apiBase,
@@ -1597,11 +1528,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             serverNotes = Array.isArray(parsedNotes)
               ? parsedNotes.filter((n: any) => !n.deleted)
               : [];
-            console.log(
-              "[Notes] ✅ Loaded from server:",
-              serverNotes?.length || 0,
-              "notes"
-            );
           } else {
             console.warn("[Notes] Invalid server response:", notesData);
           }
@@ -1609,15 +1535,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           console.error("[Notes] ❌ Failed to load from server:", err);
         }
       } else {
-        console.log("[Notes] No RMS config, skipping server load");
       }
 
       // Merge server and local highlights based on timestamps using Web Worker
       let mergedHighlights: any[] = [];
       if (serverHighlights && serverHighlights.length > 0) {
-        console.log(
-          "[Highlights] Merging server and local data using Web Worker..."
-        );
 
         try {
           // Use Web Worker for merge operation to avoid blocking main thread
@@ -1671,9 +1593,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           const { serverOnly, localOnly, serverNewer, localNewer } =
             mergeResult.stats;
 
-          console.log(
-            `[Highlights] Merge summary: ${localNewer} local newer, ${serverNewer} server newer, ${localOnly} local only, ${serverOnly} server only`
-          );
         } catch (err) {
           console.error(
             "[Highlights] Web Worker merge failed, falling back to sync merge:",
@@ -1705,9 +1624,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
         }
 
-        console.log(
-          `[Highlights] Merged ${mergedHighlights.length} items (Server: ${serverHighlights.length}, Local: ${localHighlights.length})`
-        );
         setHighlights(mergedHighlights);
 
         // Update IndexedDB with merged highlights data
@@ -1755,7 +1671,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
         })
           .then(() => {
-            console.log("[Highlights] Merged data saved to IndexedDB");
           })
           .catch((saveErr) => {
             console.error(
@@ -1766,18 +1681,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       } else if (localHighlights.length > 0) {
         // No server data: use local
         setHighlights(localHighlights);
-        console.log(
-          "[Highlights] 📦 Using local IndexedDB data:",
-          localHighlights.length
-        );
       }
 
       // Merge bookmarks: Same logic as highlights
       let mergedBookmarks: any[] = [];
       if (serverBookmarks && serverBookmarks.length > 0) {
-        console.log(
-          "[Bookmarks] Merging server and local data using Web Worker..."
-        );
 
         try {
           // Use Web Worker for merge operation to avoid blocking main thread
@@ -1831,9 +1739,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           const { serverOnly, localOnly, serverNewer, localNewer } =
             mergeResult.stats;
 
-          console.log(
-            `[Bookmarks] Merge summary: ${localNewer} local newer, ${serverNewer} server newer, ${localOnly} local only, ${serverOnly} server only`
-          );
         } catch (err) {
           console.error(
             "[Bookmarks] Web Worker merge failed, falling back to sync merge:",
@@ -1863,9 +1768,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
         }
 
-        console.log(
-          `[Bookmarks] Merged ${mergedBookmarks.length} items (Server: ${serverBookmarks.length}, Local: ${localBookmarks.length})`
-        );
         setBookmarks(mergedBookmarks);
 
         // Update IndexedDB with merged bookmarks data
@@ -1913,7 +1815,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
         })
           .then(() => {
-            console.log("[Bookmarks] Merged data saved to IndexedDB");
           })
           .catch((saveErr) => {
             console.error(
@@ -1924,24 +1825,16 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       } else if (localBookmarks.length > 0) {
         // No server data: use local
         setBookmarks(localBookmarks);
-        console.log(
-          "[Bookmarks] 📦 Using local IndexedDB data:",
-          localBookmarks.length
-        );
       }
 
       // Merge server and local drawings
       if (serverDrawings && serverDrawings.length > 0) {
-        console.log("[Drawings] Merging server and local data...");
 
         // Simple merge: use all server data and add local strokes not in server
         const serverIds = new Set(serverDrawings.map((s) => s.id));
         const localOnly = localDrawings.filter((s) => !serverIds.has(s.id));
         const mergedDrawings = [...serverDrawings, ...localOnly];
 
-        console.log(
-          `[Drawings] Merged ${mergedDrawings.length} strokes (Server: ${serverDrawings.length}, Local: ${localDrawings.length}, Local-only: ${localOnly.length})`
-        );
         setChapterStrokes(mergedDrawings);
 
         // Update IndexedDB with merged drawings
@@ -1989,7 +1882,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
         })
           .then(() => {
-            console.log("[Drawings] Merged data saved to IndexedDB");
           })
           .catch((saveErr) => {
             console.error(
@@ -2000,16 +1892,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       } else if (localDrawings.length > 0) {
         // No server data: use local
         setChapterStrokes(localDrawings);
-        console.log(
-          "[Drawings] 📦 Using local IndexedDB data:",
-          localDrawings.length,
-          "strokes"
-        );
       }
 
       // Merge server and local notes
       if (serverNotes && Array.isArray(serverNotes) && serverNotes.length > 0) {
-        console.log("[Notes] Merging server and local data...");
 
         // Merge logic: Use server data and add local notes not in server
         const serverMap = new Map(serverNotes.map((n: any) => [n.id, n]));
@@ -2032,9 +1918,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           }
         });
 
-        console.log(
-          `[Notes] Merged ${mergedNotes.length} notes (Server: ${serverNotes.length}, Local: ${localNotes.length})`
-        );
         setGeneralNotes(mergedNotes);
 
         // Update IndexedDB with merged notes
@@ -2082,7 +1965,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           });
         })
           .then(() => {
-            console.log("[Notes] Merged data saved to IndexedDB");
           })
           .catch((saveErr) => {
             console.error(
@@ -2093,18 +1975,12 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       } else if (localNotes.length > 0) {
         // No server data: use local
         setGeneralNotes(localNotes);
-        console.log(
-          "[Notes] 📦 Using local IndexedDB data:",
-          localNotes.length,
-          "notes"
-        );
       }
 
       // Load progress: Server data takes priority over IndexedDB
       let serverProgressPage: number | null = null;
 
       if (config) {
-        console.log("[Progress] Attempting to load from server...");
         try {
           const progressData = await loadProgressFromServer({
             apiBase: config.apiBase,
@@ -2120,20 +1996,17 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           ) {
             // Parse the most recent progress data
             const parsed = JSON.parse(progressData.result.dataList[0]);
-            console.log("[Progress] ✅ Loaded from server:", parsed);
 
             // Store server progress page
             if (typeof parsed.currentPdfPage === "number") {
               serverProgressPage = parsed.currentPdfPage;
             }
           } else {
-            console.log("[Progress] No progress data on server");
           }
         } catch (err) {
           console.error("[Progress] ❌ Failed to load from server:", err);
         }
       } else {
-        console.log("[Progress] No RMS config, skipping server load");
       }
 
       // Apply progress data: prioritize server, fallback to IndexedDB
@@ -2155,18 +2028,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         const targetPage =
           serverProgressPage !== null ? serverProgressPage : savedPage;
         if (typeof targetPage === "number" && Number.isFinite(targetPage)) {
-          console.log(
-            `[Progress] Setting initial page to load: ${targetPage} (source: ${
-              serverProgressPage !== null ? "server" : "IndexedDB"
-            })`
-          );
           setInitialPageToLoad(targetPage);
         }
       } else if (serverProgressPage !== null) {
         // No IndexedDB progress, but server has data
-        console.log(
-          `[Progress] Setting initial page to load: ${serverProgressPage} (source: server)`
-        );
         setInitialPageToLoad(serverProgressPage);
       }
       indexedDbSnapshotRef.current = snapshot;
@@ -2305,13 +2170,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           );
 
           if (changedHighlights.length > 0) {
-            console.log(
-              `[Highlights] Sending ${
-                changedHighlights.length
-              } changed items to server (Total: ${
-                (snapshot.data.highlights || []).length
-              })`
-            );
 
             await saveHighlightsToServer({
               apiBase: config.apiBase,
@@ -2393,11 +2251,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
                     : h
                 )
             );
-            console.log(
-              `[Highlights] ${changedHighlights.length} items synced, deleted items removed`
-            );
           } else {
-            console.log("[Highlights] No changes to sync");
           }
 
           // Filter only changed bookmarks (syncStatus === "pending")
@@ -2406,22 +2260,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           ).filter((b: any) => b.syncStatus === "pending");
 
           if (changedBookmarks.length > 0) {
-            console.log(
-              `[Bookmarks] Sending ${
-                changedBookmarks.length
-              } changed items to server (Total: ${
-                (currentSnapshot.data.bookmarks || []).length
-              })`
-            );
-
             await saveBookmarksToServer({
               apiBase: config.apiBase,
               bookCd: config.bookCd,
               bookmarks: changedBookmarks,
             });
-            console.log(
-              `[Bookmarks] ✅ Saved ${changedBookmarks.length} items to server`
-            );
 
             // Mark saved bookmarks as synced and remove deleted ones
             const updatedBookmarks = (currentSnapshot.data.bookmarks || [])
@@ -2495,15 +2338,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
                     : b
                 )
             );
-            console.log(
-              `[Bookmarks] ${changedBookmarks.length} items synced, deleted items removed`
-            );
           } else {
-            console.log("[Bookmarks] No changes to sync");
           }
 
           // Save drawings to server
-          console.log("[Drawings] Sending drawings to server...");
           const strokes = currentSnapshot.data.strokes || [];
           if (Array.isArray(strokes) && strokes.length > 0) {
             await saveDrawingsToServer({
@@ -2511,9 +2349,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
               bookCd: config.bookCd,
               drawings: strokes,
             });
-            console.log(
-              `[Drawings] ✅ Saved ${strokes.length} strokes to server`
-            );
 
             // Remove deleted strokes after successful sync
             const updatedStrokes = strokes.filter((s: any) => !s.deleted);
@@ -2570,15 +2405,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             indexedDbSnapshotRef.current = currentSnapshot;
             // Also update the local state to remove deleted strokes
             setChapterStrokes((prev) => prev.filter((s) => !s.deleted));
-            console.log(
-              `[Drawings] Deleted items removed from IndexedDB and state`
-            );
           } else {
-            console.log("[Drawings] No drawings to save");
           }
 
           // Save notes to server
-          console.log("[Notes] Sending notes to server...");
           if (
             Array.isArray(currentSnapshot.data.notes) &&
             currentSnapshot.data.notes.length > 0
@@ -2588,9 +2418,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
               bookCd: config.bookCd,
               notes: currentSnapshot.data.notes,
             });
-            console.log(
-              `[Notes] ✅ Saved ${currentSnapshot.data.notes.length} notes to server`
-            );
 
             // Remove deleted notes after successful sync
             const updatedNotes = currentSnapshot.data.notes.filter(
@@ -2649,15 +2476,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             indexedDbSnapshotRef.current = currentSnapshot;
             // Also update the local state to remove deleted notes
             setGeneralNotes((prev) => prev.filter((n) => !n.deleted));
-            console.log(
-              `[Notes] Deleted items removed from IndexedDB and state`
-            );
           } else {
-            console.log("[Notes] No notes to save");
           }
 
           // Save progress to server
-          console.log("[Progress] Sending progress to server...");
           const progressData = {
             currentPdfPage,
             lastReadAt: new Date().toISOString(),
@@ -2668,7 +2490,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             bookCd: config.bookCd,
             progress: progressData,
           });
-          console.log("[Progress] ✅ Saved to server");
 
           const savedItems = [];
           if (changedHighlights.length > 0) {
@@ -2721,7 +2542,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
       // 네트워크 상태 확인
       if (!navigator.onLine) {
-        console.log("네트워크 끊김 - 로컬 저장만 수행");
         // 로컬 저장 (IndexedDB + 서버 동기화 시뮬레이션)
         await saveLocalDataToIndexedDb();
         setSyncStatus("LOCAL_ONLY");
@@ -2756,7 +2576,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       setLastSavedAt(
         `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`
       );
-      console.log("저장 완료");
     } catch (err) {
       console.error("Save all failed", err);
       setSyncStatus("LOCAL_ONLY");

@@ -216,8 +216,6 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       // 펜 모드가 아니면 무시
       if (drawingModeRef.current === "idle") return;
 
-      console.log('[PenStart] Pen detected, mode:', drawingModeRef.current);
-
       e.preventDefault();
       e.stopPropagation();
 
@@ -243,10 +241,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
       const pt = getPagePoint(e, pageEl, getVisualScale);
       if (!pt) {
-        console.log('[PenStart] Failed to get point');
         return;
       }
-      console.log('[PenStart] Drawing started at', pt);
       currentPageRef.current = pageNumber;
       isDrawingRef.current = true;
       livePointsRef.current = [pt];

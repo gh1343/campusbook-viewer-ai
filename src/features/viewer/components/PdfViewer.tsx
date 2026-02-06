@@ -1481,18 +1481,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       const next = [...prev, { id, rects: mergedRects }];
       const totalBytes = getJsonBytes(next);
       if (enable_debug_log) {
-        console.log("[highlight/pdf/size]", {
-          pageNumber,
-          rectCount: mergedRects.length,
-          rectBytes,
-          rectMb: bytesToMb(rectBytes),
-          listBytes,
-          listMb: bytesToMb(listBytes),
-          combinedBytes,
-          combinedMb: bytesToMb(combinedBytes),
-          totalBytes,
-          totalMb: bytesToMb(totalBytes),
-        });
       }
       return next;
     });

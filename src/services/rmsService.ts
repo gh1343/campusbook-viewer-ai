@@ -1026,14 +1026,6 @@ export const saveHighlightsToServer = async ({
     data: JSON.stringify(highlights),
   };
 
-  console.log("=== Sending Highlights to Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("Payload:", payload);
-  console.log("Highlights Count:", highlights.length);
-  console.log("Highlights Data (stringified):", JSON.stringify(highlights));
-  console.log("====================================");
-
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -1085,11 +1077,6 @@ export const loadHighlightsFromServer = async ({
 
   const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=hl`;
 
-  console.log("=== Loading Highlights from Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("======================================");
-
   const response = await fetch(url, {
     method: "GET",
     headers,
@@ -1109,10 +1096,6 @@ export const loadHighlightsFromServer = async ({
       `Highlights load failed (${response.status})`;
     throw new Error(message);
   }
-
-  console.log("=== Loaded Highlights Response ===");
-  console.log("Result:", result);
-  console.log("==================================");
 
   return result;
 };
@@ -1150,13 +1133,6 @@ export const saveProgressToServer = async ({
     type: "pr",
     data: JSON.stringify(progress),
   };
-
-  console.log("=== Sending Progress to Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("Payload:", payload);
-  console.log("Progress Data (stringified):", JSON.stringify(progress));
-  console.log("====================================");
 
   const response = await fetch(url, {
     method: "POST",
@@ -1209,11 +1185,6 @@ export const loadProgressFromServer = async ({
 
   const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=pr`;
 
-  console.log("=== Loading Progress from Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("======================================");
-
   const response = await fetch(url, {
     method: "GET",
     headers,
@@ -1233,10 +1204,6 @@ export const loadProgressFromServer = async ({
       `Progress load failed (${response.status})`;
     throw new Error(message);
   }
-
-  console.log("=== Loaded Progress Response ===");
-  console.log("Result:", result);
-  console.log("==================================");
 
   return result;
 };
@@ -1274,14 +1241,6 @@ export const saveBookmarksToServer = async ({
     type: "bm",
     data: JSON.stringify(bookmarks),
   };
-
-  console.log("=== Sending Bookmarks to Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("Payload:", payload);
-  console.log("Bookmarks Count:", bookmarks.length);
-  console.log("Bookmarks Data (stringified):", JSON.stringify(bookmarks));
-  console.log("====================================");
 
   const response = await fetch(url, {
     method: "POST",
@@ -1334,11 +1293,6 @@ export const loadBookmarksFromServer = async ({
 
   const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=bm`;
 
-  console.log("=== Loading Bookmarks from Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("======================================");
-
   const response = await fetch(url, {
     method: "GET",
     headers,
@@ -1358,10 +1312,6 @@ export const loadBookmarksFromServer = async ({
       `Bookmarks load failed (${response.status})`;
     throw new Error(message);
   }
-
-  console.log("=== Loaded Bookmarks Response ===");
-  console.log("Result:", result);
-  console.log("==================================");
 
   return result;
 };
@@ -1400,13 +1350,6 @@ export const saveDrawingsToServer = async ({
     type: "dr",
     data: JSON.stringify(drawings),
   };
-
-  console.log("=== Sending Drawings to Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("Payload:", payload);
-  console.log("Drawings Data (stringified):", JSON.stringify(drawings));
-  console.log("====================================");
 
   const response = await fetch(url, {
     method: "POST",
@@ -1459,11 +1402,6 @@ export const loadDrawingsFromServer = async ({
 
   const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=dr`;
 
-  console.log("=== Loading Drawings from Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("======================================");
-
   const response = await fetch(url, {
     method: "GET",
     headers,
@@ -1483,10 +1421,6 @@ export const loadDrawingsFromServer = async ({
       `Drawings load failed (${response.status})`;
     throw new Error(message);
   }
-
-  console.log("=== Loaded Drawings Response ===");
-  console.log("Result:", result);
-  console.log("==================================");
 
   return result;
 };
@@ -1526,13 +1460,6 @@ export const saveNotesToServer = async ({
     type: "en",
     data: JSON.stringify(notes),
   };
-
-  console.log("=== Sending Notes to Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("Payload:", payload);
-  console.log("Notes Data (stringified):", JSON.stringify(notes));
-  console.log("====================================");
 
   const response = await fetch(url, {
     method: "POST",
@@ -1585,11 +1512,6 @@ export const loadNotesFromServer = async ({
 
   const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=en`;
 
-  console.log("=== Loading Notes from Server ===");
-  console.log("URL:", url);
-  console.log("Headers:", headers);
-  console.log("======================================");
-
   const response = await fetch(url, {
     method: "GET",
     headers,
@@ -1609,10 +1531,6 @@ export const loadNotesFromServer = async ({
       `Notes load failed (${response.status})`;
     throw new Error(message);
   }
-
-  console.log("=== Loaded Notes Response ===");
-  console.log("Result:", result);
-  console.log("==================================");
 
   return result;
 };

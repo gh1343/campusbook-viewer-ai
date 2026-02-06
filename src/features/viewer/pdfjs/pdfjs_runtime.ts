@@ -118,19 +118,16 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     // Track all rendered pages
     if (evt?.pageNumber && !allPagesRendered) {
       renderedPages.add(evt.pageNumber);
-      console.log(`[PDF Load] Page ${evt.pageNumber} rendered. Total: ${renderedPages.size}/${totalPages}`);
 
       // Update progress based on rendered pages
       if (totalPages > 0) {
         const renderProgress = Math.round((renderedPages.size / totalPages) * 100);
-        console.log(`[PDF Load] Progress: ${renderProgress}%`);
         setPdfLoadProgress?.(renderProgress);
         setLoadProgress(renderProgress);
       }
 
       // Check if all pages are rendered
       if (totalPages > 0 && renderedPages.size >= totalPages) {
-        console.log(`[PDF Load] All pages rendered! Finalizing...`);
         allPagesRendered = true;
         if (updateTimeInterval !== null) {
           clearInterval(updateTimeInterval);
@@ -140,7 +137,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         setLoadProgress(100);
         updateLoadingTime(); // Final update
         setPdfIsLoading?.(false);
-        console.log(`[PDF Load] Complete!`);
       }
     }
 
@@ -175,13 +171,11 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     if (evt?.pagesCount) {
       totalPages = evt.pagesCount;
       onPagesCount?.(evt.pagesCount);
-      console.log(`[PDF Load] Total pages: ${totalPages}`);
     }
     handlePageRendered();
 
     // PDF가 완전히 로드되면 pending 페이지 네비게이션 실행
     if (pendingPageNavigation !== null) {
-      console.log(`[pdfjs_runtime/pagesloaded] Executing pending navigation to page ${pendingPageNavigation}`);
       const pageToNavigate = pendingPageNavigation;
       pendingPageNavigation = null;
       // 약간의 지연을 두고 실행하여 페이지 렌더링 완료 보장
@@ -191,7 +185,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     }
 
     // Note: Loading will complete when text extraction finishes
-    console.log(`[PDF Load] Pages initialized, waiting for text extraction to complete`);
   });
 
   eventBus.on("pagerendered", handlePageRendered);
@@ -204,22 +197,17 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   let pendingPageNavigation: number | null = null;
 
   const attemptPageNavigation = (page: number) => {
-    console.log(`[pdfjs_runtime/attemptPageNavigation] Attempting to navigate to page: ${page}`);
     if (
       !pdfViewerRef.current ||
       !pdfViewerRef.current.pdfDocument ||
       !pdfViewerRef.current.pagesCount
     ) {
-      console.log(`[pdfjs_runtime/attemptPageNavigation] PDF not ready - viewer: ${!!pdfViewerRef.current}, document: ${!!pdfViewerRef.current?.pdfDocument}, pagesCount: ${pdfViewerRef.current?.pagesCount}`);
-      console.log(`[pdfjs_runtime/attemptPageNavigation] Storing pending navigation to page ${page}`);
       pendingPageNavigation = page;
       return false;
     }
     const maxPage = pdfViewerRef.current.pdfDocument.numPages;
     const target = Math.min(Math.max(page, 1), maxPage);
-    console.log(`[pdfjs_runtime/attemptPageNavigation] Target page: ${target} (max: ${maxPage})`);
     pdfViewerRef.current.currentPageNumber = target;
-    console.log(`[pdfjs_runtime/attemptPageNavigation] Set currentPageNumber to ${target}`);
 
     // scrollPageIntoView는 확대된 상태에서 제대로 작동하지 않을 수 있으므로
     // 직접 스크롤 위치를 계산하여 이동
@@ -227,7 +215,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       const pageEl = viewer.querySelector<HTMLElement>(
         `.page[data-page-number="${target}"]`
       );
-      console.log(`[pdfjs_runtime/attemptPageNavigation/raf] pageEl found: ${!!pageEl}`);
       if (pageEl && viewerContainer) {
         const containerRect = viewerContainer.getBoundingClientRect();
         const pageRect = pageEl.getBoundingClientRect();
@@ -236,7 +223,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         const scrollTop = pageRect.top - containerRect.top + viewerContainer.scrollTop;
         const scrollLeft = pageRect.left - containerRect.left + viewerContainer.scrollLeft;
 
-        console.log(`[pdfjs_runtime/attemptPageNavigation/raf] Scrolling to top: ${scrollTop}, left: ${scrollLeft}`);
         viewerContainer.scrollTo({
           top: Math.max(0, scrollTop),
           left: Math.max(0, scrollLeft),
@@ -244,7 +230,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         });
       } else {
         // 페이지 요소가 아직 렌더링되지 않았으면 기본 방식 사용
-        console.log(`[pdfjs_runtime/attemptPageNavigation/raf] Using fallback scrollPageIntoView`);
         pdfViewerRef.current?.scrollPageIntoView({ pageNumber: target });
       }
     });
@@ -252,7 +237,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   };
 
   registerGoToPage?.((page: number) => {
-    console.log(`[pdfjs_runtime/goToPage] Requested page: ${page}`);
     attemptPageNavigation(page);
   });
 
@@ -305,7 +289,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     .then((pdfDoc) => {
       if (cancelled) return;
       // clearTimeout(loadingTimeout);
-      console.log(`[PDF Load] Document loaded successfully`);
       setErrorMsg(null);
       pdfViewer.setDocument(pdfDoc);
       linkService.setDocument(pdfDoc, null);
@@ -324,7 +307,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         },
         onComplete: () => {
           // Text extraction completed - finalize loading
-          console.log(`[PDF Load] Text extraction completed - 100%`);
           if (!allPagesRendered) {
             allPagesRendered = true;
             if (updateTimeInterval !== null) {
@@ -335,7 +317,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
             setLoadProgress(100);
             updateLoadingTime();
             setPdfIsLoading?.(false);
-            console.log(`[PDF Load] Complete with text extraction!`);
           }
         },
       });
