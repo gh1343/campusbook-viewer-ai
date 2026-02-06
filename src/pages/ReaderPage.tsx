@@ -96,7 +96,7 @@ export const ReaderPage: React.FC = () => {
     }
   }, [isToolsOpen, isNarrow]);
 
-  // Prevent pinch-to-zoom on side panels (tablet/mobile)
+  // Prevent pinch-to-zoom and pull-to-refresh on side panels (tablet/mobile)
   const leftPanelRef = useRef<HTMLDivElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
 
@@ -117,10 +117,42 @@ export const ReaderPage: React.FC = () => {
       }
     };
 
+    // Prevent pull-to-refresh in side panels
+    let touchStartY = 0;
+    const preventPullToRefresh = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const preventPullMove = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      const touchY = e.touches[0].clientY;
+      const deltaY = touchY - touchStartY;
+
+      // Find the nearest scrollable ancestor
+      let scrollable: HTMLElement | null = target;
+      while (scrollable && scrollable !== document.body) {
+        const overflowY = window.getComputedStyle(scrollable).overflowY;
+        if (overflowY === 'auto' || overflowY === 'scroll') {
+          break;
+        }
+        scrollable = scrollable.parentElement;
+      }
+
+      // If trying to pull down (deltaY > 0)
+      if (deltaY > 0) {
+        // If there's no scrollable element, or if scrollable is at top, prevent pull-to-refresh
+        if (!scrollable || scrollable === document.body || scrollable.scrollTop === 0) {
+          e.preventDefault();
+        }
+      }
+    };
+
     panels.forEach(panel => {
       panel.addEventListener("wheel", preventZoom, { passive: false });
       panel.addEventListener("touchstart", preventTouchZoom, { passive: false });
       panel.addEventListener("touchmove", preventTouchZoom, { passive: false });
+      panel.addEventListener("touchstart", preventPullToRefresh, { passive: true });
+      panel.addEventListener("touchmove", preventPullMove, { passive: false });
     });
 
     return () => {
@@ -128,6 +160,8 @@ export const ReaderPage: React.FC = () => {
         panel.removeEventListener("wheel", preventZoom);
         panel.removeEventListener("touchstart", preventTouchZoom);
         panel.removeEventListener("touchmove", preventTouchZoom);
+        panel.removeEventListener("touchstart", preventPullToRefresh);
+        panel.removeEventListener("touchmove", preventPullMove);
       });
     };
   }, []);
