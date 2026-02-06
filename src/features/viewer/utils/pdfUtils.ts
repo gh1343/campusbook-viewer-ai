@@ -1,5 +1,5 @@
 import type React from "react";
-import type { PdfHighlightRect } from "../../../types";
+import type { PdfHighlightRect } from "../../../../types";
 // Shared types and helpers for PdfViewer
 
 export type HighlightRect = PdfHighlightRect;

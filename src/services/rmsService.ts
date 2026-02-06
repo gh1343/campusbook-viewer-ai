@@ -145,12 +145,20 @@ const parseIdTimestamp = (value: unknown) => {
 };
 
 const generate_uuid = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+  const crypto_api =
+    typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
+
+  if (crypto_api) {
+    try {
+      return crypto_api.randomUUID();
+    } catch (err) {
+      // Fallback to manual uuid generation below when randomUUID is unavailable.
+    }
   }
+
   const bytes = new Uint8Array(16);
-  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
-    crypto.getRandomValues(bytes);
+  if (crypto_api) {
+    crypto_api.getRandomValues(bytes);
   } else {
     for (let i = 0; i < bytes.length; i += 1) {
       bytes[i] = Math.floor(Math.random() * 256);
@@ -879,7 +887,10 @@ export const saveRmsProgress = async ({
     viewMode,
   });
 
-  const rmsList = [
+  const rmsList: Array<
+    | { rmsTp: "RMS_PR"; rmsData: string }
+    | { rmsTp: "RMS_ST"; lastPages: number; bookTotalPages: number }
+  > = [
     {
       rmsTp: "RMS_PR",
       rmsData: JSON.stringify(progressData),

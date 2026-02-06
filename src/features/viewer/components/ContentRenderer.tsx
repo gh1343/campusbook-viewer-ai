@@ -4,7 +4,7 @@ import {useDrawing} from '../../../contexts/DrawingContext';
 import {usePdfViewer} from '../../../contexts/PdfViewerContext';
 import {useAnnotation} from '../../../contexts/AnnotationContext';
 import {Highlighter, MessageCircleQuestion, StickyNote} from 'lucide-react';
-import {Point, Stroke, Chapter} from '../../../types';
+import {Point, Stroke, Chapter} from '../../../../types';
 import html2canvas from 'html2canvas';
 
 interface ContentRendererProps {

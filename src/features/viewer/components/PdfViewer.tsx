@@ -181,7 +181,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const livePointsRef = useRef<{ x: number; y: number }[]>([]);
   const isDrawingRef = useRef(false);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(
-    new Map()
+    new Map<number, { x: number; y: number }>()
   );
   const pinchStartDistRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef<number | null>(null);
@@ -389,7 +389,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const container = viewerContainerRef.current;
     const layer = transformLayerRef.current;
     if (!container || !layer) return null;
-    const pts = Array.from(activePointersRef.current.values());
+    const pts = Array.from(activePointersRef.current.values()) as Array<{
+      x: number;
+      y: number;
+    }>;
     if (pts.length < 2) return null;
     const centerClientX = (pts[0].x + pts[1].x) / 2;
     const centerClientY = (pts[0].y + pts[1].y) / 2;
@@ -407,7 +410,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const container = viewerContainerRef.current;
     const viewerRoot = viewerRef.current;
     if (!container || !viewerRoot) return;
-    const pts = Array.from(activePointersRef.current.values());
+    const pts = Array.from(activePointersRef.current.values()) as Array<{
+      x: number;
+      y: number;
+    }>;
     if (pts.length < 2) return;
 
     const centerClientX = (pts[0].x + pts[1].x) / 2;
@@ -425,9 +431,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       }
     }
     if (!pageEl) {
-      const pages = Array.from(
-        viewerRoot.querySelectorAll<HTMLElement>(".page")
-      );
+      const pages = Array.from(viewerRoot.querySelectorAll(".page")) as HTMLElement[];
       pageEl =
         pages.find((page) => {
           const rect = page.getBoundingClientRect();
@@ -1203,7 +1207,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         scheduleRenderRefresh();
       }
 
-      const pts = Array.from(activePointersRef.current.values());
+      const pts = Array.from(activePointersRef.current.values()) as Array<{
+        x: number;
+        y: number;
+      }>;
       pinchStartDistRef.current = Math.hypot(
         pts[1].x - pts[0].x,
         pts[1].y - pts[0].y
@@ -1252,7 +1259,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // 정확히 2개의 포인터가 있을 때만 핀치 진행
     if (activePointersRef.current.size !== 2) return;
 
-    const pts = Array.from(activePointersRef.current.values());
+    const pts = Array.from(activePointersRef.current.values()) as Array<{
+      x: number;
+      y: number;
+    }>;
     const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
     if (!pinchStartDistRef.current) {
       pinchStartDistRef.current = dist;
