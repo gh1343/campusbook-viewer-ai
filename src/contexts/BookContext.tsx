@@ -379,6 +379,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   );
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("SAVED");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
@@ -583,6 +584,32 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, []);
 
+  // 네트워크 상태 감지
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log("네트워크 연결됨");
+      // 네트워크 재연결 시 로컬에 저장된 데이터가 있으면 동기화 시도
+      if (syncStatus === "LOCAL_ONLY") {
+        console.log("네트워크 재연결, 자동 동기화 시도");
+        saveAll();
+      }
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log("네트워크 끊김");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [syncStatus]);
+
   useEffect(() => {
     return () => {
       if (indexedDbWorkerRef.current) {
@@ -736,7 +763,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const addPdfBookmark = (page: number, label?: string) => {
     if (!page || page < 1) return;
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setBookmarks((prev) => {
       if (prev.some((b) => b.page === page && !b.deleted)) return prev;
       const now = Date.now();
@@ -755,7 +782,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const removePdfBookmark = (id: string) => {
     const now = Date.now();
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setBookmarks((prev) =>
       prev.map((b) =>
         b.id === id
@@ -837,7 +864,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   ): string => {
     const chapterId = targetChapterId || currentChapter.id;
     const now = Date.now();
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     const newHighlight: Highlight = {
       id: now.toString(),
       chapterId: chapterId,
@@ -899,7 +926,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     data: Partial<Highlight> & { note?: string }
   ) => {
     const now = Date.now();
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setHighlights((prev) =>
       prev.map((hl) =>
         hl.id === id
@@ -911,7 +938,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const removeHighlight = (id: string) => {
     const now = Date.now();
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setHighlights((prev) =>
       prev.map((h) =>
         h.id === id
@@ -962,7 +989,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const addStroke = (stroke: Stroke) => {
     const itemBytes = getJsonBytes(stroke);
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setChapterStrokes((prev) => {
       const next = [...prev, stroke];
       const totalBytes = getJsonBytes(next);
@@ -980,7 +1007,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const removeStroke = (strokeId: string) => {
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setChapterStrokes((prev) =>
       prev.map((s) => (s.id === strokeId ? { ...s, deleted: true } : s))
     );
@@ -992,7 +1019,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const addGeneralNote = (title: string, content: string) => {
     const now = Date.now();
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     const newNote: GeneralNote = {
       id: now.toString(),
       title: title || "Untitled Note",
@@ -1008,7 +1035,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const updateGeneralNote = (id: string, title: string, content: string) => {
     const now = Date.now();
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setGeneralNotes((prev) =>
       prev.map((note) =>
         note.id === id ? { ...note, title, content, updated_at: now } : note
@@ -1017,7 +1044,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const removeGeneralNote = (id: string) => {
-    setSyncStatus("UNSAVED");
+    markAsUnsaved();
     setGeneralNotes((prev) =>
       prev.map((n) => (n.id === id ? { ...n, deleted: true } : n))
     );
@@ -2718,10 +2745,39 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
+  // 데이터 변경 시 UNSAVED로 표시 (자동 저장은 하지 않음)
+  const markAsUnsaved = React.useCallback(() => {
+    setSyncStatus("UNSAVED");
+  }, []);
+
   const saveAll = async () => {
     try {
       setSyncStatus("SYNCING");
+
+      // 네트워크 상태 확인
+      if (!navigator.onLine) {
+        console.log("네트워크 끊김 - 로컬 저장만 수행");
+        // 로컬 저장 (IndexedDB + 서버 동기화 시뮬레이션)
+        await saveLocalDataToIndexedDb();
+        setSyncStatus("LOCAL_ONLY");
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, "0");
+        const day = now.getDate().toString().padStart(2, "0");
+        const hours = now.getHours();
+        const minutes = now.getMinutes().toString().padStart(2, "0");
+        const ampm = hours >= 12 ? "오후" : "오전";
+        const displayHours = hours % 12 || 12;
+        setLastSavedAt(
+          `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`
+        );
+        return;
+      }
+
+      // 온라인 상태: 정상적으로 로컬 + 서버 저장
       await saveLocalDataToIndexedDb();
+
       setSyncStatus("SAVED");
       const now = new Date();
       const year = now.getFullYear();
@@ -2735,6 +2791,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       setLastSavedAt(
         `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`
       );
+      console.log("저장 완료");
     } catch (err) {
       console.error("Save all failed", err);
       setSyncStatus("LOCAL_ONLY");
