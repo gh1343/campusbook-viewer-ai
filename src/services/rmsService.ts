@@ -980,7 +980,7 @@ export const saveHighlightsToServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const url = `${apiBase}/v3/viewer-record/save`;
   const payload = {
     bookCode: bookCd,
     type: "hl",
@@ -1036,7 +1036,7 @@ export const loadHighlightsFromServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=hl`;
+  const url = `${apiBase}/v3/viewer-record/list?bookCode=${bookCd}&type=hl`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -1088,7 +1088,7 @@ export const saveProgressToServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const url = `${apiBase}/v3/viewer-record/save`;
   const payload = {
     bookCode: bookCd,
     type: "pr",
@@ -1144,7 +1144,7 @@ export const loadProgressFromServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=pr`;
+  const url = `${apiBase}/v3/viewer-record/list?bookCode=${bookCd}&type=pr`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -1196,7 +1196,7 @@ export const saveBookmarksToServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const url = `${apiBase}/v3/viewer-record/save`;
   const payload = {
     bookCode: bookCd,
     type: "bm",
@@ -1252,7 +1252,7 @@ export const loadBookmarksFromServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=bm`;
+  const url = `${apiBase}/v3/viewer-record/list?bookCode=${bookCd}&type=bm`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -1304,7 +1304,7 @@ export const saveDrawingsToServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const url = `${apiBase}/v3/viewer-record/save`;
 
   const payload = {
     bookCode: bookCd,
@@ -1361,7 +1361,7 @@ export const loadDrawingsFromServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=dr`;
+  const url = `${apiBase}/v3/viewer-record/list?bookCode=${bookCd}&type=dr`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -1413,7 +1413,7 @@ export const saveNotesToServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
+  const url = `${apiBase}/v3/viewer-record/save`;
 
   // Save all notes as a single array
   const payload = {
@@ -1471,7 +1471,7 @@ export const loadNotesFromServer = async ({
       : `Bearer ${authToken}`;
   }
 
-  const url = `${apiBase}/v3/t-pack/test-v-save/list?bookCode=${bookCd}&type=en`;
+  const url = `${apiBase}/v3/viewer-record/list?bookCode=${bookCd}&type=en`;
 
   const response = await fetch(url, {
     method: "GET",

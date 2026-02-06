@@ -87,12 +87,15 @@ export interface Stroke {
   color: string;
   width: number;
   opacity: number;
+  created_at?: number;
+  updated_at?: number;
   deleted?: boolean;
   isEraser?: boolean;
   anchorIndex?: number;
   pageNumber?: number;
   pageWidth?: number;
   pageHeight?: number;
+  syncStatus?: "pending" | "synced";
 }
 
 export interface GeneralNote {

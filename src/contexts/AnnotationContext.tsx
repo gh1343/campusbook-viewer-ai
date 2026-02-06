@@ -86,6 +86,83 @@ const formatSavedAt = (date: Date) => {
   return `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`;
 };
 
+const toFiniteNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const getStrokeTimestamp = (stroke: Partial<Stroke>) => {
+  const updatedAt = toFiniteNumber(stroke.updated_at);
+  if (updatedAt !== null) return updatedAt;
+  const createdAt = toFiniteNumber(stroke.created_at);
+  if (createdAt !== null) return createdAt;
+  const idTimestamp = toFiniteNumber(stroke.id);
+  return idTimestamp !== null ? idTimestamp : 0;
+};
+
+const normalizeStrokeSyncFields = (
+  stroke: Stroke,
+  syncStatus: "pending" | "synced"
+): Stroke => {
+  const timestamp = getStrokeTimestamp(stroke);
+  const createdAt = toFiniteNumber(stroke.created_at);
+  const updatedAt = toFiniteNumber(stroke.updated_at);
+  return {
+    ...stroke,
+    created_at: createdAt !== null ? createdAt : timestamp,
+    updated_at: updatedAt !== null ? updatedAt : timestamp,
+    syncStatus,
+  };
+};
+
+const parseStrokeEntry = (raw: unknown): Stroke[] => {
+  if (Array.isArray(raw)) {
+    return raw.flatMap((item) => parseStrokeEntry(item));
+  }
+  if (!raw || typeof raw !== "object") return [];
+
+  const stroke = raw as Stroke;
+  if (!stroke.id || typeof stroke.id !== "string") return [];
+  return [normalizeStrokeSyncFields(stroke, "synced")];
+};
+
+const parseServerStrokeDataList = (dataList: unknown[]) => {
+  const parsed = dataList.flatMap((entry) => {
+    if (typeof entry === "string") {
+      try {
+        const json = JSON.parse(entry);
+        return parseStrokeEntry(json);
+      } catch (err) {
+        console.error("stroke parse failed", err);
+        return [];
+      }
+    }
+    return parseStrokeEntry(entry);
+  });
+
+  if (parsed.length === 0) return [];
+
+  const mergedById = new Map<string, Stroke>();
+  parsed.forEach((stroke) => {
+    const previous = mergedById.get(stroke.id);
+    if (!previous) {
+      mergedById.set(stroke.id, stroke);
+      return;
+    }
+    const previousTs = getStrokeTimestamp(previous);
+    const currentTs = getStrokeTimestamp(stroke);
+    if (currentTs >= previousTs) {
+      mergedById.set(stroke.id, stroke);
+    }
+  });
+
+  return Array.from(mergedById.values());
+};
+
 export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
@@ -454,17 +531,32 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
   const addStroke = useCallback(
     (stroke: Stroke) => {
+      const now = Date.now();
       markAsUnsaved();
-      setStrokes((prev) => [...prev, stroke]);
+      setStrokes((prev) => [
+        ...prev,
+        {
+          ...stroke,
+          created_at: stroke.created_at ?? now,
+          updated_at: now,
+          deleted: stroke.deleted ?? false,
+          syncStatus: "pending",
+        },
+      ]);
     },
     [markAsUnsaved]
   );
 
   const removeStroke = useCallback(
     (strokeId: string) => {
+      const now = Date.now();
       markAsUnsaved();
       setStrokes((prev) =>
-        prev.map((s) => (s.id === strokeId ? { ...s, deleted: true } : s))
+        prev.map((s) =>
+          s.id === strokeId
+            ? { ...s, deleted: true, updated_at: now, syncStatus: "pending" }
+            : s
+        )
       );
     },
     [markAsUnsaved]
@@ -592,6 +684,9 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         const changedBookmarks = bookmarks.filter(
           (item) => item.syncStatus === "pending"
         );
+        const changedStrokes = strokes.filter(
+          (item) => item.syncStatus !== "synced"
+        );
 
         if (changedHighlights.length > 0) {
           await saveHighlightsToServer({
@@ -635,14 +730,19 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           setGeneralNotes(updatedNotes);
         }
 
-        // strokes 서버 저장 추가
-        if (strokes.length > 0) {
+        if (changedStrokes.length > 0) {
           await saveDrawingsToServer({
             apiBase: config.apiBase,
             bookCd: config.bookCd,
-            drawings: strokes,
+            drawings: changedStrokes,
           });
-          updatedStrokes = strokes.filter((item) => !item.deleted);
+          updatedStrokes = strokes
+            .map((item) =>
+              item.syncStatus !== "synced"
+                ? { ...item, syncStatus: "synced" as const }
+                : item
+            )
+            .filter((item) => !item.deleted);
           setStrokes(updatedStrokes);
         }
       }
@@ -743,11 +843,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
               drawingRes &&
               drawingRes.ok &&
               drawingRes.result &&
-              Array.isArray(drawingRes.result.dataList) &&
-              drawingRes.result.dataList.length > 0
-                ? (JSON.parse(drawingRes.result.dataList[0]) as Stroke[]).filter(
-                    (item) => !item.deleted
-                  )
+              Array.isArray(drawingRes.result.dataList)
+                ? parseServerStrokeDataList(drawingRes.result.dataList)
                 : [];
           } catch (err) {
             console.error("annotation server load failed", err);
@@ -776,12 +873,21 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         let finalHighlights = Array.isArray(data.highlights) ? (data.highlights as Highlight[]) : [];
         let finalBookmarks = Array.isArray(data.bookmarks) ? (data.bookmarks as PdfBookmark[]) : [];
         let finalNotes = Array.isArray(data.notes) ? (data.notes as GeneralNote[]) : [];
-        const finalStrokes = Array.isArray(data.strokes) ? (data.strokes as Stroke[]) : [];
+        let finalStrokes = Array.isArray(data.strokes) ? (data.strokes as Stroke[]) : [];
+        finalStrokes = finalStrokes.map((item) =>
+          item.syncStatus === "synced"
+            ? normalizeStrokeSyncFields(item, "synced")
+            : normalizeStrokeSyncFields(item, "pending")
+        );
 
         // 3. pending 항목이 있으면 서버 동기화
+        const hasPendingStrokes = finalStrokes.some(
+          (item) => item.syncStatus !== "synced"
+        );
         const hasPending =
           finalHighlights.some((item) => item.syncStatus === "pending") ||
-          finalBookmarks.some((item) => item.syncStatus === "pending");
+          finalBookmarks.some((item) => item.syncStatus === "pending") ||
+          hasPendingStrokes;
 
         let finalSyncStatus: SyncStatus = hasPending ? "UNSAVED" : "SAVED";
 
@@ -792,6 +898,9 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
             );
             const changedBookmarks = finalBookmarks.filter(
               (item) => item.syncStatus === "pending"
+            );
+            const changedStrokes = finalStrokes.filter(
+              (item) => item.syncStatus !== "synced"
             );
 
             if (changedHighlights.length > 0) {
@@ -818,6 +927,21 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
               finalBookmarks = finalBookmarks
                 .map((item) =>
                   item.syncStatus === "pending"
+                    ? { ...item, syncStatus: "synced" as const }
+                    : item
+                )
+                .filter((item) => !item.deleted);
+            }
+
+            if (changedStrokes.length > 0) {
+              await saveDrawingsToServer({
+                apiBase: config.apiBase,
+                bookCd: config.bookCd,
+                drawings: changedStrokes,
+              });
+              finalStrokes = finalStrokes
+                .map((item) =>
+                  item.syncStatus !== "synced"
                     ? { ...item, syncStatus: "synced" as const }
                     : item
                 )
