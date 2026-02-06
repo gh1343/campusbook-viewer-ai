@@ -35,6 +35,7 @@ type MergeAndSavePayload = {
     highlights: unknown[];
     bookmarks: unknown[];
     notes: unknown[];
+    strokes: unknown[];
   };
   currentPdfPage?: number;
   viewMode?: string;
@@ -191,6 +192,13 @@ const mergeAndSave = async (payload: MergeAndSavePayload) => {
       )
     : localNotes;
 
+  const mergedStrokes = payload.serverData.strokes && payload.serverData.strokes.length > 0
+    ? mergeItemsByUpdatedAt(
+        payload.serverData.strokes as Array<{ id: string }>,
+        localStrokes as Array<{ id: string }>
+      )
+    : localStrokes;
+
   // 3. Prepare merged snapshot
   const savedAt = Date.now();
   const mergedSnapshot: StoredBundle = {
@@ -201,7 +209,7 @@ const mergeAndSave = async (payload: MergeAndSavePayload) => {
       highlights: mergedHighlights,
       bookmarks: mergedBookmarks,
       notes: mergedNotes,
-      strokes: localStrokes,
+      strokes: mergedStrokes,
       progress:
         typeof payload.currentPdfPage === 'number' &&
         typeof payload.pdfTotalPages === 'number'

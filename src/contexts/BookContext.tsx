@@ -24,8 +24,8 @@ import { synthesizeWithGemini } from "../services/ttsService";
 import {
   getRmsConfig,
   migrate_snapshot,
-  saveRmsProgress,
   loadProgressFromServer,
+  saveProgressToServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -1006,16 +1006,16 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-      await saveRmsProgress({
+      // 새로운 v3 엔드포인트로 progress 저장
+      await saveProgressToServer({
         apiBase: config.apiBase,
         bookCd: config.bookCd,
-        memberCd: config.memberCd,
-        orderIgnore: config.orderIgnore,
-        pageOffset: config.pageOffset,
-        pageIndex: currentPdfPage,
-        viewMode,
-        lastPages: currentPdfPage,
-        bookTotalPages: pdfTotalPages,
+        progressData: {
+          currentPdfPage,
+          viewMode,
+          pdfTotalPages,
+          updatedAt: Date.now(),
+        },
       });
     } catch (err) {
       console.error("Failed to save progress to server", err);

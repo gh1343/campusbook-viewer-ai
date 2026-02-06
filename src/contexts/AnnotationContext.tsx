@@ -23,10 +23,12 @@ import {
   loadBookmarksFromServer,
   loadHighlightsFromServer,
   loadNotesFromServer,
+  loadDrawingsFromServer,
   migrate_snapshot,
   saveBookmarksToServer,
   saveHighlightsToServer,
   saveNotesToServer,
+  saveDrawingsToServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 
@@ -225,6 +227,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         highlights: Highlight[];
         bookmarks: PdfBookmark[];
         notes: GeneralNote[];
+        strokes: Stroke[];
       }
     ) => {
       const worker = getIndexedDbWorker();
@@ -580,6 +583,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       let updatedHighlights = highlights;
       let updatedBookmarks = bookmarks;
       let updatedNotes = generalNotes;
+      let updatedStrokes = strokes;
 
       if (config) {
         const changedHighlights = highlights.filter(
@@ -630,6 +634,17 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           updatedNotes = generalNotes.filter((item) => !item.deleted);
           setGeneralNotes(updatedNotes);
         }
+
+        // strokes 서버 저장 추가
+        if (strokes.length > 0) {
+          await saveDrawingsToServer({
+            apiBase: config.apiBase,
+            bookCd: config.bookCd,
+            drawings: strokes,
+          });
+          updatedStrokes = strokes.filter((item) => !item.deleted);
+          setStrokes(updatedStrokes);
+        }
       }
 
       const postSyncSnapshot: IndexedDbSnapshot = {
@@ -640,7 +655,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           bookmarks: updatedBookmarks,
           highlights: updatedHighlights,
           notes: updatedNotes,
-          strokes: strokes.filter((item) => !item.deleted),
+          strokes: updatedStrokes,
           // Progress는 BookContext에서 관리
           progress: currentSnapshot.data.progress,
         },
@@ -663,11 +678,12 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         let serverHighlights: Highlight[] = [];
         let serverBookmarks: PdfBookmark[] = [];
         let serverNotes: GeneralNote[] = [];
+        let serverStrokes: Stroke[] = [];
 
         // 1. 서버에서 데이터 로드 (있으면)
         if (config) {
           try {
-            const [highlightRes, bookmarkRes, noteRes] = await Promise.all([
+            const [highlightRes, bookmarkRes, noteRes, drawingRes] = await Promise.all([
               loadHighlightsFromServer({
                 apiBase: config.apiBase,
                 bookCd: config.bookCd,
@@ -677,6 +693,10 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                 bookCd: config.bookCd,
               }),
               loadNotesFromServer({
+                apiBase: config.apiBase,
+                bookCd: config.bookCd,
+              }),
+              loadDrawingsFromServer({
                 apiBase: config.apiBase,
                 bookCd: config.bookCd,
               }),
@@ -718,6 +738,17 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                     (item) => !item.deleted
                   )
                 : [];
+
+            serverStrokes =
+              drawingRes &&
+              drawingRes.ok &&
+              drawingRes.result &&
+              Array.isArray(drawingRes.result.dataList) &&
+              drawingRes.result.dataList.length > 0
+                ? (JSON.parse(drawingRes.result.dataList[0]) as Stroke[]).filter(
+                    (item) => !item.deleted
+                  )
+                : [];
           } catch (err) {
             console.error("annotation server load failed", err);
           }
@@ -728,6 +759,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           highlights: serverHighlights,
           bookmarks: serverBookmarks,
           notes: serverNotes,
+          strokes: serverStrokes,
         });
 
         if (!mergedSnapshot) {
