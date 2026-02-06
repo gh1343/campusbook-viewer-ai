@@ -128,9 +128,10 @@ export const PdfViewerProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(() => {
     if (pdfTotalPages > 0 && initialPageToLoad !== null && pdfNavigator) {
-      pdfNavigator(initialPageToLoad);
+      const pageToLoad = Math.max(1, Math.min(initialPageToLoad, pdfTotalPages));
+      pdfNavigator(pageToLoad);
+      setCurrentPdfPage(pageToLoad);
       setInitialPageToLoad(null);
-      setCurrentPdfPage(initialPageToLoad);
     }
   }, [pdfTotalPages, initialPageToLoad, pdfNavigator]);
 

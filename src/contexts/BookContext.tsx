@@ -897,7 +897,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const saveProgress = async () => {
     const config = getRmsConfig();
     if (!config) {
-      alert("RMS 설정이 필요합니다. (VITE_RMS_API_BASE, VITE_RMS_BOOK_CD)");
+      console.warn("RMS config not available, skipping progress save");
       return;
     }
     try {
@@ -912,11 +912,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         lastPages: currentPdfPage,
         bookTotalPages: pdfTotalPages,
       });
-      alert("Progress Saved!");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
       console.error("Failed to save progress", err);
-      alert(`Progress Save Failed: ${message}`);
+      throw err;
     }
   };
 

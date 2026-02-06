@@ -35,10 +35,11 @@ export const Header: React.FC<{
   const {
     isToolsOpen,
     setToolsOpen,
+    saveProgress,
   } = useBook();
   const {
     bookmarks,
-    syncStatus,
+    syncStatus: annotationSyncStatus,
     lastSavedAt,
     saveAnnotations,
     addPdfBookmark,
@@ -63,7 +64,36 @@ export const Header: React.FC<{
     setPenColor,
     penWidth,
     setPenWidth,
+    syncStatus: drawingSyncStatus,
+    saveDrawings,
   } = useDrawing();
+
+  // 통합 syncStatus: 둘 중 하나라도 UNSAVED이면 UNSAVED, 둘 다 SYNCING이면 SYNCING
+  const syncStatus =
+    annotationSyncStatus === "SYNCING" || drawingSyncStatus === "SYNCING"
+      ? "SYNCING"
+      : annotationSyncStatus === "UNSAVED" || drawingSyncStatus === "UNSAVED"
+      ? "UNSAVED"
+      : annotationSyncStatus === "LOCAL_ONLY" || drawingSyncStatus === "LOCAL_ONLY"
+      ? "LOCAL_ONLY"
+      : annotationSyncStatus === "BLOCKED" || drawingSyncStatus === "BLOCKED"
+      ? "BLOCKED"
+      : "SAVED";
+
+  // 통합 저장 함수
+  const handleSaveAll = async () => {
+    try {
+      await Promise.all([
+        saveAnnotations(),
+        saveDrawings(),
+        saveProgress(),
+      ]);
+      alert("저장이 완료되었습니다.");
+    } catch (err) {
+      console.error("Save failed:", err);
+      alert("저장 중 오류가 발생했습니다.");
+    }
+  };
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -310,7 +340,7 @@ export const Header: React.FC<{
               <div className="save_status_wrap">
                 {syncStatus === "UNSAVED" && (
                   <button
-                    onClick={saveAnnotations}
+                    onClick={handleSaveAll}
                     className="save_btn unsaved"
                   >
                     <Save size={14} />
@@ -325,7 +355,7 @@ export const Header: React.FC<{
                 )}
                 {syncStatus === "SAVED" && (
                   <button
-                    onClick={saveAnnotations}
+                    onClick={handleSaveAll}
                     className="save_btn_group saved"
                   >
                     <div className="save_btn saved_btn">
@@ -341,7 +371,7 @@ export const Header: React.FC<{
                 )}
                 {syncStatus === "LOCAL_ONLY" && (
                   <button
-                    onClick={saveAnnotations}
+                    onClick={handleSaveAll}
                     className="save_btn_group local_only"
                   >
                     <div className="save_btn local_btn">
@@ -355,7 +385,7 @@ export const Header: React.FC<{
                   </button>
                 )}
                 {syncStatus === "BLOCKED" && (
-                  <button onClick={saveAnnotations} className="save_btn blocked">
+                  <button onClick={handleSaveAll} className="save_btn blocked">
                     <X size={14} />
                     <span>동기화 차단됨</span>
                   </button>

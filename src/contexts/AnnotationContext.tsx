@@ -731,24 +731,75 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           }
         }
 
-        setHighlights(mergedHighlights);
-        setBookmarks(mergedBookmarks);
-        setGeneralNotes(mergedNotes);
-        setSyncStatus(
+        const hasPending =
           mergedHighlights.some((item) => item.syncStatus === "pending") ||
-            mergedBookmarks.some((item) => item.syncStatus === "pending")
-            ? "UNSAVED"
-            : "SAVED"
-        );
+          mergedBookmarks.some((item) => item.syncStatus === "pending");
+
+        // 초기 로드 시 pending 항목이 있고 온라인이면 자동 동기화 시도
+        let finalHighlights = mergedHighlights;
+        let finalBookmarks = mergedBookmarks;
+        let finalNotes = mergedNotes;
+        let finalSyncStatus: SyncStatus = hasPending ? "UNSAVED" : "SAVED";
+
+        if (hasPending && navigator.onLine && config) {
+          try {
+            const changedHighlights = mergedHighlights.filter(
+              (item) => item.syncStatus === "pending"
+            );
+            const changedBookmarks = mergedBookmarks.filter(
+              (item) => item.syncStatus === "pending"
+            );
+
+            if (changedHighlights.length > 0) {
+              await saveHighlightsToServer({
+                apiBase: config.apiBase,
+                bookCd: config.bookCd,
+                highlights: changedHighlights,
+              });
+              finalHighlights = mergedHighlights
+                .map((item) =>
+                  item.syncStatus === "pending"
+                    ? { ...item, syncStatus: "synced" as const }
+                    : item
+                )
+                .filter((item) => !item.deleted);
+            }
+
+            if (changedBookmarks.length > 0) {
+              await saveBookmarksToServer({
+                apiBase: config.apiBase,
+                bookCd: config.bookCd,
+                bookmarks: changedBookmarks,
+              });
+              finalBookmarks = mergedBookmarks
+                .map((item) =>
+                  item.syncStatus === "pending"
+                    ? { ...item, syncStatus: "synced" as const }
+                    : item
+                )
+                .filter((item) => !item.deleted);
+            }
+
+            finalSyncStatus = "SAVED";
+          } catch (err) {
+            console.error("Auto-sync on initial load failed", err);
+            finalSyncStatus = "UNSAVED";
+          }
+        }
+
+        setHighlights(finalHighlights);
+        setBookmarks(finalBookmarks);
+        setGeneralNotes(finalNotes);
+        setSyncStatus(finalSyncStatus);
 
         const mergedSnapshot: IndexedDbSnapshot = {
           ...snapshot,
           savedAt: Date.now(),
           data: {
             ...snapshot.data,
-            highlights: mergedHighlights,
-            bookmarks: mergedBookmarks,
-            notes: mergedNotes,
+            highlights: finalHighlights,
+            bookmarks: finalBookmarks,
+            notes: finalNotes,
           },
         };
         await saveSnapshot(mergedSnapshot);
