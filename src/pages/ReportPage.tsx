@@ -1,11 +1,13 @@
 import React from 'react';
 import { useBook } from '../contexts/BookContext';
+import { useAnnotation } from '../contexts/AnnotationContext';
 import { Header } from '../components/layout/Header';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Clock, BookOpen, PenTool, Bot } from 'lucide-react';
 
 export const ReportPage: React.FC = () => {
-  const { stats, highlights } = useBook();
+  const { stats } = useBook();
+  const { highlights } = useAnnotation();
 
   // Prepare data for chart
   const data = Object.entries(stats.chapterVisits).map(([chapterId, visits]) => ({
@@ -20,8 +22,8 @@ export const ReportPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-       {/* Use dummy toggle functions for Header since they aren't used here */}
-      <Header toggleSidebar={() => {}} toggleNotes={() => {}} />
+      {/* Use dummy toggle functions for Header since they aren't used here */}
+      <Header toggleSidebar={() => {}} />
       
       <main className="pt-24 px-4 max-w-5xl mx-auto pb-20">
         <div className="mb-8">

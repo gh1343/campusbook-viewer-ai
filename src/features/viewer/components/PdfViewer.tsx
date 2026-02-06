@@ -25,6 +25,7 @@ import {
 import { useBook } from "../../../contexts/BookContext";
 import { useDrawing } from "../../../contexts/DrawingContext";
 import { usePdfViewer } from "../../../contexts/PdfViewerContext";
+import { useAnnotation } from "../../../contexts/AnnotationContext";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
@@ -78,18 +79,20 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   >(new Map());
   const currentPageRef = useRef<number | null>(null);
   const {
+    triggerSmartExplain,
+    setToolsOpen,
+    setActiveToolTab,
+    getChapterTitleByPage,
+  } = useBook();
+  const {
     addHighlight,
     updateHighlight,
     highlights,
     activeHighlightId,
     focusHighlight,
-    triggerSmartExplain,
     showAnnotations,
-    setToolsOpen,
-    setActiveToolTab,
     requestHighlightNoteEdit,
-    getChapterTitleByPage,
-  } = useBook();
+  } = useAnnotation();
   const {
     setPdfTextPages,
     pdfSearchHighlight,
@@ -1491,7 +1494,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     window.getSelection()?.removeAllRanges();
     if (options?.requestNoteEdit) {
       setToolsOpen(true);
-      setActiveToolTab("notes");
+      setActiveToolTab("highlight");
       focusHighlight(id);
       requestHighlightNoteEdit(id);
     }

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useBook } from "../../contexts/BookContext";
 import { useDrawing } from "../../contexts/DrawingContext";
 import { usePdfViewer } from "../../contexts/PdfViewerContext";
+import { useAnnotation } from "../../contexts/AnnotationContext";
 import {
   Book,
   Sidebar,
@@ -34,13 +35,15 @@ export const Header: React.FC<{
   const {
     isToolsOpen,
     setToolsOpen,
+  } = useBook();
+  const {
     bookmarks,
     syncStatus,
     lastSavedAt,
-    saveAll,
+    saveAnnotations,
     addPdfBookmark,
     removePdfBookmark,
-  } = useBook();
+  } = useAnnotation();
   const {
     viewMode,
     setViewMode,
@@ -306,7 +309,10 @@ export const Header: React.FC<{
               {/* 저장 상태 인터페이스 */}
               <div className="save_status_wrap">
                 {syncStatus === "UNSAVED" && (
-                  <button onClick={saveAll} className="save_btn unsaved">
+                  <button
+                    onClick={saveAnnotations}
+                    className="save_btn unsaved"
+                  >
                     <Save size={14} />
                     <span>저장 필요</span>
                   </button>
@@ -318,7 +324,10 @@ export const Header: React.FC<{
                   </div>
                 )}
                 {syncStatus === "SAVED" && (
-                  <button onClick={saveAll} className="save_btn_group saved">
+                  <button
+                    onClick={saveAnnotations}
+                    className="save_btn_group saved"
+                  >
                     <div className="save_btn saved_btn">
                       <CheckCircle2 size={12} />
                       <span>저장 완료</span>
@@ -332,7 +341,7 @@ export const Header: React.FC<{
                 )}
                 {syncStatus === "LOCAL_ONLY" && (
                   <button
-                    onClick={saveAll}
+                    onClick={saveAnnotations}
                     className="save_btn_group local_only"
                   >
                     <div className="save_btn local_btn">
@@ -346,7 +355,7 @@ export const Header: React.FC<{
                   </button>
                 )}
                 {syncStatus === "BLOCKED" && (
-                  <button onClick={saveAll} className="save_btn blocked">
+                  <button onClick={saveAnnotations} className="save_btn blocked">
                     <X size={14} />
                     <span>동기화 차단됨</span>
                   </button>

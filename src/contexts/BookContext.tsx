@@ -8,18 +8,14 @@ import React, {
 } from "react";
 import {
   Chapter,
-  Highlight,
   FontSize,
   Theme,
   ReadingStats,
-  GeneralNote,
   ChatMessage,
   BookContextType,
   RagChunk,
   SearchResult,
-  PdfBookmark,
   TTSConfig,
-  SyncStatus,
 } from "../../types";
 import { usePdfViewer } from "./PdfViewerContext";
 import { generateExplanation } from "../services/geminiService";
@@ -28,16 +24,8 @@ import { synthesizeWithGemini } from "../services/ttsService";
 import {
   getRmsConfig,
   migrate_snapshot,
-  sync_snapshot,
   saveRmsProgress,
-  saveHighlightsToServer,
-  loadHighlightsFromServer,
-  saveProgressToServer,
   loadProgressFromServer,
-  saveBookmarksToServer,
-  loadBookmarksFromServer,
-  saveNotesToServer,
-  loadNotesFromServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 const NAV_TOC_PATH =
@@ -165,57 +153,6 @@ const normalizeForMatch = (value: string) =>
     .replace(/[^0-9A-Za-z가-힣]/g, "")
     .toLowerCase();
 
-const getJsonBytes = (value: unknown) => {
-  const text = JSON.stringify(value);
-  if (typeof TextEncoder === "undefined") return text.length;
-  return new TextEncoder().encode(text).length;
-};
-
-const bytesToMb = (bytes: number) => Number((bytes / (1024 * 1024)).toFixed(4));
-
-const stableStringify = (value: unknown) =>
-  JSON.stringify(value, (_key, val) => {
-    if (!val || typeof val !== "object" || Array.isArray(val)) return val;
-    return Object.keys(val as Record<string, unknown>)
-      .sort()
-      .reduce<Record<string, unknown>>((acc, k) => {
-        acc[k] = (val as Record<string, unknown>)[k];
-        return acc;
-      }, {});
-  });
-
-const normalizeSnapshotForCompare = (snapshot: IndexedDbSnapshot) => {
-  const data = snapshot.data || {};
-  const progress = data.progress;
-  const normalizedProgress =
-    progress && typeof progress === "object"
-      ? {
-          currentPdfPage: progress.currentPdfPage,
-          viewMode: progress.viewMode,
-          pdfTotalPages: progress.pdfTotalPages,
-          furthestPage: progress.furthestPage,
-          lastReadPage: progress.lastReadPage,
-        }
-      : progress;
-  return {
-    data: {
-      bookmarks: Array.isArray(data.bookmarks) ? data.bookmarks : [],
-      highlights: Array.isArray(data.highlights) ? data.highlights : [],
-      notes: Array.isArray(data.notes) ? data.notes : [],
-      strokes:
-        data.strokes && typeof data.strokes === "object" ? data.strokes : {},
-      progress: normalizedProgress,
-    },
-    meta: snapshot.meta || {},
-  };
-};
-
-const isSameSnapshot = (a: IndexedDbSnapshot, b: IndexedDbSnapshot) =>
-  stableStringify(normalizeSnapshotForCompare(a)) ===
-  stableStringify(normalizeSnapshotForCompare(b));
-
-const enable_debug_log = false;
-
 const parseNavChapters = (
   raw: string
 ): {
@@ -302,18 +239,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
   const [fontSize, setFontSize] = useState<FontSize>("medium");
   const [theme, setTheme] = useState<Theme>("light");
-
-  const [showAnnotations, setShowAnnotations] = useState(true);
-  const [bookmarks, setBookmarks] = useState<PdfBookmark[]>([]);
-  const [highlights, setHighlights] = useState<Highlight[]>([]);
-  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
-    null
-  );
-  const [pendingHighlightEditId, setPendingHighlightEditId] = useState<
-    string | null
-  >(null);
-
-  const [generalNotes, setGeneralNotes] = useState<GeneralNote[]>([]);
   const [isCaptureMode, setCaptureMode] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
@@ -337,15 +262,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [chapterPageMap, setChapterPageMap] = useState<Record<string, number>>(
     {}
   );
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("SAVED");
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
   const indexedDbWorkerRef = useRef<Worker | null>(null);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
-  const indexedDbSnapshotRef = useRef<IndexedDbSnapshot | null>(null);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState((prev) => ({ ...prev, ...config }));
@@ -529,29 +450,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, []);
 
-  // 네트워크 상태 감지
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      // 네트워크 재연결 시 로컬에 저장된 데이터가 있으면 동기화 시도
-      if (syncStatus === "LOCAL_ONLY") {
-        saveAll();
-      }
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, [syncStatus]);
-
   useEffect(() => {
     return () => {
       if (indexedDbWorkerRef.current) {
@@ -694,44 +592,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const toggleAnnotations = () => setShowAnnotations((prev) => !prev);
-
-  const addPdfBookmark = (page: number, label?: string) => {
-    if (!page || page < 1) return;
-    markAsUnsaved();
-    setBookmarks((prev) => {
-      if (prev.some((b) => b.page === page && !b.deleted)) return prev;
-      const now = Date.now();
-      const bookmark: PdfBookmark = {
-        id: now.toString(),
-        page,
-        label: label || `Page ${page}`,
-        created_at: now,
-        updated_at: now,
-        deleted: false,
-        syncStatus: "pending", // Mark as pending sync
-      };
-      return [bookmark, ...prev];
-    });
-  };
-
-  const removePdfBookmark = (id: string) => {
-    const now = Date.now();
-    markAsUnsaved();
-    setBookmarks((prev) =>
-      prev.map((b) =>
-        b.id === id
-          ? { ...b, deleted: true, updated_at: now, syncStatus: "pending" }
-          : b
-      )
-    );
-  };
-
-  const clearHighlightFocus = () => {
-    // Prevent stale highlight auto-scroll from overriding explicit navigation.
-    setActiveHighlightId(null);
-  };
-
   const goToNextChapter = () => {
     if (currentChapterIndex < chapters.length - 1) {
       goToChapter(currentChapterIndex + 1);
@@ -746,7 +606,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const goToChapter = (index: number) => {
     if (index >= 0 && index < chapters.length) {
-      clearHighlightFocus();
       setCurrentChapterIndex(index);
       const target = chapters[index];
       const targetPage = chapterPageMap[target.id];
@@ -789,178 +648,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const addHighlight = (
-    text: string,
-    note?: string,
-    targetChapterId?: string,
-    pageNumber?: number
-  ): string => {
-    const chapterId = targetChapterId || currentChapter.id;
-    const now = Date.now();
-    markAsUnsaved();
-    const newHighlight: Highlight = {
-      id: now.toString(),
-      chapterId: chapterId,
-      text,
-      color: "yellow",
-      pageNumber,
-      note,
-      created_at: now,
-      updated_at: now,
-      deleted: false,
-      syncStatus: "pending", // Mark as pending sync
-    };
-    const itemBytes = getJsonBytes(newHighlight);
-    const chapterLabel = (() => {
-      if (newHighlight.chapterId === "reference-doc") {
-        if (!newHighlight.pageNumber) return "Reference PDF";
-        const title = getChapterTitleByPage(newHighlight.pageNumber);
-        return title || "Reference PDF";
-      }
-      const chapterIndex = chapters.findIndex(
-        (c) => c.id === newHighlight.chapterId
-      );
-      if (chapterIndex === -1) return "Chapter";
-      const chapterTitle = chapters[chapterIndex]?.title?.trim();
-      return chapterTitle || `Chapter ${chapterIndex + 1}`;
-    })();
-    const listInfo = {
-      chapterLabel,
-      pageNumber: newHighlight.pageNumber ?? null,
-      text: newHighlight.text,
-    };
-    const listBytes = getJsonBytes(listInfo);
-    const combinedBytes = itemBytes + listBytes;
-    setHighlights((prev) => {
-      const next = [newHighlight, ...prev];
-      const totalBytes = getJsonBytes(next);
-      if (enable_debug_log) {
-      }
-      return next;
-    });
-    setStats((prev) => ({ ...prev, highlightCount: prev.highlightCount + 1 }));
-    return newHighlight.id;
-  };
-
-  const updateHighlight = (
-    id: string,
-    data: Partial<Highlight> & { note?: string }
-  ) => {
-    const now = Date.now();
-    markAsUnsaved();
-    setHighlights((prev) =>
-      prev.map((hl) =>
-        hl.id === id
-          ? { ...hl, ...data, updated_at: now, syncStatus: "pending" }
-          : hl
-      )
-    );
-  };
-
-  const removeHighlight = (id: string) => {
-    const now = Date.now();
-    markAsUnsaved();
-    setHighlights((prev) =>
-      prev.map((h) =>
-        h.id === id
-          ? { ...h, deleted: true, updated_at: now, syncStatus: "pending" }
-          : h
-      )
-    );
-  };
-
-  const focusHighlight = (id: string) => {
-    setShowAnnotations(true);
-    setActiveHighlightId(id);
-    setTimeout(() => setActiveHighlightId(null), 2000);
-  };
-
-  const requestHighlightNoteEdit = (id: string) => {
-    setPendingHighlightEditId(id);
-  };
-
-  const clearHighlightNoteEditRequest = () => {
-    setPendingHighlightEditId(null);
-  };
-
-  const goToHighlight = (hlOrId: Highlight | string) => {
-    const hl =
-      typeof hlOrId === "string"
-        ? highlights.find((h) => h.id === hlOrId)
-        : hlOrId;
-    if (!hl) return;
-
-    // Try to fill missing pageNumber for reference-doc
-    if (hl.chapterId === "reference-doc" && !hl.pageNumber) {
-      if (currentPdfPage) {
-        updateHighlight(hl.id, { pageNumber: currentPdfPage });
-      }
-    }
-
-    if (hl.chapterId === "reference-doc" && hl.pageNumber) {
-      goToPdfPage(hl.pageNumber);
-    } else {
-      const idx = chapters.findIndex((c) => c.id === hl.chapterId);
-      if (idx >= 0) {
-        goToChapter(idx);
-      }
-    }
-    focusHighlight(hl.id);
-  };
-
-  const addGeneralNote = (title: string, content: string) => {
-    const now = Date.now();
-    markAsUnsaved();
-    const newNote: GeneralNote = {
-      id: now.toString(),
-      title: title || "Untitled Note",
-      content: content,
-      chapterId: currentChapter.id,
-      chapterTitle: currentChapter.title,
-      created_at: now,
-      updated_at: now,
-      deleted: false,
-    };
-    setGeneralNotes((prev) => [newNote, ...prev]);
-  };
-
-  const updateGeneralNote = (id: string, title: string, content: string) => {
-    const now = Date.now();
-    markAsUnsaved();
-    setGeneralNotes((prev) =>
-      prev.map((note) =>
-        note.id === id ? { ...note, title, content, updated_at: now } : note
-      )
-    );
-  };
-
-  const removeGeneralNote = (id: string) => {
-    markAsUnsaved();
-    setGeneralNotes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, deleted: true } : n))
-    );
-  };
-
-  const exportNoteAsMarkdown = (note: GeneralNote) => {
-    let md = note.content.replace(/<[^>]+>/g, "");
-    const blob = new Blob([`# ${note.title}\n\n${md}`], {
-      type: "text/markdown",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${note.title.replace(/\s+/g, "_")}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const importNotes = async (file: File) => {
-    const text = await file.text();
-    let title = file.name.replace(".md", "").replace(".json", "");
-    let content = text.replace(/\n/g, "<br>");
-    addGeneralNote(title, content);
   };
 
   const addChatMessage = (role: "user" | "model", text: string) => {
@@ -1018,40 +705,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       }
     });
 
-    highlights.forEach((hl) => {
-      if (
-        !hl.deleted &&
-        (hl.text.toLowerCase().includes(lowerQuery) ||
-          (hl.note && hl.note.toLowerCase().includes(lowerQuery)))
-      ) {
-        results.push({
-          id: `hl-${hl.id}`,
-          type: "highlight",
-          title: "Highlight",
-          contentSnippet: hl.note ? `${hl.text} - ${hl.note}` : hl.text,
-          chapterId: hl.chapterId,
-          pageNumber: hl.pageNumber,
-        });
-      }
-    });
-
-    generalNotes.forEach((note) => {
-      if (note.deleted) return;
-      const plainContent = note.content.replace(/<[^>]+>/g, " ");
-      if (
-        note.title.toLowerCase().includes(lowerQuery) ||
-        plainContent.toLowerCase().includes(lowerQuery)
-      ) {
-        results.push({
-          id: `note-${note.id}`,
-          type: "note",
-          title: note.title,
-          contentSnippet: plainContent.substring(0, 80) + "...",
-          chapterId: note.chapterId,
-        });
-      }
-    });
-
     pdfTextPages.forEach((p) => {
       const idx = p.text.toLowerCase().indexOf(lowerQuery);
       if (idx !== -1) {
@@ -1087,658 +740,105 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     const normalized = rawPath.replace(/[^a-zA-Z0-9_-]+/g, "_");
     return normalized ? `path_${normalized}` : "local_default";
   };
-
-  const buildCurrentIndexedDbSnapshot = (
-    storageKey: string,
-    savedAt: number
-  ): IndexedDbSnapshot => ({
-    key: storageKey,
-    savedAt,
-    data: {
-      bookmarks,
-      highlights,
-      notes: generalNotes,
-      strokes: [],
-      progress: {
-        currentPdfPage,
-        viewMode,
-        pdfTotalPages,
-        updatedAt: savedAt,
-      },
-    },
-    meta: {
-      bookTitle,
-    },
-  });
-
-  const getStorageEstimate = async () => {
-    if (typeof navigator === "undefined") return null;
-    if (!navigator.storage || !navigator.storage.estimate) return null;
-    try {
-      const estimate = await navigator.storage.estimate();
-      const usage =
-        typeof estimate.usage === "number" && Number.isFinite(estimate.usage)
-          ? estimate.usage
-          : null;
-      const quota =
-        typeof estimate.quota === "number" && Number.isFinite(estimate.quota)
-          ? estimate.quota
-          : null;
-      const remaining =
-        usage !== null && quota !== null ? Math.max(0, quota - usage) : null;
-      return { usage, remaining, quota };
-    } catch (err) {
-      return null;
-    }
-  };
-
-  const formatStorageMb = (value: number | null) =>
-    value === null ? "알 수 없음" : `${bytesToMb(value).toFixed(2)} MB`;
-
   const loadLocalDataFromIndexedDb = async (storageKey: string) => {
     if (typeof window === "undefined") return;
     const worker = getIndexedDbWorker();
     if (!worker) return;
 
-    try {
-      const result = await new Promise<IndexedDbSnapshot | null>(
-        (resolve, reject) => {
-          const requestId = `${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}`;
-          const cleanup = () => {
-            worker.removeEventListener("message", handleMessage);
-            worker.removeEventListener("error", handleError);
-          };
-          const handleMessage = (event: MessageEvent) => {
-            const response = event.data as {
-              type?: string;
-              requestId?: string;
-              error?: string;
-              payload?: unknown;
-            };
-            if (!response || response.requestId !== requestId) return;
-            cleanup();
-            if (response.type === "load_complete") {
-              resolve((response.payload as IndexedDbSnapshot) || null);
-            } else {
-              reject(new Error(response.error || "IndexedDB load failed."));
-            }
-          };
-          const handleError = () => {
-            cleanup();
-            reject(new Error("IndexedDB worker error."));
-          };
-          worker.addEventListener("message", handleMessage);
-          worker.addEventListener("error", handleError);
-          worker.postMessage({
-            type: "load_bundle",
-            requestId,
-            payload: { storageKey },
-          });
-        }
-      );
-
-      // Create empty snapshot if IndexedDB is empty
-      let snapshot: IndexedDbSnapshot;
-      let needsMigrationSave = false;
-
-      if (result && result.data) {
-        const migrated = migrate_snapshot(result);
-        snapshot = migrated.snapshot || result;
-        needsMigrationSave = migrated.changed;
-      } else {
-        snapshot = {
-          key: storageKey,
-          savedAt: Date.now(),
-          schema_version: 1,
-          data: {
-            bookmarks: [],
-            highlights: [],
-            notes: [],
-            strokes: [],
-            progress: undefined,
-          },
-          meta: {},
+    const loadSnapshot = async () =>
+      await new Promise<IndexedDbSnapshot | null>((resolve, reject) => {
+        const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const cleanup = () => {
+          worker.removeEventListener("message", handleMessage);
+          worker.removeEventListener("error", handleError);
         };
-      }
-
-      if (needsMigrationSave) {
-        try {
-          await new Promise<void>((resolve, reject) => {
-            const requestId = `${Date.now()}_${Math.random()
-              .toString(36)
-              .slice(2)}`;
-            const cleanup = () => {
-              worker.removeEventListener("message", handleMessage);
-              worker.removeEventListener("error", handleError);
-            };
-            const handleMessage = (event: MessageEvent) => {
-              const response = event.data as {
-                type?: string;
-                requestId?: string;
-                error?: string;
-              };
-              if (!response || response.requestId !== requestId) return;
-              cleanup();
-              if (response.type === "save_complete") {
-                resolve();
-              } else {
-                reject(new Error(response.error || "IndexedDB save failed."));
-              }
-            };
-            const handleError = () => {
-              cleanup();
-              reject(new Error("IndexedDB worker error."));
-            };
-            worker.addEventListener("message", handleMessage);
-            worker.addEventListener("error", handleError);
-            worker.postMessage({
-              type: "save_bundle",
-              requestId,
-              payload: {
-                storageKey: snapshot.key,
-                data: snapshot.data,
-                meta: snapshot.meta,
-                schema_version: snapshot.schema_version,
-                savedAt: snapshot.savedAt,
-              },
-            });
-          });
-        } catch (err) {
-          console.error("IndexedDB migrate save failed", err);
-        }
-      }
-
-      const data = snapshot.data;
-
-      // Load highlights: Merge server and IndexedDB based on timestamps
-      const config = getRmsConfig();
-      const localHighlights = Array.isArray(data.highlights)
-        ? data.highlights
-        : [];
-      const localBookmarks = Array.isArray(data.bookmarks)
-        ? data.bookmarks
-        : [];
-      const localNotes = Array.isArray(data.notes) ? data.notes : [];
-      let serverHighlights: any[] | null = null;
-      let serverBookmarks: any[] | null = null;
-      let serverNotes: any[] | null = null;
-
-      // Try to load highlights from server first
-      if (config) {
-        try {
-          const serverData = await loadHighlightsFromServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-          });
-          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
-          if (
-            serverData &&
-            serverData.ok &&
-            serverData.result &&
-            Array.isArray(serverData.result.dataList)
-          ) {
-            // Parse each JSON string in dataList and mark as synced
-            serverHighlights = serverData.result.dataList
-              .map((jsonStr: string) => {
-                const parsed = JSON.parse(jsonStr);
-                // Mark server data as synced (already on server)
-                return { ...parsed, syncStatus: "synced" };
-              })
-              .filter((hl: any) => !hl.deleted);
+        const handleMessage = (event: MessageEvent) => {
+          const response = event.data as {
+            type?: string;
+            requestId?: string;
+            error?: string;
+            payload?: unknown;
+          };
+          if (!response || response.requestId !== requestId) return;
+          cleanup();
+          if (response.type === "load_complete") {
+            resolve((response.payload as IndexedDbSnapshot) || null);
           } else {
-            console.warn("[Highlights] Invalid server response:", serverData);
+            reject(new Error(response.error || "IndexedDB load failed."));
           }
-        } catch (err) {
-          console.error("[Highlights] ❌ Failed to load from server:", err);
-        }
-      } else {
-      }
-
-      // Try to load bookmarks from server
-      if (config) {
-        try {
-          const bookmarkData = await loadBookmarksFromServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-          });
-          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
-          if (
-            bookmarkData &&
-            bookmarkData.ok &&
-            bookmarkData.result &&
-            Array.isArray(bookmarkData.result.dataList)
-          ) {
-            // Parse each JSON string in dataList and mark as synced
-            serverBookmarks = bookmarkData.result.dataList
-              .map((jsonStr: string) => {
-                const parsed = JSON.parse(jsonStr);
-                // Mark server data as synced (already on server)
-                return { ...parsed, syncStatus: "synced" };
-              })
-              .filter((bm: any) => !bm.deleted);
-          } else {
-            console.warn("[Bookmarks] Invalid server response:", bookmarkData);
-          }
-        } catch (err) {
-          console.error("[Bookmarks] ❌ Failed to load from server:", err);
-        }
-      } else {
-      }
-
-      // Try to load notes from server
-      if (config) {
-        try {
-          const notesData = await loadNotesFromServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-          });
-          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
-          if (
-            notesData &&
-            notesData.ok &&
-            notesData.result &&
-            Array.isArray(notesData.result.dataList) &&
-            notesData.result.dataList.length > 0
-          ) {
-            // Parse the most recent notes data
-            const parsedNotes = JSON.parse(notesData.result.dataList[0]);
-            serverNotes = Array.isArray(parsedNotes)
-              ? parsedNotes.filter((n: any) => !n.deleted)
-              : [];
-          } else {
-            console.warn("[Notes] Invalid server response:", notesData);
-          }
-        } catch (err) {
-          console.error("[Notes] ❌ Failed to load from server:", err);
-        }
-      } else {
-      }
-
-      // Merge server and local highlights based on timestamps using Web Worker
-      let mergedHighlights: any[] = [];
-      if (serverHighlights && serverHighlights.length > 0) {
-
-        try {
-          // Use Web Worker for merge operation to avoid blocking main thread
-          const mergeResult = await new Promise<{
-            merged: any[];
-            stats: {
-              total: number;
-              serverOnly: number;
-              localOnly: number;
-              serverNewer: number;
-              localNewer: number;
-            };
-          }>((resolve, reject) => {
-            const mergeWorker = new Worker(
-              new URL("../workers/mergeWorker.ts", import.meta.url),
-              { type: "module" }
-            );
-
-            const timeout = setTimeout(() => {
-              mergeWorker.terminate();
-              reject(new Error("Merge operation timed out"));
-            }, 10000); // 10 second timeout
-
-            mergeWorker.onmessage = (e) => {
-              clearTimeout(timeout);
-              mergeWorker.terminate();
-              if (e.data.type === "merge-complete") {
-                resolve({
-                  merged: e.data.merged,
-                  stats: e.data.stats,
-                });
-              } else {
-                reject(new Error("Invalid merge response"));
-              }
-            };
-
-            mergeWorker.onerror = (err) => {
-              clearTimeout(timeout);
-              mergeWorker.terminate();
-              reject(err);
-            };
-
-            mergeWorker.postMessage({
-              type: "merge",
-              serverData: serverHighlights,
-              localData: localHighlights,
-            });
-          });
-
-          mergedHighlights = mergeResult.merged;
-          const { serverOnly, localOnly, serverNewer, localNewer } =
-            mergeResult.stats;
-
-        } catch (err) {
-          console.error(
-            "[Highlights] Web Worker merge failed, falling back to sync merge:",
-            err
-          );
-
-          // Fallback to synchronous merge if worker fails
-          const serverMap = new Map(
-            serverHighlights.map((h: any) => [h.id, h])
-          );
-          const localMap = new Map(localHighlights.map((h: any) => [h.id, h]));
-          const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
-
-          allIds.forEach((id) => {
-            const serverItem = serverMap.get(id);
-            const localItem = localMap.get(id);
-
-            if (serverItem && localItem) {
-              const serverTime =
-                serverItem.updated_at || serverItem.created_at || 0;
-              const localTime =
-                localItem.updated_at || localItem.created_at || 0;
-              mergedHighlights.push(
-                localTime > serverTime ? localItem : serverItem
-              );
-            } else {
-              mergedHighlights.push(localItem || serverItem);
-            }
-          });
-        }
-
-        setHighlights(mergedHighlights);
-
-        // Update IndexedDB with merged highlights data
-        snapshot.data.highlights = mergedHighlights;
-
-        // Save merged snapshot to IndexedDB
-        new Promise<void>((resolve, reject) => {
-          const requestId = `${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}`;
-          const cleanup = () => {
-            worker.removeEventListener("message", handleMessage);
-            worker.removeEventListener("error", handleError);
-          };
-          const handleMessage = (event: MessageEvent) => {
-            const response = event.data as {
-              type?: string;
-              requestId?: string;
-              error?: string;
-            };
-            if (!response || response.requestId !== requestId) return;
-            cleanup();
-            if (response.type === "save_complete") {
-              resolve();
-            } else {
-              reject(new Error(response.error || "IndexedDB save failed."));
-            }
-          };
-          const handleError = () => {
-            cleanup();
-            reject(new Error("IndexedDB worker error."));
-          };
-          worker.addEventListener("message", handleMessage);
-          worker.addEventListener("error", handleError);
-          worker.postMessage({
-            type: "save_bundle",
-            requestId,
-            payload: {
-              storageKey: snapshot.key,
-              data: snapshot.data,
-              meta: snapshot.meta,
-              schema_version: snapshot.schema_version,
-              savedAt: Date.now(),
-            },
-          });
-        })
-          .then(() => {
-          })
-          .catch((saveErr) => {
-            console.error(
-              "[Highlights] Failed to save merged data to IndexedDB:",
-              saveErr
-            );
-          });
-      } else if (localHighlights.length > 0) {
-        // No server data: use local
-        setHighlights(localHighlights);
-      }
-
-      // Merge bookmarks: Same logic as highlights
-      let mergedBookmarks: any[] = [];
-      if (serverBookmarks && serverBookmarks.length > 0) {
-
-        try {
-          // Use Web Worker for merge operation to avoid blocking main thread
-          const mergeResult = await new Promise<{
-            merged: any[];
-            stats: {
-              total: number;
-              serverOnly: number;
-              localOnly: number;
-              serverNewer: number;
-              localNewer: number;
-            };
-          }>((resolve, reject) => {
-            const mergeWorker = new Worker(
-              new URL("../workers/mergeWorker.ts", import.meta.url),
-              { type: "module" }
-            );
-
-            const timeout = setTimeout(() => {
-              mergeWorker.terminate();
-              reject(new Error("Merge operation timed out"));
-            }, 10000); // 10 second timeout
-
-            mergeWorker.onmessage = (e) => {
-              clearTimeout(timeout);
-              mergeWorker.terminate();
-              if (e.data.type === "merge-complete") {
-                resolve({
-                  merged: e.data.merged,
-                  stats: e.data.stats,
-                });
-              } else {
-                reject(new Error("Invalid merge response"));
-              }
-            };
-
-            mergeWorker.onerror = (err) => {
-              clearTimeout(timeout);
-              mergeWorker.terminate();
-              reject(err);
-            };
-
-            mergeWorker.postMessage({
-              type: "merge",
-              serverData: serverBookmarks,
-              localData: localBookmarks,
-            });
-          });
-
-          mergedBookmarks = mergeResult.merged;
-          const { serverOnly, localOnly, serverNewer, localNewer } =
-            mergeResult.stats;
-
-        } catch (err) {
-          console.error(
-            "[Bookmarks] Web Worker merge failed, falling back to sync merge:",
-            err
-          );
-
-          // Fallback to synchronous merge if worker fails
-          const serverMap = new Map(serverBookmarks.map((b: any) => [b.id, b]));
-          const localMap = new Map(localBookmarks.map((b: any) => [b.id, b]));
-          const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
-
-          allIds.forEach((id) => {
-            const serverItem = serverMap.get(id);
-            const localItem = localMap.get(id);
-
-            if (serverItem && localItem) {
-              const serverTime =
-                serverItem.updated_at || serverItem.created_at || 0;
-              const localTime =
-                localItem.updated_at || localItem.created_at || 0;
-              mergedBookmarks.push(
-                localTime > serverTime ? localItem : serverItem
-              );
-            } else {
-              mergedBookmarks.push(localItem || serverItem);
-            }
-          });
-        }
-
-        setBookmarks(mergedBookmarks);
-
-        // Update IndexedDB with merged bookmarks data
-        snapshot.data.bookmarks = mergedBookmarks;
-
-        // Save merged snapshot to IndexedDB (bookmarks included)
-        new Promise<void>((resolve, reject) => {
-          const requestId = `${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}`;
-          const cleanup = () => {
-            worker.removeEventListener("message", handleMessage);
-            worker.removeEventListener("error", handleError);
-          };
-          const handleMessage = (event: MessageEvent) => {
-            const response = event.data as {
-              type?: string;
-              requestId?: string;
-              error?: string;
-            };
-            if (!response || response.requestId !== requestId) return;
-            cleanup();
-            if (response.type === "save_complete") {
-              resolve();
-            } else {
-              reject(new Error(response.error || "IndexedDB save failed."));
-            }
-          };
-          const handleError = () => {
-            cleanup();
-            reject(new Error("IndexedDB worker error."));
-          };
-          worker.addEventListener("message", handleMessage);
-          worker.addEventListener("error", handleError);
-          worker.postMessage({
-            type: "save_bundle",
-            requestId,
-            payload: {
-              storageKey: snapshot.key,
-              data: snapshot.data,
-              meta: snapshot.meta,
-              schema_version: snapshot.schema_version,
-              savedAt: Date.now(),
-            },
-          });
-        })
-          .then(() => {
-          })
-          .catch((saveErr) => {
-            console.error(
-              "[Bookmarks] Failed to save merged data to IndexedDB:",
-              saveErr
-            );
-          });
-      } else if (localBookmarks.length > 0) {
-        // No server data: use local
-        setBookmarks(localBookmarks);
-      }
-
-      // Merge server and local notes
-      if (serverNotes && Array.isArray(serverNotes) && serverNotes.length > 0) {
-
-        // Merge logic: Use server data and add local notes not in server
-        const serverMap = new Map(serverNotes.map((n: any) => [n.id, n]));
-        const localMap = new Map(localNotes.map((n: any) => [n.id, n]));
-        const allIds = new Set([...serverMap.keys(), ...localMap.keys()]);
-
-        const mergedNotes: any[] = [];
-        allIds.forEach((id) => {
-          const serverItem = serverMap.get(id);
-          const localItem = localMap.get(id);
-
-          if (serverItem && localItem) {
-            // Both exist: use the one with the latest updated_at
-            const serverTime = serverItem.updated_at || serverItem.created_at || 0;
-            const localTime = localItem.updated_at || localItem.created_at || 0;
-            mergedNotes.push(localTime > serverTime ? localItem : serverItem);
-          } else {
-            // Only one exists: use it
-            mergedNotes.push(localItem || serverItem);
-          }
+        };
+        const handleError = () => {
+          cleanup();
+          reject(new Error("IndexedDB worker error."));
+        };
+        worker.addEventListener("message", handleMessage);
+        worker.addEventListener("error", handleError);
+        worker.postMessage({
+          type: "load_bundle",
+          requestId,
+          payload: { storageKey },
         });
+      });
 
-        setGeneralNotes(mergedNotes);
+    const saveSnapshot = async (snapshot: IndexedDbSnapshot) => {
+      await new Promise<void>((resolve, reject) => {
+        const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const cleanup = () => {
+          worker.removeEventListener("message", handleMessage);
+          worker.removeEventListener("error", handleError);
+        };
+        const handleMessage = (event: MessageEvent) => {
+          const response = event.data as {
+            type?: string;
+            requestId?: string;
+            error?: string;
+          };
+          if (!response || response.requestId !== requestId) return;
+          cleanup();
+          if (response.type === "save_complete") {
+            resolve();
+          } else {
+            reject(new Error(response.error || "IndexedDB save failed."));
+          }
+        };
+        const handleError = () => {
+          cleanup();
+          reject(new Error("IndexedDB worker error."));
+        };
+        worker.addEventListener("message", handleMessage);
+        worker.addEventListener("error", handleError);
+        worker.postMessage({
+          type: "save_bundle",
+          requestId,
+          payload: {
+            storageKey: snapshot.key,
+            data: snapshot.data,
+            meta: snapshot.meta,
+            schema_version: snapshot.schema_version,
+            savedAt: snapshot.savedAt,
+          },
+        });
+      });
+    };
 
-        // Update IndexedDB with merged notes
-        snapshot.data.notes = mergedNotes;
-
-        // Save merged snapshot to IndexedDB
-        new Promise<void>((resolve, reject) => {
-          const requestId = `${Date.now()}_${Math.random()
-            .toString(36)
-            .slice(2)}`;
-          const cleanup = () => {
-            worker.removeEventListener("message", handleMessage);
-            worker.removeEventListener("error", handleError);
-          };
-          const handleMessage = (event: MessageEvent) => {
-            const response = event.data as {
-              type?: string;
-              requestId?: string;
-              error?: string;
-            };
-            if (!response || response.requestId !== requestId) return;
-            cleanup();
-            if (response.type === "save_complete") {
-              resolve();
-            } else {
-              reject(new Error(response.error || "IndexedDB save failed."));
-            }
-          };
-          const handleError = () => {
-            cleanup();
-            reject(new Error("IndexedDB worker error."));
-          };
-          worker.addEventListener("message", handleMessage);
-          worker.addEventListener("error", handleError);
-          worker.postMessage({
-            type: "save_bundle",
-            requestId,
-            payload: {
-              storageKey: snapshot.key,
-              data: snapshot.data,
-              meta: snapshot.meta,
-              schema_version: snapshot.schema_version,
-              savedAt: Date.now(),
-            },
-          });
-        })
-          .then(() => {
-          })
-          .catch((saveErr) => {
-            console.error(
-              "[Notes] Failed to save merged data to IndexedDB:",
-              saveErr
-            );
-          });
-      } else if (localNotes.length > 0) {
-        // No server data: use local
-        setGeneralNotes(localNotes);
+    try {
+      let snapshot = await loadSnapshot();
+      if (snapshot) {
+        const migrated = migrate_snapshot(snapshot);
+        snapshot = migrated.snapshot || snapshot;
+        if (migrated.changed) {
+          await saveSnapshot(snapshot);
+        }
       }
 
-      // Load progress: Server data takes priority over IndexedDB
       let serverProgressPage: number | null = null;
-
+      const config = getRmsConfig();
       if (config) {
         try {
           const progressData = await loadProgressFromServer({
             apiBase: config.apiBase,
             bookCd: config.bookCd,
           });
-          // Server response structure: { ok: true, result: { dataList: ["JSON string", ...] } }
           if (
             progressData &&
             progressData.ok &&
@@ -1746,47 +846,40 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             Array.isArray(progressData.result.dataList) &&
             progressData.result.dataList.length > 0
           ) {
-            // Parse the most recent progress data
             const parsed = JSON.parse(progressData.result.dataList[0]);
-
-            // Store server progress page
             if (typeof parsed.currentPdfPage === "number") {
               serverProgressPage = parsed.currentPdfPage;
             }
-          } else {
           }
         } catch (err) {
-          console.error("[Progress] ❌ Failed to load from server:", err);
+          console.error("[Progress] Failed to load from server:", err);
         }
-      } else {
       }
 
-      // Apply progress data: prioritize server, fallback to IndexedDB
-      if (data.progress && typeof data.progress === "object") {
-        const { currentPdfPage: savedPage, viewMode: savedMode } =
-          data.progress;
+      const progress =
+        snapshot && snapshot.data && typeof snapshot.data.progress === "object"
+          ? snapshot.data.progress
+          : null;
+
+      if (progress) {
+        const savedPage = progress.currentPdfPage;
+        const savedMode = progress.viewMode;
         const totalPages =
-          typeof data.progress.pdfTotalPages === "number"
-            ? data.progress.pdfTotalPages
-            : null;
+          typeof progress.pdfTotalPages === "number" ? progress.pdfTotalPages : null;
         if (savedMode === "single" || savedMode === "double") {
           setViewMode(savedMode);
         }
         if (totalPages !== null && Number.isFinite(totalPages)) {
           setPdfTotalPages(Math.max(0, Math.round(totalPages)));
         }
-
-        // Use server progress if available, otherwise use IndexedDB
         const targetPage =
           serverProgressPage !== null ? serverProgressPage : savedPage;
         if (typeof targetPage === "number" && Number.isFinite(targetPage)) {
           setInitialPageToLoad(targetPage);
         }
       } else if (serverProgressPage !== null) {
-        // No IndexedDB progress, but server has data
         setInitialPageToLoad(serverProgressPage);
       }
-      indexedDbSnapshotRef.current = snapshot;
     } catch (err) {
       console.error("IndexedDB load failed", err);
     }
@@ -1827,441 +920,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const saveLocalDataToIndexedDb = async () => {
-    if (typeof window === "undefined") return;
-    const worker = getIndexedDbWorker();
-    if (!worker) {
-      alert("IndexedDB 저장을 위한 Worker를 사용할 수 없습니다.");
-      return;
-    }
-
-    const storageKey = buildIndexedDbKey();
-    const savedAt = Date.now();
-    const baseSnapshot = buildCurrentIndexedDbSnapshot(storageKey, savedAt);
-    const migrated = migrate_snapshot(baseSnapshot);
-    const snapshot = migrated.snapshot || baseSnapshot;
-
-    const previousSnapshot = indexedDbSnapshotRef.current;
-    if (previousSnapshot && previousSnapshot.key === storageKey) {
-      if (isSameSnapshot(previousSnapshot, snapshot)) {
-        alert("변경된 내용이 없어 IndexedDB 저장을 건너뜁니다.");
-        return;
-      }
-    }
-
-    const estimate = await getStorageEstimate();
-    if (estimate) {
-      alert(
-        [
-          "IndexedDB 저장 용량",
-          `사용된 용량: ${formatStorageMb(estimate.usage)}`,
-          `남은 용량: ${formatStorageMb(estimate.remaining)}`,
-          `전체 용량: ${formatStorageMb(estimate.quota)}`,
-        ].join("\n")
-      );
-    } else {
-      alert(
-        [
-          "IndexedDB 저장 용량",
-          "사용된 용량: 알 수 없음",
-          "남은 용량: 알 수 없음",
-          "전체 용량: 알 수 없음",
-        ].join("\n")
-      );
-    }
-    const payload = {
-      storageKey: snapshot.key,
-      schema_version: snapshot.schema_version,
-      savedAt: snapshot.savedAt,
-      data: snapshot.data,
-      meta: snapshot.meta,
-    };
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const requestId = `${Date.now()}_${Math.random()
-          .toString(36)
-          .slice(2)}`;
-        const cleanup = () => {
-          worker.removeEventListener("message", handleMessage);
-          worker.removeEventListener("error", handleError);
-        };
-        const handleMessage = (event: MessageEvent) => {
-          const response = event.data as {
-            type?: string;
-            requestId?: string;
-            error?: string;
-          };
-          if (!response || response.requestId !== requestId) return;
-          cleanup();
-          if (response.type === "save_complete") {
-            resolve();
-          } else {
-            reject(new Error(response.error || "IndexedDB save failed."));
-          }
-        };
-        const handleError = () => {
-          cleanup();
-          reject(new Error("IndexedDB worker error."));
-        };
-        worker.addEventListener("message", handleMessage);
-        worker.addEventListener("error", handleError);
-        worker.postMessage({ type: "save_bundle", requestId, payload });
-      });
-      indexedDbSnapshotRef.current = snapshot;
-      alert("IndexedDB에 저장했습니다.");
-      const config = getRmsConfig();
-      if (config) {
-        try {
-          // Start with the current snapshot
-          let currentSnapshot = snapshot;
-
-          // Filter only changed highlights (syncStatus === "pending")
-          const changedHighlights = (snapshot.data.highlights || []).filter(
-            (h: any) => h.syncStatus === "pending"
-          );
-
-          if (changedHighlights.length > 0) {
-
-            await saveHighlightsToServer({
-              apiBase: config.apiBase,
-              bookCd: config.bookCd,
-              highlights: changedHighlights,
-            });
-            alert(
-              `하이라이트가 서버에 저장되었습니다. (${changedHighlights.length}개 항목)`
-            );
-
-            // Mark saved highlights as synced and remove deleted ones
-            const updatedHighlights = (snapshot.data.highlights || [])
-              .map((h: any) => {
-                // Mark as synced if it was pending
-                if (h.syncStatus === "pending") {
-                  return { ...h, syncStatus: "synced" };
-                }
-                return h;
-              })
-              .filter((h: any) => !h.deleted); // Remove deleted items
-
-            currentSnapshot = {
-              ...currentSnapshot,
-              data: {
-                ...currentSnapshot.data,
-                highlights: updatedHighlights,
-              },
-            };
-            // Save cleaned snapshot to IndexedDB
-            await new Promise<void>((resolve, reject) => {
-              const requestId = `${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2)}`;
-              const cleanup = () => {
-                worker.removeEventListener("message", handleMessage);
-                worker.removeEventListener("error", handleError);
-              };
-              const handleMessage = (event: MessageEvent) => {
-                const response = event.data as {
-                  type?: string;
-                  requestId?: string;
-                  error?: string;
-                };
-                if (!response || response.requestId !== requestId) return;
-                cleanup();
-                if (response.type === "save_complete") {
-                  resolve();
-                } else {
-                  reject(new Error(response.error || "IndexedDB save failed."));
-                }
-              };
-              const handleError = () => {
-                cleanup();
-                reject(new Error("IndexedDB worker error."));
-              };
-              worker.addEventListener("message", handleMessage);
-              worker.addEventListener("error", handleError);
-              worker.postMessage({
-                type: "save_bundle",
-                requestId,
-                payload: {
-                  storageKey: currentSnapshot.key,
-                  schema_version: currentSnapshot.schema_version,
-                  savedAt: currentSnapshot.savedAt,
-                  data: currentSnapshot.data,
-                  meta: currentSnapshot.meta,
-                },
-              });
-            });
-
-            indexedDbSnapshotRef.current = currentSnapshot;
-            // Also update the local state to remove deleted highlights and mark as synced
-            setHighlights((prev) =>
-              prev
-                .filter((h) => !h.deleted)
-                .map((h) =>
-                  h.syncStatus === "pending"
-                    ? { ...h, syncStatus: "synced" as const }
-                    : h
-                )
-            );
-          } else {
-          }
-
-          // Filter only changed bookmarks (syncStatus === "pending")
-          const changedBookmarks = (
-            currentSnapshot.data.bookmarks || []
-          ).filter((b: any) => b.syncStatus === "pending");
-
-          if (changedBookmarks.length > 0) {
-            await saveBookmarksToServer({
-              apiBase: config.apiBase,
-              bookCd: config.bookCd,
-              bookmarks: changedBookmarks,
-            });
-
-            // Mark saved bookmarks as synced and remove deleted ones
-            const updatedBookmarks = (currentSnapshot.data.bookmarks || [])
-              .map((b: any) => {
-                // Mark as synced if it was pending
-                if (b.syncStatus === "pending") {
-                  return { ...b, syncStatus: "synced" };
-                }
-                return b;
-              })
-              .filter((b: any) => !b.deleted); // Remove deleted items
-
-            currentSnapshot = {
-              ...currentSnapshot,
-              data: {
-                ...currentSnapshot.data,
-                bookmarks: updatedBookmarks,
-              },
-            };
-
-            // Save cleaned snapshot to IndexedDB
-            await new Promise<void>((resolve, reject) => {
-              const requestId = `${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2)}`;
-              const cleanup = () => {
-                worker.removeEventListener("message", handleMessage);
-                worker.removeEventListener("error", handleError);
-              };
-              const handleMessage = (event: MessageEvent) => {
-                const response = event.data as {
-                  type?: string;
-                  requestId?: string;
-                  error?: string;
-                };
-                if (!response || response.requestId !== requestId) return;
-                cleanup();
-                if (response.type === "save_complete") {
-                  resolve();
-                } else {
-                  reject(new Error(response.error || "IndexedDB save failed."));
-                }
-              };
-              const handleError = () => {
-                cleanup();
-                reject(new Error("IndexedDB worker error."));
-              };
-              worker.addEventListener("message", handleMessage);
-              worker.addEventListener("error", handleError);
-              worker.postMessage({
-                type: "save_bundle",
-                requestId,
-                payload: {
-                  storageKey: currentSnapshot.key,
-                  schema_version: currentSnapshot.schema_version,
-                  savedAt: currentSnapshot.savedAt,
-                  data: currentSnapshot.data,
-                  meta: currentSnapshot.meta,
-                },
-              });
-            });
-
-            indexedDbSnapshotRef.current = currentSnapshot;
-            // Also update the local state to remove deleted bookmarks and mark as synced
-            setBookmarks((prev) =>
-              prev
-                .filter((b) => !b.deleted)
-                .map((b) =>
-                  b.syncStatus === "pending"
-                    ? { ...b, syncStatus: "synced" as const }
-                    : b
-                )
-            );
-          } else {
-          }
-
-          // Save notes to server
-          if (
-            Array.isArray(currentSnapshot.data.notes) &&
-            currentSnapshot.data.notes.length > 0
-          ) {
-            await saveNotesToServer({
-              apiBase: config.apiBase,
-              bookCd: config.bookCd,
-              notes: currentSnapshot.data.notes,
-            });
-
-            // Remove deleted notes after successful sync
-            const updatedNotes = currentSnapshot.data.notes.filter(
-              (n: any) => !n.deleted
-            );
-            currentSnapshot = {
-              ...currentSnapshot,
-              data: {
-                ...currentSnapshot.data,
-                notes: updatedNotes,
-              },
-            };
-
-            // Save cleaned snapshot to IndexedDB
-            await new Promise<void>((resolve, reject) => {
-              const requestId = `${Date.now()}_${Math.random()
-                .toString(36)
-                .slice(2)}`;
-              const cleanup = () => {
-                worker.removeEventListener("message", handleMessage);
-                worker.removeEventListener("error", handleError);
-              };
-              const handleMessage = (event: MessageEvent) => {
-                const response = event.data as {
-                  type?: string;
-                  requestId?: string;
-                  error?: string;
-                };
-                if (!response || response.requestId !== requestId) return;
-                cleanup();
-                if (response.type === "save_complete") {
-                  resolve();
-                } else {
-                  reject(new Error(response.error || "IndexedDB save failed."));
-                }
-              };
-              const handleError = () => {
-                cleanup();
-                reject(new Error("IndexedDB worker error."));
-              };
-              worker.addEventListener("message", handleMessage);
-              worker.addEventListener("error", handleError);
-              worker.postMessage({
-                type: "save_bundle",
-                requestId,
-                payload: {
-                  storageKey: currentSnapshot.key,
-                  schema_version: currentSnapshot.schema_version,
-                  savedAt: currentSnapshot.savedAt,
-                  data: currentSnapshot.data,
-                  meta: currentSnapshot.meta,
-                },
-              });
-            });
-
-            indexedDbSnapshotRef.current = currentSnapshot;
-            // Also update the local state to remove deleted notes
-            setGeneralNotes((prev) => prev.filter((n) => !n.deleted));
-          } else {
-          }
-
-          // Save progress to server
-          const progressData = {
-            currentPdfPage,
-            lastReadAt: new Date().toISOString(),
-          };
-
-          await saveProgressToServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-            progress: progressData,
-          });
-
-          const savedItems = [];
-          if (changedHighlights.length > 0) {
-            savedItems.push(`하이라이트: ${changedHighlights.length}개`);
-          }
-          if (changedBookmarks.length > 0) {
-            savedItems.push(`북마크: ${changedBookmarks.length}개`);
-          }
-          if (
-            Array.isArray(currentSnapshot.data.notes) &&
-            currentSnapshot.data.notes.length > 0
-          ) {
-            savedItems.push(
-              `마이노트: ${currentSnapshot.data.notes.length}개`
-            );
-          }
-          savedItems.push("진행도: 저장됨");
-
-          if (savedItems.length > 1) {
-            alert(`저장이 완료되었습니다.\n- ${savedItems.join("\n- ")}`);
-          } else {
-            alert("진행도가 서버에 저장되었습니다.");
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error("Server save failed", err);
-          alert(`서버 저장 실패: ${message}`);
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error("IndexedDB save failed", err);
-      alert(`IndexedDB 저장 실패: ${message}`);
-    }
-  };
-
-  // 데이터 변경 시 UNSAVED로 표시 (자동 저장은 하지 않음)
-  const markAsUnsaved = React.useCallback(() => {
-    setSyncStatus("UNSAVED");
-  }, []);
-
-  const saveAll = async () => {
-    try {
-      setSyncStatus("SYNCING");
-
-      // 네트워크 상태 확인
-      if (!navigator.onLine) {
-        // 로컬 저장 (IndexedDB + 서버 동기화 시뮬레이션)
-        await saveLocalDataToIndexedDb();
-        setSyncStatus("LOCAL_ONLY");
-
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = (now.getMonth() + 1).toString().padStart(2, "0");
-        const day = now.getDate().toString().padStart(2, "0");
-        const hours = now.getHours();
-        const minutes = now.getMinutes().toString().padStart(2, "0");
-        const ampm = hours >= 12 ? "오후" : "오전";
-        const displayHours = hours % 12 || 12;
-        setLastSavedAt(
-          `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`
-        );
-        return;
-      }
-
-      // 온라인 상태: 정상적으로 로컬 + 서버 저장
-      await saveLocalDataToIndexedDb();
-
-      setSyncStatus("SAVED");
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = (now.getMonth() + 1).toString().padStart(2, "0");
-      const day = now.getDate().toString().padStart(2, "0");
-      const hours = now.getHours();
-      const minutes = now.getMinutes().toString().padStart(2, "0");
-      const ampm = hours >= 12 ? "오후" : "오전";
-      const displayHours = hours % 12 || 12;
-
-      setLastSavedAt(
-        `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`
-      );
-    } catch (err) {
-      console.error("Save all failed", err);
-      setSyncStatus("LOCAL_ONLY");
-    }
-  };
-
   return (
     <BookContext.Provider
       value={{
@@ -2281,26 +939,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         setFontSize,
         theme,
         toggleTheme,
-        showAnnotations,
-        toggleAnnotations,
-        bookmarks,
-        addPdfBookmark,
-        removePdfBookmark,
-        highlights,
-        addHighlight,
-        updateHighlight,
-        removeHighlight,
-        activeHighlightId,
-        focusHighlight,
-        pendingHighlightEditId,
-        requestHighlightNoteEdit,
-        clearHighlightNoteEditRequest,
-        generalNotes,
-        addGeneralNote,
-        updateGeneralNote,
-        removeGeneralNote,
-        importNotes,
-        exportNoteAsMarkdown,
         isCaptureMode,
         setCaptureMode,
         capturedImage,
@@ -2326,11 +964,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         incrementAiCount,
         updateReadingTime,
         saveProgress,
-        saveLocalDataToIndexedDb,
-        saveAll,
-        syncStatus,
-        lastSavedAt,
-        goToHighlight,
       }}
     >
       {children}

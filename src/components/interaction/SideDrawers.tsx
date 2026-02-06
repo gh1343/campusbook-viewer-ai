@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { GoogleGenAI } from "@google/genai";
 import { useBook } from "../../contexts/BookContext";
 import { usePdfViewer } from "../../contexts/PdfViewerContext";
+import { useAnnotation } from "../../contexts/AnnotationContext";
 import {
   X,
   Trash2,
@@ -86,10 +87,11 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     chapters,
     currentChapterIndex,
     goToChapter,
+  } = useBook();
+  const {
     bookmarks,
     removePdfBookmark,
-    goToHighlight,
-  } = useBook();
+  } = useAnnotation();
   const { goToPdfPage, currentPdfPage } = usePdfViewer();
   const [activeTab, setActiveTab] = useState<"contents" | "bookmarks">(
     "contents"
@@ -230,20 +232,9 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   onClose,
 }) => {
   const {
-    highlights,
-    activeHighlightId,
-    removeHighlight,
-    updateHighlight,
     currentChapter,
     ragChunks,
     incrementAiCount,
-    generalNotes,
-    addGeneralNote,
-    updateGeneralNote,
-    removeGeneralNote,
-    importNotes,
-    exportNoteAsMarkdown,
-    focusHighlight,
     goToChapter,
     chapters,
     aiChatHistory,
@@ -259,11 +250,25 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     searchQuery,
     setSearchQuery,
     performSearch,
-    goToHighlight,
     getChapterTitleByPage,
+  } = useBook();
+  const {
+    highlights,
+    activeHighlightId,
+    removeHighlight,
+    updateHighlight,
+    generalNotes,
+    addGeneralNote,
+    updateGeneralNote,
+    removeGeneralNote,
+    importNotes,
+    exportNoteAsMarkdown,
+    focusHighlight,
+    goToHighlight,
     pendingHighlightEditId,
     clearHighlightNoteEditRequest,
-  } = useBook();
+    performAnnotationSearch,
+  } = useAnnotation();
   const {
     pdfTextPages,
     goToPdfPage,
@@ -650,8 +655,15 @@ ${contextString}
       printWindow.print();
     }
   };
-  const searchResults =
-    activeToolTab === "search" ? performSearch(searchQuery) : [];
+  const searchResults = useMemo(() => {
+    if (activeToolTab !== "search") return [];
+    return [...performSearch(searchQuery), ...performAnnotationSearch(searchQuery)];
+  }, [
+    activeToolTab,
+    performSearch,
+    searchQuery,
+    performAnnotationSearch,
+  ]);
 
   return (
     <PanelWrapper isOpen={isOpen} onClose={onClose} side="right">
@@ -1123,9 +1135,8 @@ ${contextString}
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {searchQuery.length > 1 ? (
-                activeToolTab === "search" &&
-                performSearch(searchQuery).length > 0 ? (
-                  performSearch(searchQuery).map((result) => (
+                activeToolTab === "search" && searchResults.length > 0 ? (
+                  searchResults.map((result) => (
                     <div
                       key={result.id}
                       onClick={() => {

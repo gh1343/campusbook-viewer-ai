@@ -141,39 +141,6 @@ export interface BookContextType {
   theme: Theme;
   toggleTheme: () => void;
 
-  showAnnotations: boolean;
-  toggleAnnotations: () => void;
-
-  bookmarks: PdfBookmark[];
-  addPdfBookmark: (page: number, label?: string) => void;
-  removePdfBookmark: (id: string) => void;
-
-  highlights: Highlight[];
-  addHighlight: (
-    text: string,
-    note?: string,
-    targetChapterId?: string,
-    pageNumber?: number
-  ) => string;
-  updateHighlight: (
-    id: string,
-    data: Partial<Highlight> & { note?: string }
-  ) => void;
-  removeHighlight: (id: string) => void;
-  activeHighlightId: string | null;
-  focusHighlight: (id: string) => void;
-  pendingHighlightEditId: string | null;
-  requestHighlightNoteEdit: (id: string) => void;
-  clearHighlightNoteEditRequest: () => void;
-  goToHighlight: (hl: Highlight | string) => void;
-
-  generalNotes: GeneralNote[];
-  addGeneralNote: (title: string, content: string) => void;
-  updateGeneralNote: (id: string, title: string, content: string) => void;
-  removeGeneralNote: (id: string) => void;
-  importNotes: (file: File) => Promise<void>;
-  exportNoteAsMarkdown: (note: GeneralNote) => void;
-
   isCaptureMode: boolean;
   setCaptureMode: (isCapture: boolean) => void;
   capturedImage: string | null;
@@ -185,9 +152,9 @@ export interface BookContextType {
 
   isToolsOpen: boolean;
   setToolsOpen: (isOpen: boolean) => void;
-  activeToolTab: "ai" | "notes" | "notebook" | "reference" | "search";
+  activeToolTab: "ai" | "highlight" | "mynote" | "reference" | "search";
   setActiveToolTab: (
-    tab: "ai" | "notes" | "notebook" | "reference" | "search"
+    tab: "ai" | "highlight" | "mynote" | "reference" | "search"
   ) => void;
 
   searchQuery: string;
@@ -207,9 +174,4 @@ export interface BookContextType {
   updateReadingTime: () => void;
 
   saveProgress: () => Promise<void>;
-  saveLocalDataToIndexedDb: () => Promise<void>;
-  saveAll: () => Promise<void>;
-
-  syncStatus: SyncStatus;
-  lastSavedAt: string | null;
 }
