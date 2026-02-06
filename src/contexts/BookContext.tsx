@@ -17,11 +17,11 @@ import {
   BookContextType,
   RagChunk,
   SearchResult,
-  ViewMode,
   PdfBookmark,
   TTSConfig,
   SyncStatus,
 } from "../../types";
+import { usePdfViewer } from "./PdfViewerContext";
 import { generateExplanation } from "../services/geminiService";
 import { processPdf, findRelevantChunks } from "../services/pdfRagService";
 import { synthesizeWithGemini } from "../services/ttsService";
@@ -302,7 +302,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
   const [fontSize, setFontSize] = useState<FontSize>("medium");
   const [theme, setTheme] = useState<Theme>("light");
-  const [viewMode, setViewMode] = useState<ViewMode>("single");
 
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [bookmarks, setBookmarks] = useState<PdfBookmark[]>([]);
@@ -347,8 +346,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const indexedDbWorkerRef = useRef<Worker | null>(null);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
   const indexedDbSnapshotRef = useRef<IndexedDbSnapshot | null>(null);
-  const pendingPdfPageRef = useRef<number | null>(null);
-  const pdfTotalPagesRef = useRef<number>(0);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState((prev) => ({ ...prev, ...config }));
@@ -513,29 +510,16 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     aiInteractionCount: 0,
     highlightCount: 0,
   });
-  const [pdfTextPages, setPdfTextPages] = useState<
-    { page: number; text: string }[]
-  >([]);
-  const [currentPdfPage, setCurrentPdfPage] = useState(1);
-  const [pdfTotalPages, setPdfTotalPages] = useState(0);
-  const [pdfLoadProgress, setPdfLoadProgress] = useState(0);
-  const [pdfLoadTime, setPdfLoadTime] = useState(0);
-  const [pdfIsLoading, setPdfIsLoading] = useState(false);
-  const [pdfNavigator, setPdfNavigator] = useState<
-    ((page: number) => void) | null
-  >(null);
-  const [pdfZoomHandler, setPdfZoomHandler] = useState<
-    ((direction: "in" | "out") => void) | null
-  >(null);
-  const [pdfZoom, setPdfZoom] = useState(1.0);
-  const [pendingPdfPage, setPendingPdfPage] = useState<number | null>(null);
-  const [initialPageToLoad, setInitialPageToLoad] = useState<number | null>(
-    null
-  );
-  const [pdfSearchHighlight, setPdfSearchHighlight] = useState<{
-    page: number;
-    term: string;
-  } | null>(null);
+  const {
+    viewMode,
+    setViewMode,
+    pdfTextPages,
+    currentPdfPage,
+    pdfTotalPages,
+    setPdfTotalPages,
+    goToPdfPage,
+    setInitialPageToLoad,
+  } = usePdfViewer();
 
   const currentChapter = chapters[currentChapterIndex];
 
@@ -1089,93 +1073,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
     return results;
   };
-
-  const goToPdfPage = (page: number) => {
-    const safePage = Number.isFinite(page) ? Math.max(1, Math.round(page)) : 1;
-    clearHighlightFocus();
-    setCurrentPdfPage(safePage);
-    if (pdfNavigator) {
-      pdfNavigator(safePage);
-    } else {
-      pendingPdfPageRef.current = safePage;
-      setPendingPdfPage(safePage);
-    }
-  };
-
-  const registerPdfNavigator = React.useCallback(
-    (fn: (page: number) => void) => {
-      const pending = pendingPdfPageRef.current;
-      const totalPages = pdfTotalPagesRef.current;
-      setPdfNavigator(() => fn);
-      if (pending !== null && totalPages > 0) {
-        fn(pending);
-        pendingPdfPageRef.current = null;
-        setPendingPdfPage(null);
-      } else if (pending !== null) {
-      }
-    },
-    []
-  );
-
-  const registerPdfZoomHandler = React.useCallback(
-    (fn: (direction: "in" | "out") => void) => {
-      setPdfZoomHandler(() => fn);
-    },
-    []
-  );
-
-  const zoomPdfIn = () => {
-    if (pdfZoomHandler) {
-      pdfZoomHandler("in");
-    }
-    setPdfZoom((prev) => Math.min(3, prev + 0.1));
-  };
-
-  const zoomPdfOut = () => {
-    if (pdfZoomHandler) {
-      pdfZoomHandler("out");
-    }
-    setPdfZoom((prev) => Math.max(1.0, prev - 0.1));
-  };
-
-  const resetPdfZoom = () => {
-    setPdfZoom(1.0);
-  };
-
-  // pdfTotalPages 변경 시 ref 업데이트
-  useEffect(() => {
-    pdfTotalPagesRef.current = pdfTotalPages;
-  }, [pdfTotalPages]);
-
-  // PDF가 로드 완료되면 initialPageToLoad로 이동
-  useEffect(() => {
-    if (pdfTotalPages > 0 && initialPageToLoad !== null && pdfNavigator) {
-      pdfNavigator(initialPageToLoad);
-      setInitialPageToLoad(null);
-      setCurrentPdfPage(initialPageToLoad);
-    }
-  }, [pdfTotalPages, initialPageToLoad, pdfNavigator]);
-
-  // PDF가 로드 완료되면 pendingPdfPage로 이동
-  useEffect(() => {
-    if (
-      pdfTotalPages > 0 &&
-      pendingPdfPageRef.current !== null &&
-      pdfNavigator
-    ) {
-      const targetPage = pendingPdfPageRef.current;
-      pdfNavigator(targetPage);
-      pendingPdfPageRef.current = null;
-      setPendingPdfPage(null);
-    }
-  }, [pdfTotalPages, pdfNavigator]);
-
-  const updatePdfTextPages = React.useCallback(
-    (pages: { page: number; text: string }[]) => {
-      setPdfTextPages(pages);
-    },
-    []
-  );
 
   const buildIndexedDbKey = () => {
     const config = getRmsConfig();
@@ -2382,8 +2279,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         isProcessing,
         fontSize,
         setFontSize,
-        viewMode,
-        setViewMode,
         theme,
         toggleTheme,
         showAnnotations,
@@ -2435,29 +2330,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         saveAll,
         syncStatus,
         lastSavedAt,
-        pdfTextPages,
-        setPdfTextPages: updatePdfTextPages,
-        goToPdfPage,
         goToHighlight,
-        registerPdfNavigator,
-        registerPdfZoomHandler,
-        zoomPdfIn,
-        zoomPdfOut,
-        pdfZoom,
-        setPdfZoom,
-        resetPdfZoom,
-        pdfSearchHighlight,
-        setPdfSearchHighlight,
-        currentPdfPage,
-        setCurrentPdfPage,
-        pdfTotalPages,
-        setPdfTotalPages,
-        pdfLoadProgress,
-        setPdfLoadProgress,
-        pdfLoadTime,
-        setPdfLoadTime,
-        pdfIsLoading,
-        setPdfIsLoading,
       }}
     >
       {children}

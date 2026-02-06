@@ -138,9 +138,6 @@ export interface BookContextType {
   fontSize: FontSize;
   setFontSize: (size: FontSize) => void;
 
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
-
   theme: Theme;
   toggleTheme: () => void;
 
@@ -215,27 +212,4 @@ export interface BookContextType {
 
   syncStatus: SyncStatus;
   lastSavedAt: string | null;
-
-  pdfTextPages: { page: number; text: string }[];
-  setPdfTextPages: (pages: { page: number; text: string }[]) => void;
-  goToPdfPage: (page: number) => void;
-  registerPdfNavigator: (fn: (page: number) => void) => void;
-  registerPdfZoomHandler: (fn: (direction: "in" | "out") => void) => void;
-  zoomPdfIn: () => void;
-  zoomPdfOut: () => void;
-  pdfZoom: number;
-  setPdfZoom: (zoom: number) => void;
-  resetPdfZoom: () => void;
-  pdfSearchHighlight: { page: number; term: string } | null;
-  setPdfSearchHighlight: (value: { page: number; term: string } | null) => void;
-  currentPdfPage: number;
-  setCurrentPdfPage: (page: number) => void;
-  pdfTotalPages: number;
-  setPdfTotalPages: (total: number) => void;
-  pdfLoadProgress: number;
-  setPdfLoadProgress: (progress: number) => void;
-  pdfLoadTime: number;
-  setPdfLoadTime: (time: number) => void;
-  pdfIsLoading: boolean;
-  setPdfIsLoading: (isLoading: boolean) => void;
 }

@@ -1,6 +1,7 @@
 import React, {useRef, useState, useEffect, useMemo} from 'react';
 import {useBook} from '../../../contexts/BookContext';
 import {useDrawing} from '../../../contexts/DrawingContext';
+import {usePdfViewer} from '../../../contexts/PdfViewerContext';
 import {Highlighter, MessageCircleQuestion, StickyNote} from 'lucide-react';
 import {Point, Stroke, Chapter} from '../../../types';
 import html2canvas from 'html2canvas';
@@ -17,7 +18,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   const {
     currentChapter: contextChapter,
     fontSize,
-    viewMode, // From context
     addHighlight,
     highlights,
     activeHighlightId,
@@ -29,6 +29,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   } = useBook();
   const {drawingMode, penColor, penWidth, penOpacity, chapterStrokes, addStroke, removeStroke} =
     useDrawing();
+  const {viewMode} = usePdfViewer();
 
   const targetChapter = customChapter || contextChapter;
   const canCapture = variant === 'main';

@@ -21,10 +21,10 @@ import {
   PdfViewerOverlay,
   usePdfJsViewer,
   usePdfPenLayer,
-  usePdfViewerUiState,
 } from "..";
 import { useBook } from "../../../contexts/BookContext";
 import { useDrawing } from "../../../contexts/DrawingContext";
+import { usePdfViewer } from "../../../contexts/PdfViewerContext";
 import {
   getCanvasMetrics,
   getPageOffsetInfo,
@@ -84,13 +84,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     activeHighlightId,
     focusHighlight,
     triggerSmartExplain,
-    setPdfTextPages,
-    pdfSearchHighlight,
     showAnnotations,
     setToolsOpen,
     setActiveToolTab,
     requestHighlightNoteEdit,
     getChapterTitleByPage,
+  } = useBook();
+  const {
+    setPdfTextPages,
+    pdfSearchHighlight,
     registerPdfZoomHandler,
     setPdfZoom,
     pdfZoom,
@@ -98,7 +100,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfLoadTime,
     setPdfIsLoading,
     currentPdfPage,
-  } = useBook();
+  } = usePdfViewer();
   const {
     drawingMode,
     penColor,
@@ -139,20 +141,22 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const PINCH_SELECTION_COOLDOWN_MS = 200;
   const MANUAL_ZOOM_COOLDOWN_MS = 300; // 수동 줌 후 자동 조정 대기 시간
 
-  const {
-    loading,
-    setLoading,
-    loadProgress,
-    setLoadProgress,
-    errorMsg,
-    setErrorMsg,
-    copyStatus,
-    setCopyStatus,
-    selection,
-    setSelection,
-    layoutTick,
-    setLayoutTick,
-  } = usePdfViewerUiState();
+  const [loading, setLoading] = useState(true);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"" | "ok" | "fail">("");
+  const [selection, setSelection] = useState<{
+    text: string;
+    top: number;
+    left: number;
+    show: boolean;
+  }>({
+    text: "",
+    top: 0,
+    left: 0,
+    show: false,
+  });
+  const [layoutTick, setLayoutTick] = useState(0);
   const copyResetRef = useRef<number | null>(null);
   const selectionCacheRef = useRef<{
     range: Range | null;

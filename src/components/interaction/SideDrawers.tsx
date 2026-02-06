@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { GoogleGenAI } from "@google/genai";
 import { useBook } from "../../contexts/BookContext";
+import { usePdfViewer } from "../../contexts/PdfViewerContext";
 import {
   X,
   Trash2,
@@ -86,11 +87,10 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     currentChapterIndex,
     goToChapter,
     bookmarks,
-    goToPdfPage,
     removePdfBookmark,
-    currentPdfPage,
     goToHighlight,
   } = useBook();
+  const { goToPdfPage, currentPdfPage } = usePdfViewer();
   const [activeTab, setActiveTab] = useState<"contents" | "bookmarks">(
     "contents"
   );
@@ -259,16 +259,16 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     searchQuery,
     setSearchQuery,
     performSearch,
-    pdfTextPages,
-    currentPdfPage,
-    goToPdfPage,
-    pdfSearchHighlight,
-    setPdfSearchHighlight,
     goToHighlight,
     getChapterTitleByPage,
     pendingHighlightEditId,
     clearHighlightNoteEditRequest,
   } = useBook();
+  const {
+    pdfTextPages,
+    goToPdfPage,
+    setPdfSearchHighlight,
+  } = usePdfViewer();
 
   const [aiInput, setAiInput] = useState("");
   const [isAiThinking, setIsAiThinking] = useState(false);

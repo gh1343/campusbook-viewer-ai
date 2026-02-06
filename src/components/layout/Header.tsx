@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useBook } from "../../contexts/BookContext";
 import { useDrawing } from "../../contexts/DrawingContext";
+import { usePdfViewer } from "../../contexts/PdfViewerContext";
 import {
   Book,
   Sidebar,
@@ -31,17 +32,19 @@ export const Header: React.FC<{
   isSidebarOpen?: boolean;
 }> = ({ toggleSidebar, isSidebarOpen }) => {
   const {
-    viewMode,
-    setViewMode,
     isToolsOpen,
     setToolsOpen,
     bookmarks,
-    currentPdfPage,
     syncStatus,
     lastSavedAt,
     saveAll,
     addPdfBookmark,
     removePdfBookmark,
+  } = useBook();
+  const {
+    viewMode,
+    setViewMode,
+    currentPdfPage,
     zoomPdfIn,
     zoomPdfOut,
     pdfZoom,
@@ -49,7 +52,7 @@ export const Header: React.FC<{
     pdfLoadProgress,
     pdfLoadTime,
     pdfIsLoading,
-  } = useBook();
+  } = usePdfViewer();
   const {
     drawingMode,
     setDrawingMode,

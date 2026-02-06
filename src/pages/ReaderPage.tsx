@@ -9,6 +9,7 @@ import { Header } from "../components/layout/Header";
 import { ContentRenderer, ControlBar, PdfViewer } from "../features/viewer";
 import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
 import { useBook } from "../contexts/BookContext";
+import { usePdfViewer } from "../contexts/PdfViewerContext";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
@@ -16,12 +17,11 @@ export const ReaderPage: React.FC = () => {
   // Mobile default: Closed (Overlay)
   const [isTocOpen, setTocOpen] = useState(true);
   const [isNarrow, setIsNarrow] = useState(false);
+  const { registerPdfNavigator, setCurrentPdfPage, setPdfTotalPages } =
+    usePdfViewer();
   const {
     isToolsOpen,
     setToolsOpen,
-    registerPdfNavigator,
-    setCurrentPdfPage,
-    setPdfTotalPages,
   } = useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);

@@ -8,7 +8,6 @@ export { PdfViewer } from "./components/PdfViewer";
 
 export { usePdfJsViewer } from "./hooks/usePdfJsViewer";
 export { usePdfPenLayer } from "./hooks/usePdfPenLayer";
-export { usePdfViewerUiState } from "./hooks/usePdfViewerUiState";
 
 export { buildHighlightRectsFromSelection, mergeHighlightRects } from "./highlight/highlight_geometry";
 
