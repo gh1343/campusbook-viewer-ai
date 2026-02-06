@@ -896,10 +896,115 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const saveProgress = async () => {
     const config = getRmsConfig();
+
+    // 1. IndexedDB에 저장 (항상 수행)
+    try {
+      const worker = getIndexedDbWorker();
+      if (worker) {
+        const storageKey = buildIndexedDbKey();
+
+        // 기존 데이터 로드
+        const existingSnapshot = await new Promise<IndexedDbSnapshot | null>(
+          (resolve, reject) => {
+            const requestId = `${Date.now()}_${Math.random()
+              .toString(36)
+              .slice(2)}`;
+            const cleanup = () => {
+              worker.removeEventListener("message", handleMessage);
+              worker.removeEventListener("error", handleError);
+            };
+            const handleMessage = (event: MessageEvent) => {
+              const response = event.data;
+              if (!response || response.requestId !== requestId) return;
+              cleanup();
+              if (response.type === "load_complete") {
+                resolve((response.payload as IndexedDbSnapshot) || null);
+              } else {
+                reject(
+                  new Error(response.error || "IndexedDB load failed.")
+                );
+              }
+            };
+            const handleError = () => {
+              cleanup();
+              reject(new Error("IndexedDB worker error."));
+            };
+            worker.addEventListener("message", handleMessage);
+            worker.addEventListener("error", handleError);
+            worker.postMessage({
+              type: "load_bundle",
+              requestId,
+              payload: { storageKey },
+            });
+          }
+        );
+
+        // Progress 업데이트 후 저장
+        const savedAt = Date.now();
+        const progressData = {
+          currentPdfPage,
+          viewMode,
+          pdfTotalPages,
+          updatedAt: savedAt,
+        };
+
+        const updatedPayload = {
+          storageKey,
+          savedAt,
+          schema_version: existingSnapshot?.schema_version || 1,
+          data: {
+            bookmarks: existingSnapshot?.data?.bookmarks || [],
+            highlights: existingSnapshot?.data?.highlights || [],
+            notes: existingSnapshot?.data?.notes || [],
+            strokes: existingSnapshot?.data?.strokes || [],
+            progress: progressData,
+          },
+          meta: {
+            ...(existingSnapshot?.meta || {}),
+            bookTitle,
+          },
+        };
+
+        await new Promise<void>((resolve, reject) => {
+          const requestId = `${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2)}`;
+          const cleanup = () => {
+            worker.removeEventListener("message", handleMessage);
+            worker.removeEventListener("error", handleError);
+          };
+          const handleMessage = (event: MessageEvent) => {
+            const response = event.data;
+            if (!response || response.requestId !== requestId) return;
+            cleanup();
+            if (response.type === "save_complete") {
+              resolve();
+            } else {
+              reject(new Error(response.error || "IndexedDB save failed."));
+            }
+          };
+          const handleError = () => {
+            cleanup();
+            reject(new Error("IndexedDB worker error."));
+          };
+          worker.addEventListener("message", handleMessage);
+          worker.addEventListener("error", handleError);
+          worker.postMessage({
+            type: "save_bundle",
+            requestId,
+            payload: updatedPayload,
+          });
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save progress to IndexedDB", err);
+    }
+
+    // 2. 서버에 저장 (RMS config 있을 때만)
     if (!config) {
-      console.warn("RMS config not available, skipping progress save");
       return;
     }
+
     try {
       await saveRmsProgress({
         apiBase: config.apiBase,
@@ -913,7 +1018,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         bookTotalPages: pdfTotalPages,
       });
     } catch (err) {
-      console.error("Failed to save progress", err);
+      console.error("Failed to save progress to server", err);
       throw err;
     }
   };

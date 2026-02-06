@@ -537,10 +537,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
   const persistCurrentAnnotationToIndexedDb = useCallback(async () => {
     const storageKey = buildIndexedDbKey();
-    const base =
-      indexedDbSnapshotRef.current && indexedDbSnapshotRef.current.key === storageKey
-        ? indexedDbSnapshotRef.current
-        : await loadSnapshot(storageKey);
+    // 항상 최신 snapshot을 IndexedDB에서 로드 (BookContext의 progress 업데이트 반영)
+    const base = await loadSnapshot(storageKey);
 
     const savedAt = Date.now();
     const nextSnapshot: IndexedDbSnapshot = {
@@ -552,12 +550,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         highlights: highlights.filter((item) => !item.deleted),
         notes: generalNotes.filter((item) => !item.deleted),
         strokes: strokes.filter((item) => !item.deleted),
-        progress: typeof currentPdfPage === 'number' && typeof pdfTotalPages === 'number' ? {
-          currentPdfPage,
-          viewMode: viewMode || 'single',
-          pdfTotalPages,
-          updatedAt: savedAt,
-        } : base?.data?.progress,
+        // Progress는 BookContext에서 관리
+        progress: base?.data?.progress,
       },
       meta: {
         ...(base?.meta || {}),
@@ -569,7 +563,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     await saveSnapshot(finalSnapshot);
     indexedDbSnapshotRef.current = finalSnapshot;
     return finalSnapshot;
-  }, [buildIndexedDbKey, bookmarks, highlights, generalNotes, strokes, bookTitle, currentPdfPage, viewMode, pdfTotalPages, loadSnapshot, saveSnapshot]);
+  }, [buildIndexedDbKey, bookmarks, highlights, generalNotes, strokes, bookTitle, loadSnapshot, saveSnapshot]);
 
   const saveAnnotations = useCallback(async () => {
     try {
@@ -647,12 +641,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           highlights: updatedHighlights,
           notes: updatedNotes,
           strokes: strokes.filter((item) => !item.deleted),
-          progress: typeof currentPdfPage === 'number' && typeof pdfTotalPages === 'number' ? {
-            currentPdfPage,
-            viewMode: viewMode || 'single',
-            pdfTotalPages,
-            updatedAt: Date.now(),
-          } : currentSnapshot.data.progress,
+          // Progress는 BookContext에서 관리
+          progress: currentSnapshot.data.progress,
         },
       };
       await saveSnapshot(postSyncSnapshot);
@@ -664,7 +654,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       setSyncStatus("LOCAL_ONLY");
       setLastSavedAt(formatSavedAt(new Date()));
     }
-  }, [persistCurrentAnnotationToIndexedDb, highlights, bookmarks, generalNotes, strokes, currentPdfPage, viewMode, pdfTotalPages, saveSnapshot]);
+  }, [persistCurrentAnnotationToIndexedDb, highlights, bookmarks, generalNotes, strokes, saveSnapshot]);
 
   const loadAnnotationFromIndexedDb = useCallback(
     async (storageKey: string) => {

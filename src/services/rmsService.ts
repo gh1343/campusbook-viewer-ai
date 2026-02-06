@@ -953,56 +953,6 @@ export const saveRmsProgress = async ({
   return payload;
 };
 
-export const saveRmsIndexedDbData = async ({
-  apiBase,
-  bookCd,
-  memberCd,
-  payload,
-}: {
-  apiBase: string;
-  bookCd: string;
-  memberCd: string;
-  payload: IndexedDbBundlePayload;
-}) => {
-  if (typeof window === "undefined") {
-    throw new Error("RMS is only available in the browser.");
-  }
-  if (!apiBase || !bookCd) {
-    throw new Error("Missing RMS configuration (apiBase/bookCd).");
-  }
-
-  const reqData = {
-    bookCd,
-    memberCd,
-    storageKey: payload.storageKey,
-    data: payload.data,
-    meta: payload.meta || {},
-  };
-
-  const response = await fetch(`${apiBase}/v3/rms/saveData`, {
-    method: "POST",
-    headers: buildRmsHeaders(),
-    body: JSON.stringify(reqData),
-  });
-
-  let result: any = null;
-  try {
-    result = await response.json();
-  } catch (err) {
-    result = null;
-  }
-
-  if (!response.ok) {
-    const message =
-      result?.message ||
-      result?.error ||
-      `RMS saveData failed (${response.status})`;
-    throw new Error(message);
-  }
-
-  return result;
-};
-
 export const saveHighlightsToServer = async ({
   apiBase,
   bookCd,
@@ -1105,64 +1055,6 @@ export const loadHighlightsFromServer = async ({
       result?.message ||
       result?.error ||
       `Highlights load failed (${response.status})`;
-    throw new Error(message);
-  }
-
-  return result;
-};
-
-export const saveProgressToServer = async ({
-  apiBase,
-  bookCd,
-  progress,
-}: {
-  apiBase: string;
-  bookCd: string;
-  progress: unknown;
-}) => {
-  if (typeof window === "undefined") {
-    throw new Error("RMS is only available in the browser.");
-  }
-  if (!apiBase || !bookCd) {
-    throw new Error("Missing RMS configuration (apiBase/bookCd).");
-  }
-
-  const authToken = getRmsAuthToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json; charset=utf-8",
-  };
-
-  if (authToken) {
-    headers.Authorization = /^Bearer\s+/i.test(authToken)
-      ? authToken
-      : `Bearer ${authToken}`;
-  }
-
-  const url = `${apiBase}/v3/t-pack/test-v-save/save`;
-  const payload = {
-    bookCode: bookCd,
-    type: "pr",
-    data: JSON.stringify(progress),
-  };
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
-
-  let result: any = null;
-  try {
-    result = await response.json();
-  } catch (err) {
-    result = null;
-  }
-
-  if (!response.ok) {
-    const message =
-      result?.message ||
-      result?.error ||
-      `Progress save failed (${response.status})`;
     throw new Error(message);
   }
 

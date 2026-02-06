@@ -83,10 +83,12 @@ export const Header: React.FC<{
   // 통합 저장 함수
   const handleSaveAll = async () => {
     try {
+      // 1. 먼저 progress 저장 (BookContext)
+      await saveProgress();
+      // 2. 그 다음 annotations와 drawings 저장
       await Promise.all([
         saveAnnotations(),
         saveDrawings(),
-        saveProgress(),
       ]);
       alert("저장이 완료되었습니다.");
     } catch (err) {
