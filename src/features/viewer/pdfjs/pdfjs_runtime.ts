@@ -209,30 +209,38 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     const target = Math.min(Math.max(page, 1), maxPage);
     pdfViewerRef.current.currentPageNumber = target;
 
-    // scrollPageIntoView는 확대된 상태에서 제대로 작동하지 않을 수 있으므로
-    // 직접 스크롤 위치를 계산하여 이동
-    requestAnimationFrame(() => {
+    // 페이지가 렌더링될 때까지 재시도하는 함수
+    const scrollToPageWithRetry = (retryCount = 0, maxRetries = 10) => {
       const pageEl = viewer.querySelector<HTMLElement>(
         `.page[data-page-number="${target}"]`
       );
+
+      if (!pageEl && retryCount < maxRetries) {
+        // 페이지가 아직 렌더링되지 않았으면 다시 시도
+        requestAnimationFrame(() => scrollToPageWithRetry(retryCount + 1, maxRetries));
+        return;
+      }
+
       if (pageEl && viewerContainer) {
         const containerRect = viewerContainer.getBoundingClientRect();
         const pageRect = pageEl.getBoundingClientRect();
 
-        // 페이지 상단을 컨테이너 상단에 맞추도록 스크롤
+        // 페이지 상단을 컨테이너 상단에 맞추도록 스크롤 (애니메이션 없이 즉시 이동)
         const scrollTop = pageRect.top - containerRect.top + viewerContainer.scrollTop;
         const scrollLeft = pageRect.left - containerRect.left + viewerContainer.scrollLeft;
 
         viewerContainer.scrollTo({
           top: Math.max(0, scrollTop),
           left: Math.max(0, scrollLeft),
-          behavior: 'smooth'
+          behavior: 'auto'
         });
       } else {
-        // 페이지 요소가 아직 렌더링되지 않았으면 기본 방식 사용
+        // 최대 재시도 후에도 페이지를 찾지 못하면 기본 방식 사용
         pdfViewerRef.current?.scrollPageIntoView({ pageNumber: target });
       }
-    });
+    };
+
+    requestAnimationFrame(() => scrollToPageWithRetry());
     return true;
   };
 
