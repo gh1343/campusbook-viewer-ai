@@ -777,6 +777,15 @@
   .header_nav {
     display: none;
   }
+  /* .center_hub {
+    display: none;
+  } */
+}
+@media (max-width: 540px) {
+  .header_inner {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
   .center_hub {
     display: none;
   }

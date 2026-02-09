@@ -296,12 +296,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       );
       if (!containerEl || !pageEl) return;
 
-      const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } = getPageOffsetInfo(
-        containerEl,
-        pageEl,
-        first.pageWidth,
-        first.pageHeight
-      );
+      const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } =
+        getPageOffsetInfo(
+          containerEl,
+          pageEl,
+          first.pageWidth,
+          first.pageHeight
+        );
 
       const nextTop = Math.max(0, pageOffsetTop + first.top * scaleY - 40);
       const nextLeft = Math.max(0, pageOffsetLeft + first.left * scaleX - 20);
@@ -399,10 +400,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const containerRect = container.getBoundingClientRect();
     const viewportX = centerClientX - containerRect.left;
     const viewportY = centerClientY - containerRect.top;
-    const contentX =
-      viewportX + container.scrollLeft - layer.offsetLeft;
-    const contentY =
-      viewportY + container.scrollTop - layer.offsetTop;
+    const contentX = viewportX + container.scrollLeft - layer.offsetLeft;
+    const contentY = viewportY + container.scrollTop - layer.offsetTop;
     return { contentX, contentY, viewportX, viewportY };
   };
 
@@ -426,12 +425,17 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const hit = document.elementFromPoint(centerClientX, centerClientY);
     if (hit instanceof HTMLElement) {
       const closestPage = hit.closest(".page");
-      if (closestPage instanceof HTMLElement && viewerRoot.contains(closestPage)) {
+      if (
+        closestPage instanceof HTMLElement &&
+        viewerRoot.contains(closestPage)
+      ) {
         pageEl = closestPage;
       }
     }
     if (!pageEl) {
-      const pages = Array.from(viewerRoot.querySelectorAll(".page")) as HTMLElement[];
+      const pages = Array.from(
+        viewerRoot.querySelectorAll(".page")
+      ) as HTMLElement[];
       pageEl =
         pages.find((page) => {
           const rect = page.getBoundingClientRect();
@@ -610,12 +614,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       const containerRect = container.getBoundingClientRect();
 
       // 마우스 위치가 없으면 화면 중앙을 앵커로 사용
-      const viewportX = mouseX !== undefined
-        ? mouseX - containerRect.left
-        : container.clientWidth / 2;
-      const viewportY = mouseY !== undefined
-        ? mouseY - containerRect.top
-        : container.clientHeight / 2;
+      const viewportX =
+        mouseX !== undefined
+          ? mouseX - containerRect.left
+          : container.clientWidth / 2;
+      const viewportY =
+        mouseY !== undefined
+          ? mouseY - containerRect.top
+          : container.clientHeight / 2;
 
       // 현재 스크롤 위치 + 뷰포트 내 앵커 위치 = 컨텐츠 상의 절대 위치
       const contentX = container.scrollLeft + viewportX;
@@ -670,9 +676,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
   }, [pdfZoom, scheduleRenderRefresh, setLayoutTick]);
 
-  const onPageChangeFiltered = useCallback((page: number) => {
-    onPageChange?.(page);
-  }, [onPageChange]);
+  const onPageChangeFiltered = useCallback(
+    (page: number) => {
+      onPageChange?.(page);
+    },
+    [onPageChange]
+  );
 
   usePdfJsViewer({
     file,
@@ -823,12 +832,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
         if (!isPageVisible) {
           // 페이지가 보이지 않으면 페이지 상단으로 스크롤
-          container.scrollTop +=
-            pageTopInView - 4; // 4px 여유
+          container.scrollTop += pageTopInView - 4; // 4px 여유
         }
 
         // 수평 스크롤이 컨텐츠 범위를 벗어났으면 보정
-        if (container.scrollLeft > container.scrollWidth - container.clientWidth) {
+        if (
+          container.scrollLeft >
+          container.scrollWidth - container.clientWidth
+        ) {
           container.scrollLeft = Math.max(
             0,
             container.scrollWidth - container.clientWidth
@@ -1003,16 +1014,18 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     // 첫 번째 줄의 rect를 기준으로 메뉴 위치 결정 (드래그 중 줄이 바뀌어도 안정적)
     const firstRect = clientRects[0];
-    const lastRect = clientRects[clientRects.length - 1];
 
-    const menuWidth = 210;
-    const margin = 10;
-    const top = isTouchDevice
-      ? lastRect.bottom + margin // drop below native selection handles
-      : firstRect.top - 56;
-    const left = firstRect.left + firstRect.width / 2 - menuWidth / 2;
+    const menuWidth = 140;
+    const menuHeight = 40;
+    const margin = 5;
+    const sideGap = 1;
+    const top = firstRect.top + firstRect.height / 2 - menuHeight / 2;
+    const left = firstRect.left - menuWidth - sideGap;
 
-    const clampedTop = top < margin ? rect.bottom + margin : top;
+    const clampedTop = Math.min(
+      Math.max(top, margin),
+      window.innerHeight - menuHeight - margin
+    );
     const clampedLeft = Math.min(
       Math.max(left, margin),
       window.innerWidth - menuWidth - margin
@@ -1112,8 +1125,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const pageRectBefore = pageElBefore.getBoundingClientRect();
 
     // 스케일 적용 전 앵커의 절대 위치 계산
-    const anchorAbsX = (pageRectBefore.left - containerRect.left) + anchor.relX * pageRectBefore.width;
-    const anchorAbsY = (pageRectBefore.top - containerRect.top) + anchor.relY * pageRectBefore.height;
+    const anchorAbsX =
+      pageRectBefore.left -
+      containerRect.left +
+      anchor.relX * pageRectBefore.width;
+    const anchorAbsY =
+      pageRectBefore.top -
+      containerRect.top +
+      anchor.relY * pageRectBefore.height;
 
     // 스케일 적용 (핀치 줌이므로 수동 변경으로 표시)
     pdfZoomManualRef.current = true;
@@ -1139,8 +1158,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       }
 
       // 스케일 적용 후 앵커의 새로운 절대 위치
-      const anchorNewAbsX = (pageRectAfter.left - containerRectAfter.left) + anchor.relX * pageRectAfter.width;
-      const anchorNewAbsY = (pageRectAfter.top - containerRectAfter.top) + anchor.relY * pageRectAfter.height;
+      const anchorNewAbsX =
+        pageRectAfter.left -
+        containerRectAfter.left +
+        anchor.relX * pageRectAfter.width;
+      const anchorNewAbsY =
+        pageRectAfter.top -
+        containerRectAfter.top +
+        anchor.relY * pageRectAfter.height;
 
       // 앵커를 원래 뷰포트 위치에 유지하도록 스크롤 조정
       const scrollDeltaX = anchorNewAbsX - anchorAbsX;
@@ -1166,7 +1191,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     // PDF.js의 실제 현재 페이지와 동기화
     const actualPage = viewer?.currentPageNumber;
-    if (actualPage && pinchTargetPageRef.current && actualPage !== pinchTargetPageRef.current) {
+    if (
+      actualPage &&
+      pinchTargetPageRef.current &&
+      actualPage !== pinchTargetPageRef.current
+    ) {
       // 페이지가 달라졌다면 올바른 페이지로 이벤트 발생
       onPageChange?.(pinchTargetPageRef.current);
     }
@@ -1184,7 +1213,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     e: React.PointerEvent<HTMLDivElement>
   ) => {
     // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
-    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
+    if (
+      (e.pointerType === "pen" || e.pointerType === "mouse") &&
+      drawingMode === "pen"
+    ) {
       e.preventDefault(); // 텍스트 선택 방지
       penRuntime.handlePenStart(e);
       return;
@@ -1243,7 +1275,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     e: React.PointerEvent<HTMLDivElement>
   ) => {
     // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
-    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
+    if (
+      (e.pointerType === "pen" || e.pointerType === "mouse") &&
+      drawingMode === "pen"
+    ) {
       e.preventDefault(); // 텍스트 선택 방지
       penRuntime.handlePenMove(e);
       return;
@@ -1340,7 +1375,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const handleContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
-    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
+    if (
+      (e.pointerType === "pen" || e.pointerType === "mouse") &&
+      drawingMode === "pen"
+    ) {
       penRuntime.handlePenEnd(e);
       return;
     }
@@ -1357,7 +1395,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     e: React.PointerEvent<HTMLDivElement>
   ) => {
     // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
-    if ((e.pointerType === "pen" || e.pointerType === "mouse") && drawingMode === "pen") {
+    if (
+      (e.pointerType === "pen" || e.pointerType === "mouse") &&
+      drawingMode === "pen"
+    ) {
       penRuntime.handlePenEnd(e);
       return;
     }
@@ -1563,7 +1604,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           className="pdf_viewer_container"
           data-drawing-mode={drawingMode}
           style={{
-            cursor: drawingMode === "pen" ? "crosshair" : drawingMode === "eraser" ? "crosshair" : "auto",
+            cursor:
+              drawingMode === "pen"
+                ? "crosshair"
+                : drawingMode === "eraser"
+                ? "crosshair"
+                : "auto",
             userSelect: drawingMode !== "idle" ? "none" : "auto",
           }}
           onPointerDown={handleContainerPointerDown}
@@ -1573,10 +1619,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           onContextMenu={(e) => e.preventDefault()}
           onCopy={handleContainerCopy}
         >
-          <div
-            ref={transformLayerRef}
-            className="pdf_viewer_transform_layer"
-          >
+          <div ref={transformLayerRef} className="pdf_viewer_transform_layer">
             <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
             {/* 커스텀 하이라이트 오버레이 */}
             <div
