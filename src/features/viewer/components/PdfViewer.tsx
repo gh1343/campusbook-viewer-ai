@@ -983,23 +983,25 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     const range = sel.getRangeAt(0);
-    const primaryRect = range.getBoundingClientRect();
-    const clientRects = Array.from(range.getClientRects());
-    const rect =
-      (primaryRect.width > 0 && primaryRect.height > 0 && primaryRect) ||
-      clientRects.find((r) => r.width > 0 && r.height > 0);
+    const clientRects = Array.from(range.getClientRects()).filter(
+      (r) => r.width > 0 && r.height > 0
+    );
 
-    if (!rect || rect.width === 0) {
+    if (clientRects.length === 0) {
       setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
 
+    // 첫 번째 줄의 rect를 기준으로 메뉴 위치 결정 (드래그 중 줄이 바뀌어도 안정적)
+    const firstRect = clientRects[0];
+    const lastRect = clientRects[clientRects.length - 1];
+
     const menuWidth = 210;
     const margin = 10;
     const top = isTouchDevice
-      ? rect.bottom + margin // drop below native selection handles
-      : rect.top - 56;
-    const left = rect.left + rect.width / 2 - menuWidth / 2;
+      ? lastRect.bottom + margin // drop below native selection handles
+      : firstRect.top - 56;
+    const left = firstRect.left + firstRect.width / 2 - menuWidth / 2;
 
     const clampedTop = top < margin ? rect.bottom + margin : top;
     const clampedLeft = Math.min(
