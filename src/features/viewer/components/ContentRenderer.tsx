@@ -285,11 +285,18 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       const children = contentRef.current
         ? (Array.from(contentRef.current.children) as HTMLElement[])
         : [];
+      const canvasEl = canvasRef.current;
+      const ew = canvasEl ? canvasEl.width : 1;
+      const eh = canvasEl ? canvasEl.height : 1;
       strokes.forEach(stroke => {
         let strokePoints = stroke.points;
+        // 정규화된 스트로크 복원
+        if ((stroke as any).normalized) {
+          strokePoints = stroke.points.map(p => ({x: p.x * ew, y: p.y * eh}));
+        }
         if (stroke.anchorIndex !== undefined && children[stroke.anchorIndex]) {
           const offset = children[stroke.anchorIndex].offsetTop;
-          strokePoints = stroke.points.map(p => ({x: p.x, y: p.y + offset}));
+          strokePoints = strokePoints.map(p => ({x: p.x, y: p.y + offset}));
         }
         const hit = strokePoints.some(
           p => Math.hypot(p.x - point.x, p.y - point.y) < 20
@@ -447,16 +454,24 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
     const children = Array.from(contentRef.current.children) as HTMLElement[];
     const strokes = chapterStrokes.filter(s => !s.deleted);
+    const cw = canvas.width;
+    const ch = canvas.height;
     strokes.forEach(s => {
       let pts = s.points;
+      let w = s.width || 3;
+      // 정규화된 스트로크 복원 (PDF 뷰어에서 저장된 경우)
+      if ((s as any).normalized) {
+        pts = s.points.map(p => ({x: p.x * cw, y: p.y * ch}));
+        w = (s.width || 3 / cw) * cw;
+      }
       if (s.anchorIndex !== undefined && children[s.anchorIndex]) {
         const offset = children[s.anchorIndex].offsetTop;
-        pts = s.points.map(p => ({x: p.x, y: p.y + offset}));
+        pts = pts.map(p => ({x: p.x, y: p.y + offset}));
       }
       drawStroke(
         pts,
         s.color,
-        s.width || 3,
+        w,
         s.opacity !== undefined ? s.opacity : 1
       );
     });

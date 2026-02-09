@@ -25,6 +25,7 @@ interface PenLayerRuntimeDeps {
   getPageElementFromEvent: (e: React.PointerEvent) => { pageEl: HTMLElement; pageNumber: number } | null;
   getPageElementByNumber: (pageNumber: number) => HTMLElement | null;
   getCanvasMetrics: (pageEl: HTMLElement) => { rect: DOMRect; dpr: number; visualScale: number; width: number; height: number };
+  getZoomRatio: () => number;
   drawStrokePath: (
     ctx: CanvasRenderingContext2D,
     points: { x: number; y: number }[],
@@ -57,6 +58,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     getPageElementFromEvent,
     getPageElementByNumber,
     getCanvasMetrics,
+    getZoomRatio,
     drawStrokePath,
     addStroke,
     removeStroke,
@@ -327,17 +329,25 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       } else if (drawingModeRef.current === "eraser") {
         const pageSize = getPageSize(pageEl);
         const strokes = getPageStrokes(pageNumber);
-        strokes.forEach((stroke) => {
-          const { scaleX, scaleY } = getStrokeScale(
-            stroke,
-            pageSize.width,
-            pageSize.height
-          );
-          const hit = stroke.points.some(
-            (p: any) =>
-              Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
-              16 * scaleX
-          );
+        strokes.forEach((stroke: any) => {
+          let hit: boolean;
+          if (stroke.normalized) {
+            hit = stroke.points.some(
+              (p: any) =>
+                Math.hypot(p.x * pageSize.width - pt.x, p.y * pageSize.height - pt.y) < 16
+            );
+          } else {
+            const { scaleX, scaleY } = getStrokeScale(
+              stroke,
+              pageSize.width,
+              pageSize.height
+            );
+            hit = stroke.points.some(
+              (p: any) =>
+                Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
+                16 * scaleX
+            );
+          }
           if (hit) removeStroke(stroke.id);
         });
       }
@@ -386,17 +396,25 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     } else if (drawingModeRef.current === "eraser") {
       const pageSize = getPageSize(pageEl);
       const strokes = getPageStrokes(pageNumber);
-      strokes.forEach((stroke) => {
-        const { scaleX, scaleY } = getStrokeScale(
-          stroke,
-          pageSize.width,
-          pageSize.height
-        );
-        const hit = stroke.points.some(
-          (p: any) =>
-            Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
-            16 * scaleX
-        );
+      strokes.forEach((stroke: any) => {
+        let hit: boolean;
+        if (stroke.normalized) {
+          hit = stroke.points.some(
+            (p: any) =>
+              Math.hypot(p.x * pageSize.width - pt.x, p.y * pageSize.height - pt.y) < 16
+          );
+        } else {
+          const { scaleX, scaleY } = getStrokeScale(
+            stroke,
+            pageSize.width,
+            pageSize.height
+          );
+          hit = stroke.points.some(
+            (p: any) =>
+              Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
+              16 * scaleX
+          );
+        }
         if (hit) removeStroke(stroke.id);
       });
     }
@@ -451,15 +469,26 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
           livePointsRef.current[livePointsRef.current.length - 1],
         ];
       }
+      // 포인트와 두께를 페이지 크기 기준으로 정규화 (0~1 비율)
+      // 확대/축소와 무관하게 일관된 필기 두께를 유지하기 위함
+      const pw = pageSize?.width || 1;
+      const ph = pageSize?.height || 1;
+      const zoomRatio = getZoomRatio();
+      const normalizedPoints = finalPoints.map((p) => ({
+        x: p.x / pw,
+        y: p.y / ph,
+      }));
+      // 두께를 줌 보정 후 정규화: penWidth * zoomRatio = 1x 기준 실제 두께
       const newStroke = {
         id: Date.now().toString(),
-        points: finalPoints,
+        points: normalizedPoints,
         color: penColorRef.current,
-        width: penWidthRef.current,
+        width: (penWidthRef.current * zoomRatio) / pw,
         opacity: penOpacityRef.current,
         pageNumber,
         pageWidth: pageSize?.width,
         pageHeight: pageSize?.height,
+        normalized: true,
       };
       addStroke(newStroke);
     }
@@ -622,13 +651,21 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
       const strokes = getPageStrokes(pageNumber);
       strokes.forEach((s: any) => {
-        const { scaleX, scaleY } = getStrokeScale(
-          s,
-          pageWidth,
-          pageHeight
-        );
-        const points = scaleStrokePoints(s.points, scaleX, scaleY);
-        const width = (s.width || 3) * scaleX;
+        let points: { x: number; y: number }[];
+        let width: number;
+        if (s.normalized) {
+          // 정규화된 스트로크: 0~1 비율 → 현재 페이지 크기로 복원
+          points = s.points.map((p: any) => ({
+            x: p.x * pageWidth,
+            y: p.y * pageHeight,
+          }));
+          width = (s.width || 3 / pageWidth) * pageWidth;
+        } else {
+          // 기존 비정규화 스트로크: 호환성 유지
+          const { scaleX, scaleY } = getStrokeScale(s, pageWidth, pageHeight);
+          points = scaleStrokePoints(s.points, scaleX, scaleY);
+          width = (s.width || 3) * scaleX;
+        }
         drawStrokePath(ctx, points, s.color, width, s.opacity ?? 1);
       });
     });
@@ -654,12 +691,16 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     const ctx = entry.liveCanvas.getContext("2d");
     if (!ctx) return;
 
+    // 줌 보정: 확대 상태에서도 시각적으로 동일한 두께로 그리기
+    const zoomRatio = getZoomRatio();
+    const adjustedWidth = penWidthRef.current * zoomRatio;
+
     if (livePointsRef.current.length === 1) {
       const p = livePointsRef.current[0];
       ctx.beginPath();
       ctx.fillStyle = penColorRef.current;
       ctx.globalAlpha = penOpacityRef.current;
-      ctx.arc(p.x, p.y, penWidthRef.current / 2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, adjustedWidth / 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
       return;
@@ -672,7 +713,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       const start = livePointsRef.current[0];
       const end = livePointsRef.current[livePointsRef.current.length - 1];
       ctx.beginPath();
-      ctx.lineWidth = penWidthRef.current;
+      ctx.lineWidth = adjustedWidth;
       ctx.strokeStyle = penColorRef.current;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
@@ -691,7 +732,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       ctx,
       livePointsRef.current,
       penColorRef.current,
-      penWidthRef.current,
+      adjustedWidth,
       penOpacityRef.current
     );
   };

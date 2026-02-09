@@ -506,6 +506,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const getPageCanvasMetrics = (pageEl: HTMLElement) =>
     getCanvasMetrics(pageEl, getVisualScale);
 
+  const getZoomRatio = () => {
+    const viewer = pdfViewerRef.current;
+    if (!viewer) return 1;
+    const current = viewer.currentScale || 1;
+    const initial = pdfZoomInitialScaleRef.current || current;
+    return initial > 0 ? current / initial : 1;
+  };
+
   const penRuntime = useMemo(
     () =>
       createPenLayerRuntime({
@@ -528,6 +536,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         getPageElementFromEvent,
         getPageElementByNumber,
         getCanvasMetrics: getPageCanvasMetrics,
+        getZoomRatio,
         drawStrokePath,
         addStroke,
         removeStroke,
