@@ -129,9 +129,20 @@ export const PdfViewerProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (pdfTotalPages > 0 && initialPageToLoad !== null && pdfNavigator) {
       const pageToLoad = Math.max(1, Math.min(initialPageToLoad, pdfTotalPages));
-      pdfNavigator(pageToLoad);
-      setCurrentPdfPage(pageToLoad);
-      setInitialPageToLoad(null);
+      // iPad Safari에서 캐시 없이 초기 로드 시 레이아웃이 아직 확정되지 않은 상태에서
+      // scrollTo()가 무시되는 문제 방지: 레이아웃 안정화를 기다린 후 네비게이션 실행
+      const navigate = () => {
+        pdfNavigator(pageToLoad);
+        setCurrentPdfPage(pageToLoad);
+        setInitialPageToLoad(null);
+      };
+      if (typeof requestAnimationFrame !== "undefined") {
+        requestAnimationFrame(() => {
+          setTimeout(navigate, 80);
+        });
+      } else {
+        navigate();
+      }
     }
   }, [pdfTotalPages, initialPageToLoad, pdfNavigator]);
 

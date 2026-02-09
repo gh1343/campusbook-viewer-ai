@@ -210,34 +210,42 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     pdfViewerRef.current.currentPageNumber = target;
 
     // 페이지가 렌더링될 때까지 재시도하는 함수
-    const scrollToPageWithRetry = (retryCount = 0, maxRetries = 10) => {
+    // iPad Safari는 캐시 없는 초기 로드 시 레이아웃 확정이 느려 재시도 횟수를 넉넉히 확보
+    const scrollToPageWithRetry = (retryCount = 0, maxRetries = 30) => {
       const pageEl = viewer.querySelector<HTMLElement>(
         `.page[data-page-number="${target}"]`
       );
 
       if (!pageEl && retryCount < maxRetries) {
         // 페이지가 아직 렌더링되지 않았으면 다시 시도
-        requestAnimationFrame(() => scrollToPageWithRetry(retryCount + 1, maxRetries));
+        setTimeout(() => scrollToPageWithRetry(retryCount + 1, maxRetries), 50);
         return;
       }
 
-      if (pageEl && viewerContainer) {
-        const containerRect = viewerContainer.getBoundingClientRect();
-        const pageRect = pageEl.getBoundingClientRect();
+      const doScroll = () => {
+        if (pageEl && viewerContainer) {
+          const containerRect = viewerContainer.getBoundingClientRect();
+          const pageRect = pageEl.getBoundingClientRect();
 
-        // 페이지 상단을 컨테이너 상단에 맞추도록 스크롤 (애니메이션 없이 즉시 이동)
-        const scrollTop = pageRect.top - containerRect.top + viewerContainer.scrollTop;
-        const scrollLeft = pageRect.left - containerRect.left + viewerContainer.scrollLeft;
+          // 페이지 상단을 컨테이너 상단에 맞추도록 스크롤 (애니메이션 없이 즉시 이동)
+          const scrollTop = pageRect.top - containerRect.top + viewerContainer.scrollTop;
+          const scrollLeft = pageRect.left - containerRect.left + viewerContainer.scrollLeft;
 
-        viewerContainer.scrollTo({
-          top: Math.max(0, scrollTop),
-          left: Math.max(0, scrollLeft),
-          behavior: 'auto'
-        });
-      } else {
-        // 최대 재시도 후에도 페이지를 찾지 못하면 기본 방식 사용
-        pdfViewerRef.current?.scrollPageIntoView({ pageNumber: target });
-      }
+          viewerContainer.scrollTo({
+            top: Math.max(0, scrollTop),
+            left: Math.max(0, scrollLeft),
+            behavior: 'auto'
+          });
+        } else {
+          // 최대 재시도 후에도 페이지를 찾지 못하면 기본 방식 사용
+          pdfViewerRef.current?.scrollPageIntoView({ pageNumber: target });
+        }
+      };
+
+      // Safari에서 레이아웃 확정 후 스크롤되도록 double rAF 사용
+      requestAnimationFrame(() => {
+        requestAnimationFrame(doScroll);
+      });
     };
 
     requestAnimationFrame(() => scrollToPageWithRetry());
