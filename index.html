@@ -33,6 +33,26 @@
   <body>
     <div id="root"></div>
     <script>
+      // DevTools 감지 - React/PDF 로드 전에 동기적으로 실행
+      (function () {
+        var SIZE_THRESHOLD = 160;
+        var widthDiff = window.outerWidth - window.innerWidth;
+        var heightDiff = window.outerHeight - window.innerHeight;
+        if (widthDiff > SIZE_THRESHOLD || heightDiff > SIZE_THRESHOLD) {
+          window.location.replace("https://www.google.com");
+          throw new Error();
+        }
+
+        // debugger 타이밍 감지 (DevTools 열린 상태에서 새로고침 시)
+        var start = performance.now();
+        debugger;
+        if (performance.now() - start > 100) {
+          window.location.replace("https://www.google.com");
+          throw new Error();
+        }
+      })();
+    </script>
+    <script>
       (function () {
         try {
           if (!window.__RMS_CONFIG__) {
