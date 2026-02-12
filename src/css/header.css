@@ -781,6 +781,15 @@
     display: none;
   } */
 }
+@media (max-width: 768px) {
+  .logo_wrap {
+    display: none;
+  }
+  .center_hub {
+    position: static;
+    transform: none;
+  }
+}
 @media (max-width: 540px) {
   .header_inner {
     padding-left: 10px;

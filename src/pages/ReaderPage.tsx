@@ -304,7 +304,7 @@ export const ReaderPage: React.FC = () => {
           className={`left_side_wrap ${!isTocOpen ? "off" : "on"}`}
           style={{
             width: isTocOpen
-              ? window.innerWidth < 768
+              ? window.innerWidth < 480
                 ? "0px"
                 : `${leftWidth}px`
               : "0px",
@@ -343,7 +343,7 @@ export const ReaderPage: React.FC = () => {
           className={`right_panel_wrap ${!isToolsOpen ? "off" : "on"}`}
           style={{
             width: isToolsOpen
-              ? window.innerWidth < 768
+              ? window.innerWidth < 480
                 ? "0px"
                 : `${rightWidth}px`
               : "0px",
