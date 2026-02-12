@@ -205,14 +205,11 @@
   -webkit-backface-visibility: hidden;
 }
 
-.pdf_highlight_layer {
+/* 각 페이지 내부에 삽입되는 하이라이트 레이어 (canvasWrapper와 textLayer 사이) */
+.pdf_page_highlight_layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* 하이라이트 레이어 안정화 */
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
 .pdf_highlight {
