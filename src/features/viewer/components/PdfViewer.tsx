@@ -791,7 +791,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     return () => cancelAnimationFrame(frameId);
   }, [loading, layoutTick]);
 
-  // 사이드바가 열리면 단일 페이지, 닫히면 2페이지 스프레드(데스크톱)로 전환
+  // 1쪽 보기/2쪽 보기 전환
   // 패널 토글 시 현재 보고 있는 페이지의 스크롤 위치를 보존
   useEffect(() => {
     const viewer = pdfViewerRef.current;
@@ -802,15 +802,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // 현재 보고 있는 페이지 번호 저장
     const currentPage = viewer.currentPageNumber;
 
-    const preferSpreadView = !isMobileLike;
-    const nextMode = forceSinglePage
-      ? SpreadMode.NONE
-      : preferSpreadView
-      ? SpreadMode.ODD
-      : SpreadMode.NONE;
+    // forceSinglePage에 따라 SpreadMode 결정 (화면 크기와 무관)
+    const nextMode = forceSinglePage ? SpreadMode.NONE : SpreadMode.ODD;
     if (viewer.spreadMode !== nextMode) {
       viewer.spreadMode = nextMode;
       scheduleRenderRefresh();
+      setLayoutTick((prev) => prev + 1);
     }
 
     // 패널 토글로 인한 레이아웃 변경 후 현재 페이지로 스크롤 복원
@@ -847,7 +844,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         }
       });
     }
-  }, [forceSinglePage, isMobileLike]);
+  }, [forceSinglePage, scheduleRenderRefresh]);
 
   const getClosestPageEl = (node: Node | null) => {
     if (!node) return null;

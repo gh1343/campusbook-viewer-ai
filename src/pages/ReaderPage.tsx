@@ -27,13 +27,17 @@ export const ReaderPage: React.FC = () => {
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const pdfGoToPageRef = useRef<(page: number) => void>();
   const hasOpenSidebar = isTocOpen || isToolsOpen;
+  const { viewMode } = usePdfViewer();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isPdfMobileLike = useMemo(() => {
     if (typeof window === "undefined") return false;
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
     return touchUA || window.innerWidth <= 1300;
   }, [ua]);
-  const pdfPageStep = !hasOpenSidebar && !isPdfMobileLike ? 2 : 1;
+
+  // viewMode에 따라 1쪽 보기/2쪽 보기 결정 (패널 상태와 무관)
+  const forceSinglePage = viewMode === "single";
+  const pdfPageStep = !forceSinglePage && !isPdfMobileLike ? 2 : 1;
 
   // Stable handlers to avoid rerunning PdfViewer effect
   const handlePdfPageChange = useCallback(
@@ -323,7 +327,7 @@ export const ReaderPage: React.FC = () => {
               onPageChange={handlePdfPageChange}
               onPagesCount={handlePdfPagesCount}
               registerGoToPage={handleRegisterGoToPage}
-              forceSinglePage={hasOpenSidebar}
+              forceSinglePage={forceSinglePage}
             />
           </div>
 
