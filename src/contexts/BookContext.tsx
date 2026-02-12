@@ -998,10 +998,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       }
     } catch (err) {
       console.error("Failed to save progress to IndexedDB", err);
+      throw err; // IndexedDB 저장 실패는 에러로 처리
     }
 
-    // 2. 서버에 저장 (RMS config 있을 때만)
-    if (!config) {
+    // 2. 서버에 저장 (RMS config 있고 온라인일 때만)
+    if (!config || !navigator.onLine) {
       return;
     }
 
@@ -1019,7 +1020,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       });
     } catch (err) {
       console.error("Failed to save progress to server", err);
-      throw err;
+      // 서버 저장 실패는 에러를 throw하지 않음 (IndexedDB에 이미 저장됨)
     }
   };
 

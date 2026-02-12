@@ -666,6 +666,11 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       const currentSnapshot = await persistCurrentAnnotationToIndexedDb();
 
       if (!navigator.onLine) {
+        // 오프라인일 때도 메모리에서 deleted 항목 제거
+        setHighlights((prev) => prev.filter((item) => !item.deleted));
+        setBookmarks((prev) => prev.filter((item) => !item.deleted));
+        setGeneralNotes((prev) => prev.filter((item) => !item.deleted));
+        setStrokes((prev) => prev.filter((item) => !item.deleted));
         setSyncStatus("LOCAL_ONLY");
         setLastSavedAt(formatSavedAt(new Date()));
         return;
