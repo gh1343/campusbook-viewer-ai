@@ -315,70 +315,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
   }, [activeHighlightId, pdfHighlights, highlightScrollBehavior]);
 
-  // 하이라이트를 각 페이지 내부의 canvasWrapper 다음, textLayer 앞에 삽입
-  useEffect(() => {
-    if (!viewerRef.current) return;
-
-    // 페이지별로 하이라이트 그룹화
-    const highlightsByPage = new Map<number, Array<{ h: PdfHighlight; rect: HighlightRect }>>();
-    pdfHighlights.forEach((h) => {
-      h.rects.forEach((rect) => {
-        if (!highlightsByPage.has(rect.pageNumber)) {
-          highlightsByPage.set(rect.pageNumber, []);
-        }
-        highlightsByPage.get(rect.pageNumber)!.push({ h, rect });
-      });
-    });
-
-    // 기존 하이라이트 레이어 모두 제거
-    viewerRef.current.querySelectorAll('.pdf_page_highlight_layer').forEach(el => el.remove());
-
-    // 각 페이지별로 하이라이트 삽입
-    highlightsByPage.forEach((highlights, pageNumber) => {
-      const pageEl = viewerRef.current?.querySelector<HTMLElement>(
-        `.page[data-page-number="${pageNumber}"]`
-      );
-      if (!pageEl) return;
-
-      // 하이라이트 레이어 생성
-      const highlightLayer = document.createElement('div');
-      highlightLayer.className = 'pdf_page_highlight_layer';
-
-      // canvasWrapper 다음에 삽입 (textLayer 전)
-      const canvasWrapper = pageEl.querySelector('.canvasWrapper');
-      const textLayer = pageEl.querySelector('.textLayer');
-
-      if (canvasWrapper && textLayer) {
-        pageEl.insertBefore(highlightLayer, textLayer);
-      } else if (canvasWrapper) {
-        canvasWrapper.after(highlightLayer);
-      } else {
-        return; // canvasWrapper가 없으면 스킵
-      }
-
-      // 페이지 크기 계산
-      const pageRect = pageEl.getBoundingClientRect();
-      const firstRect = highlights[0].rect;
-      const scaleX = pageRect.width / firstRect.pageWidth;
-      const scaleY = pageRect.height / firstRect.pageHeight;
-
-      // DocumentFragment로 일괄 삽입
-      const fragment = document.createDocumentFragment();
-      highlights.forEach(({ h, rect }) => {
-        const highlightDiv = document.createElement('div');
-        highlightDiv.className = 'pdf_highlight';
-        highlightDiv.dataset.highlightId = h.id;
-        highlightDiv.style.left = `${rect.left * scaleX}px`;
-        highlightDiv.style.top = `${rect.top * scaleY}px`;
-        highlightDiv.style.width = `${rect.width * scaleX}px`;
-        highlightDiv.style.height = `${rect.height * scaleY}px`;
-        fragment.appendChild(highlightDiv);
-      });
-
-      highlightLayer.appendChild(fragment);
-    });
-  }, [pdfHighlights, layoutTick]);
-
   useEffect(() => {
     return () => {
       if (copyResetRef.current) {
@@ -1685,7 +1621,48 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         >
           <div ref={transformLayerRef} className="pdf_viewer_transform_layer">
             <div ref={viewerRef} className="pdfViewer pdf_viewer_content" />
-            {/* 하이라이트는 useEffect에서 각 페이지 내부에 DOM으로 삽입됨 */}
+            {/* 커스텀 하이라이트 오버레이 */}
+            <div
+              className="pdf_highlight_layer"
+              data-layout-tick={layoutTick} // layout 변경 시 리렌더 트리거
+            >
+              {pdfHighlights.flatMap((h) =>
+                h.rects.map((rect, idx) => {
+                  const containerEl = viewerContainerRef.current;
+                  const pageEl = viewerRef.current?.querySelector<HTMLElement>(
+                    `.page[data-page-number="${rect.pageNumber}"]`
+                  );
+                  if (!containerEl || !pageEl) return null;
+
+                  const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } =
+                    getPageOffsetInfo(
+                      containerEl,
+                      pageEl,
+                      rect.pageWidth,
+                      rect.pageHeight
+                    );
+
+                  const left = pageOffsetLeft + rect.left * scaleX;
+                  const top = pageOffsetTop + rect.top * scaleY;
+                  const width = rect.width * scaleX;
+                  const height = rect.height * scaleY;
+
+                  return (
+                    <div
+                      key={`${h.id}-${idx}`}
+                      className="pdf_highlight"
+                      data-highlight-id={h.id}
+                      style={{
+                        left,
+                        top,
+                        width,
+                        height,
+                      }}
+                    />
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>
