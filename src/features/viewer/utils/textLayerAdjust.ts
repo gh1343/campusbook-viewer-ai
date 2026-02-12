@@ -18,9 +18,9 @@ export function adjustTextLayerSpacing(pageElement: HTMLElement) {
   const textLayer = pageElement.querySelector(".textLayer");
   if (!textLayer) return;
 
-  const spans = Array.from(textLayer.querySelectorAll<HTMLElement>("span")).filter(
-    (span) => !span.classList.contains("markedContent")
-  );
+  const spans = Array.from(
+    textLayer.querySelectorAll<HTMLElement>("span")
+  ).filter((span) => !span.classList.contains("markedContent"));
 
   if (spans.length === 0) return;
 
@@ -70,20 +70,20 @@ export function adjustTextLayerSpacing(pageElement: HTMLElement) {
 
     // 간격이 있으면 현재 줄의 모든 span 높이를 늘려서 간격 메우기
     const gap = nextTop - currentBottom;
-    if (gap > 1) {
-      // 1px 이상의 간격이 있을 때만 조정
-      const extraHeight = gap + 2; // 약간의 오버랩 추가
+    // if (gap > 1) {
+    //   // 1px 이상의 간격이 있을 때만 조정
+    //   const extraHeight = gap + 2; // 약간의 오버랩 추가
 
-      currentLine.forEach((spanInfo) => {
-        // padding-bottom으로 높이를 늘림 (텍스트 위치는 유지)
-        const currentPaddingBottom = parseFloat(
-          getComputedStyle(spanInfo.element).paddingBottom || "0"
-        );
-        spanInfo.element.style.paddingBottom = `${
-          currentPaddingBottom + extraHeight
-        }px`;
-      });
-    }
+    //   currentLine.forEach((spanInfo) => {
+    //     // padding-bottom으로 높이를 늘림 (텍스트 위치는 유지)
+    //     const currentPaddingBottom = parseFloat(
+    //       getComputedStyle(spanInfo.element).paddingBottom || "0"
+    //     );
+    //     spanInfo.element.style.paddingBottom = `${
+    //       currentPaddingBottom + extraHeight
+    //     }px`;
+    //   });
+    // }
   }
 }
 
