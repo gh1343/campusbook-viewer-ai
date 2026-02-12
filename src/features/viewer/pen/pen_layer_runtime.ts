@@ -266,8 +266,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     // 핀치줌 중에는 펜 입력 무시
     if (isPinching()) return;
 
-    // 펜 모드일 때: 터치는 스크롤/핀치줌용으로 허용, 펜만 그리기
-    if (drawingModeRef.current === "pen" && e.pointerType === "touch") {
+    // 펜/형광펜 모드일 때: 터치는 스크롤/핀치줌용으로 허용, 펜만 그리기
+    if ((drawingModeRef.current === "pen" || drawingModeRef.current === "highlighter") && e.pointerType === "touch") {
       // 손가락은 스크롤용으로 이벤트 통과 (preventDefault 하지 않음)
       return;
     }
@@ -317,7 +317,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       const pt = getPagePoint(e, pageEl, getVisualScale);
       if (!pt) return;
 
-      if (drawingModeRef.current === "pen") {
+      if (drawingModeRef.current === "pen" || drawingModeRef.current === "highlighter") {
         isDrawingRef.current = true;
         currentPageRef.current = pageNumber;
         if (livePointsRef.current.length === 0) {
@@ -366,8 +366,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       return;
     }
 
-    // 펜 모드일 때: 터치는 스크롤용으로 허용, 펜만 그리기
-    if (drawingModeRef.current === "pen" && e.pointerType === "touch") {
+    // 펜/형광펜 모드일 때: 터치는 스크롤용으로 허용, 펜만 그리기
+    if ((drawingModeRef.current === "pen" || drawingModeRef.current === "highlighter") && e.pointerType === "touch") {
       return;
     }
 
@@ -384,7 +384,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     const pt = getPagePoint(e, pageEl, getVisualScale);
     if (!pt) return;
 
-    if (drawingModeRef.current === "pen") {
+    if (drawingModeRef.current === "pen" || drawingModeRef.current === "highlighter") {
       isDrawingRef.current = true;
       currentPageRef.current = pageNumber;
       if (livePointsRef.current.length === 0) {
@@ -439,8 +439,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       activePointerId = null;
     }
 
-    // 펜 모드일 때: 터치는 스크롤용으로 허용
-    if (drawingModeRef.current === "pen" && e.pointerType === "touch") {
+    // 펜/형광펜 모드일 때: 터치는 스크롤용으로 허용
+    if ((drawingModeRef.current === "pen" || drawingModeRef.current === "highlighter") && e.pointerType === "touch") {
       return;
     }
 
@@ -455,7 +455,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     }
     const pageNumber = currentPageRef.current;
     if (
-      drawingModeRef.current === "pen" &&
+      (drawingModeRef.current === "pen" || drawingModeRef.current === "highlighter") &&
       pageNumber &&
       livePointsRef.current.length > 1
     ) {
@@ -605,11 +605,11 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   const syncCanvasPointers = () => {
     const mode = drawingModeRef.current || "idle";
-    const active = mode === "pen" || mode === "eraser";
+    const active = mode === "pen" || mode === "highlighter" || mode === "eraser";
     pageCanvasMapRef.current.forEach(({ liveCanvas }) => {
-      // 펜 모드일 때는 pointer-events를 none으로 설정하여 터치 이벤트 통과
+      // 펜/형광펜 모드일 때는 pointer-events를 none으로 설정하여 터치 이벤트 통과
       // 펜 입력은 컨테이너에서 직접 처리
-      if (mode === "pen") {
+      if (mode === "pen" || mode === "highlighter") {
         liveCanvas.style.pointerEvents = "none";
         liveCanvas.style.cursor = "crosshair";
       } else {
@@ -681,7 +681,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       ctx.restore();
     });
 
-    if (drawingModeRef.current !== "pen" || livePointsRef.current.length === 0)
+    if ((drawingModeRef.current !== "pen" && drawingModeRef.current !== "highlighter") || livePointsRef.current.length === 0)
       return;
 
     const pageNumber = currentPageRef.current;

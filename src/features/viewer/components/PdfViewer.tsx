@@ -1212,10 +1212,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerDown = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
-    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    // 펜 또는 마우스 입력 처리 (펜/형광펜 모드일 때만)
     if (
       (e.pointerType === "pen" || e.pointerType === "mouse") &&
-      drawingMode === "pen"
+      (drawingMode === "pen" || drawingMode === "highlighter")
     ) {
       e.preventDefault(); // 텍스트 선택 방지
       penRuntime.handlePenStart(e);
@@ -1274,10 +1274,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerMove = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
-    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    // 펜 또는 마우스 입력 처리 (펜/형광펜 모드일 때만)
     if (
       (e.pointerType === "pen" || e.pointerType === "mouse") &&
-      drawingMode === "pen"
+      (drawingMode === "pen" || drawingMode === "highlighter")
     ) {
       e.preventDefault(); // 텍스트 선택 방지
       penRuntime.handlePenMove(e);
@@ -1374,10 +1374,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const handleContainerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    // 펜 또는 마우스 입력 처리 (펜/형광펜 모드일 때만)
     if (
       (e.pointerType === "pen" || e.pointerType === "mouse") &&
-      drawingMode === "pen"
+      (drawingMode === "pen" || drawingMode === "highlighter")
     ) {
       penRuntime.handlePenEnd(e);
       return;
@@ -1394,10 +1394,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const handleContainerPointerCancel = (
     e: React.PointerEvent<HTMLDivElement>
   ) => {
-    // 펜 또는 마우스 입력 처리 (펜 모드일 때만)
+    // 펜 또는 마우스 입력 처리 (펜/형광펜 모드일 때만)
     if (
       (e.pointerType === "pen" || e.pointerType === "mouse") &&
-      drawingMode === "pen"
+      (drawingMode === "pen" || drawingMode === "highlighter")
     ) {
       penRuntime.handlePenEnd(e);
       return;
@@ -1606,6 +1606,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           style={{
             cursor:
               drawingMode === "pen"
+                ? "crosshair"
+                : drawingMode === "highlighter"
                 ? "crosshair"
                 : drawingMode === "eraser"
                 ? "crosshair"

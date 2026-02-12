@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Minus,
   Plus,
+  Highlighter,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DrawingColor } from "../../../types";
@@ -241,6 +242,20 @@ export const Header: React.FC<{
               </button>
               <button
                 onClick={handleButtonClick(() =>
+                  setDrawingMode(drawingMode === "highlighter" ? "idle" : "highlighter")
+                )}
+                onTouchEnd={handleButtonClick(() =>
+                  setDrawingMode(drawingMode === "highlighter" ? "idle" : "highlighter")
+                )}
+                className={`hub_btn ${
+                  drawingMode === "highlighter" ? "active highlighter_active" : ""
+                }`}
+                title="형광펜"
+              >
+                <Highlighter size={17} />
+              </button>
+              <button
+                onClick={handleButtonClick(() =>
                   setDrawingMode(drawingMode === "eraser" ? "idle" : "eraser")
                 )}
                 onTouchEnd={handleButtonClick(() =>
@@ -292,7 +307,9 @@ export const Header: React.FC<{
             {showPenSettings && (
               <div className="pen_settings_panel">
                 <div className="pen_settings_header">
-                  <span className="pen_settings_title">Pen Palette</span>
+                  <span className="pen_settings_title">
+                    {drawingMode === "highlighter" ? "Highlighter Palette" : "Pen Palette"}
+                  </span>
                   <button
                     onClick={() => setShowPenSettings(false)}
                     className="close_btn"
@@ -306,7 +323,6 @@ export const Header: React.FC<{
                       key={c}
                       onClick={() => {
                         setPenColor(c);
-                        setDrawingMode("pen");
                       }}
                       className={`color_btn ${
                         penColor === c ? "selected" : ""
@@ -323,7 +339,7 @@ export const Header: React.FC<{
                   <input
                     type="range"
                     min="1"
-                    max="15"
+                    max={drawingMode === "highlighter" ? "60" : "15"}
                     value={penWidth}
                     onChange={(e) => setPenWidth(parseInt(e.target.value))}
                     className="width_slider"

@@ -111,7 +111,7 @@ export interface GeneralNote {
 
 export type Theme = "light" | "dark";
 export type FontSize = "small" | "medium" | "large" | "xlarge";
-export type DrawingMode = "idle" | "pen" | "eraser";
+export type DrawingMode = "idle" | "pen" | "highlighter" | "eraser";
 export type ViewMode = "single" | "double";
 
 export type TTSVoice = "Kore" | "Puck" | "Charon" | "Fenrir" | "Zephyr";

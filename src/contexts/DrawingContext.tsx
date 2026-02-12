@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useContext,
   useState,
+  useEffect,
 } from "react";
 import { DrawingColor, DrawingMode, Stroke, SyncStatus } from "../../types";
 import { useAnnotation } from "./AnnotationContext";
@@ -37,6 +38,17 @@ const DrawingProviderInner: React.FC<{ children: ReactNode }> = ({
   const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
   const [penWidth, setPenWidth] = useState<number>(3);
   const [penOpacity, setPenOpacity] = useState<number>(1.0);
+
+  // 형광펜 모드일 때 자동으로 투명도 적용
+  useEffect(() => {
+    if (drawingMode === "highlighter") {
+      setPenOpacity(0.3);
+      setPenWidth(20);
+    } else if (drawingMode === "pen") {
+      setPenOpacity(1.0);
+      setPenWidth(3);
+    }
+  }, [drawingMode]);
 
   const hasStrokes = useCallback(
     () => annotation.strokes.some((s) => !s.deleted),

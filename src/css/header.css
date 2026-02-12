@@ -485,6 +485,11 @@
   transform: scale(1.05);
 }
 
+.hub_btn.highlighter_active {
+  color: rgb(245 158 11);
+  transform: scale(1.05);
+}
+
 .hub_btn.eraser_active {
   color: rgb(239 68 68);
   transform: scale(1.05);
