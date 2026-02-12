@@ -65,6 +65,8 @@ export const Header: React.FC<{
     setPenColor,
     penWidth,
     setPenWidth,
+    penOpacity,
+    setPenOpacity,
     syncStatus: drawingSyncStatus,
     saveDrawings,
   } = useDrawing();
@@ -342,6 +344,21 @@ export const Header: React.FC<{
                     max={drawingMode === "highlighter" ? "60" : "15"}
                     value={penWidth}
                     onChange={(e) => setPenWidth(parseInt(e.target.value))}
+                    className="width_slider"
+                  />
+                </div>
+                <div className="pen_width_control">
+                  <div className="control_label">
+                    <span>투명도 설정</span>
+                    <span>{Math.round(penOpacity * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.05"
+                    value={penOpacity}
+                    onChange={(e) => setPenOpacity(parseFloat(e.target.value))}
                     className="width_slider"
                   />
                 </div>
