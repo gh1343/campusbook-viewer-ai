@@ -76,22 +76,33 @@ const PanelWrapper: React.FC<PanelProps> = ({
   title,
   children,
 }) => {
-  return <>{children}</>;
+  return (
+    <>
+      <div
+        className={`panel_overlay ${isOpen ? "open" : "closed"}`}
+        onClick={onClose}
+      />
+      <aside className={`panel_aside ${side} ${isOpen ? "open" : "closed"}`}>
+        <div className="panel_wrapper">
+          <div className="panel_header">
+            <h2 className="panel_title">{title}</h2>
+            <button onClick={onClose} className="panel_close_btn">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="panel_content no-scrollbar">{children}</div>
+        </div>
+      </aside>
+    </>
+  );
 };
 
 export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   isOpen,
   onClose,
 }) => {
-  const {
-    chapters,
-    currentChapterIndex,
-    goToChapter,
-  } = useBook();
-  const {
-    bookmarks,
-    removePdfBookmark,
-  } = useAnnotation();
+  const { chapters, currentChapterIndex, goToChapter } = useBook();
+  const { bookmarks, removePdfBookmark } = useAnnotation();
   const { goToPdfPage, currentPdfPage } = usePdfViewer();
   const [activeTab, setActiveTab] = useState<"contents" | "bookmarks">(
     "contents"
@@ -122,23 +133,24 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       isOpen={isOpen}
       onClose={onClose}
       side="left"
-      title="Contents"
+      title="콘텐츠"
     >
-      <div className="chapter_favor_wrap">
-        <button
-          onClick={() => setActiveTab("contents")}
-          className={`chapter ${activeTab === "contents" ? "on" : "off"}`}
-        >
-          <ListIcon size={14} /> Chapters
-        </button>
-        <button
-          onClick={() => setActiveTab("bookmarks")}
-          className={`favor ${activeTab === "bookmarks" ? "on" : "off"}`}
-        >
-          <Bookmark size={14} /> Favorites
-        </button>
-      </div>
-      <div className="chapter_list" ref={chapterListRef}>
+      <div className="toc_panel_inner">
+        <div className="chapter_favor_wrap">
+          <button
+            onClick={() => setActiveTab("contents")}
+            className={`chapter ${activeTab === "contents" ? "on" : "off"}`}
+          >
+            <ListIcon size={14} /> 목차
+          </button>
+          <button
+            onClick={() => setActiveTab("bookmarks")}
+            className={`favor ${activeTab === "bookmarks" ? "on" : "off"}`}
+          >
+            <Bookmark size={14} /> 북마크
+          </button>
+        </div>
+        <div className="chapter_list" ref={chapterListRef}>
         {activeTab === "contents" &&
           chapters.map((chapter, idx) => (
             <button
@@ -222,6 +234,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
               </p>
             </div>
           )}
+        </div>
       </div>
     </PanelWrapper>
   );
@@ -269,11 +282,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     clearHighlightNoteEditRequest,
     performAnnotationSearch,
   } = useAnnotation();
-  const {
-    pdfTextPages,
-    goToPdfPage,
-    setPdfSearchHighlight,
-  } = usePdfViewer();
+  const { pdfTextPages, goToPdfPage, setPdfSearchHighlight } = usePdfViewer();
 
   const [aiInput, setAiInput] = useState("");
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -657,17 +666,16 @@ ${contextString}
   };
   const searchResults = useMemo(() => {
     if (activeToolTab !== "search") return [];
-    return [...performSearch(searchQuery), ...performAnnotationSearch(searchQuery)];
-  }, [
-    activeToolTab,
-    performSearch,
-    searchQuery,
-    performAnnotationSearch,
-  ]);
+    return [
+      ...performSearch(searchQuery),
+      ...performAnnotationSearch(searchQuery),
+    ];
+  }, [activeToolTab, performSearch, searchQuery, performAnnotationSearch]);
 
   return (
-    <PanelWrapper isOpen={isOpen} onClose={onClose} side="right">
-      <div className="right_panel_menu">
+    <PanelWrapper isOpen={isOpen} onClose={onClose} side="right" title="학습 도구">
+      <div className="tools_panel_inner">
+        <div className="right_panel_menu">
         {/* <button
           onClick={() => handleTabChange("ai")}
           className={`ai ${activeToolTab === "ai" ? "on" : "off"}`}
@@ -677,10 +685,13 @@ ${contextString}
         </button> */}
         <button
           onClick={() => handleTabChange("highlight")}
-          className={`highlight ${activeToolTab === "highlight" ? "on" : "off"}`}
+          className={`highlight ${
+            activeToolTab === "highlight" ? "on" : "off"
+          }`}
           title="Highlights"
         >
           <Highlighter size={14} />
+          마커
         </button>
         <button
           onClick={() => handleTabChange("mynote")}
@@ -688,6 +699,7 @@ ${contextString}
           title="mynote"
         >
           <Book size={14} />
+          마이노트
         </button>
         {/* <button
           onClick={() => handleTabChange("reference")}
@@ -704,6 +716,7 @@ ${contextString}
           title="Search"
         >
           <Search size={14} />
+          검색
         </button>
       </div>
       <div className="text_area">
@@ -1229,6 +1242,7 @@ ${contextString}
             </div>
           </div>
         )}
+      </div>
       </div>
     </PanelWrapper>
   );
