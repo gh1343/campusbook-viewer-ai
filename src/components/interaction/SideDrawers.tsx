@@ -129,12 +129,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   }, [currentChapterIndex, activeTab]);
 
   return (
-    <PanelWrapper
-      isOpen={isOpen}
-      onClose={onClose}
-      side="left"
-      title="콘텐츠"
-    >
+    <PanelWrapper isOpen={isOpen} onClose={onClose} side="left" title="콘텐츠">
       <div className="toc_panel_inner">
         <div className="chapter_favor_wrap">
           <button
@@ -151,89 +146,86 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
           </button>
         </div>
         <div className="chapter_list" ref={chapterListRef}>
-        {activeTab === "contents" &&
-          chapters.map((chapter, idx) => (
-            <button
-              key={chapter.id}
-              ref={(el) => {
-                chapterItemRefs.current[idx] = el;
-              }}
-              onClick={() => {
-                goToChapter(idx);
-                if (window.innerWidth < 768) onClose();
-              }}
-              className={` ${idx === currentChapterIndex ? "on" : "off"}`}
-            >
-              <div className="chapter_list_inner">
-                <div className="">
-                  <span
-                    className={`text_xs ${
-                      idx === currentChapterIndex ? "on" : "off"
-                    }`}
-                  >
-                    {String(idx + 1).padStart(2, "0")}
-                  </span>
-                  <span className="line_clamp_1">{chapter.title}</span>
-                </div>
-                {/* Note: Strokes are now stored globally, not per chapter */}
-              </div>
-            </button>
-          ))}
-        {activeTab === "bookmarks" &&
-          bookmarks
-            .filter((bm) => !bm.deleted)
-            .map((bm) => (
-              <div
-                key={bm.id}
-                className={`bookmark_item_row ${
-                  bm.page === currentPdfPage ? "active" : ""
-                }`}
+          {activeTab === "contents" &&
+            chapters.map((chapter, idx) => (
+              <button
+                key={chapter.id}
+                ref={(el) => {
+                  chapterItemRefs.current[idx] = el;
+                }}
+                onClick={() => {
+                  goToChapter(idx);
+                  if (window.innerWidth < 768) onClose();
+                }}
+                className={` ${idx === currentChapterIndex ? "on" : "off"}`}
               >
-                <button
-                  onClick={() => {
-                    goToPdfPage(bm.page);
-                    if (window.innerWidth < 768) onClose();
-                  }}
-                  className="bookmark_item_button"
-                >
-                  <div className="bookmark_page_badge">
-                    {/* <Bookmark size={14} />
-                    <span>Page {bm.page}</span> */}
-                    <span className="bookmark_label line_clamp_1">
-                      {`P. ${bm.page}`}
+                <div className="chapter_list_inner">
+                  <div className="">
+                    <span
+                      className={`text_xs ${
+                        idx === currentChapterIndex ? "on" : "off"
+                      }`}
+                    >
+                      {String(idx + 1).padStart(2, "0")}
                     </span>
+                    <span className="line_clamp_1">{chapter.title}</span>
                   </div>
-                  <div className="bookmark_item_text">
-                    {/* <span className="bookmark_label line_clamp_1">
+                  {/* Note: Strokes are now stored globally, not per chapter */}
+                </div>
+              </button>
+            ))}
+          {activeTab === "bookmarks" &&
+            bookmarks
+              .filter((bm) => !bm.deleted)
+              .map((bm) => (
+                <div
+                  key={bm.id}
+                  className={`bookmark_item_row ${
+                    bm.page === currentPdfPage ? "active" : ""
+                  }`}
+                >
+                  <button
+                    onClick={() => {
+                      goToPdfPage(bm.page);
+                      if (window.innerWidth < 768) onClose();
+                    }}
+                    className="bookmark_item_button"
+                  >
+                    <div className="bookmark_page_badge">
+                      {/* <Bookmark size={14} />
+                    <span>Page {bm.page}</span> */}
+                      <span className="bookmark_label line_clamp_1">
+                        {`P. ${bm.page}`}
+                      </span>
+                    </div>
+                    <div className="bookmark_item_text">
+                      {/* <span className="bookmark_label line_clamp_1">
                       {bm.label || `Page ${bm.page}`}
                     </span> */}
-                    <span className="bookmark_meta">
-                      Saved {new Date(bm.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removePdfBookmark(bm.id);
-                  }}
-                  className="bookmark_remove_btn"
-                  title="Delete bookmark"
-                >
-                  <Trash2 size={14} />
-                </button>
+                      <span className="bookmark_meta">
+                        Saved {new Date(bm.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removePdfBookmark(bm.id);
+                    }}
+                    className="bookmark_remove_btn"
+                    title="Delete bookmark"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+          {activeTab === "bookmarks" &&
+            bookmarks.filter((bm) => !bm.deleted).length === 0 && (
+              <div className="non_book_mark">
+                <Bookmark size={24} className="mx-auto mb-2 text-slate-400" />
+                <p className="text_sm">북마크한 페이지가 없습니다.</p>
               </div>
-            ))}
-        {activeTab === "bookmarks" &&
-          bookmarks.filter((bm) => !bm.deleted).length === 0 && (
-            <div className="non_book_mark">
-              <Bookmark size={24} className="mx-auto mb-2 text-slate-400" />
-              <p className="text_sm">No bookmarks yet</p>
-              <p className="text_sm">
-                Use the bookmark icon near Search to save a page.
-              </p>
-            </div>
-          )}
+            )}
         </div>
       </div>
     </PanelWrapper>
@@ -264,6 +256,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     setSearchQuery,
     performSearch,
     getChapterTitleByPage,
+    setToolsOpen,
   } = useBook();
   const {
     highlights,
@@ -444,7 +437,12 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   ]);
 
   useEffect(() => {
-    if (capturedImage && editingNote) {
+    if (!capturedImage) return;
+    // 캡처 완료 → 패널 복귀 (editingNote 유무와 무관하게 항상)
+    setToolsOpen(true);
+    setActiveToolTab("mynote");
+    // editingNote가 있으면 에디터 본문에 이미지 삽입
+    if (editingNote) {
       const imgHtml = `<div class="capture-img-container"><img src="${capturedImage}" style="max-width:100%; border:1px solid #ccc; border-radius:4px; margin: 10px 0; display: block;" /></div><p><br/></p>`;
       const newContent = (editingNote.content || "") + imgHtml;
       setEditingNote((prev) =>
@@ -454,7 +452,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         contentEditableRef.current.innerHTML = newContent;
       setCapturedImage(null);
     }
-  }, [capturedImage, setCapturedImage]);
+  }, [capturedImage]);
 
   const parseCitedPages = (text: string) => {
     const pages: number[] = [];
@@ -606,6 +604,8 @@ ${contextString}
     setEditingNote((prev) =>
       prev ? { ...prev, content: currentContent } : null
     );
+    // 패널을 닫아야 뷰어 캔버스에서 캡처 드래그가 가능함
+    setToolsOpen(false);
     setTimeout(() => setCaptureMode(true), 50);
   };
   const insertTable = (e: React.MouseEvent) => {
@@ -673,35 +673,40 @@ ${contextString}
   }, [activeToolTab, performSearch, searchQuery, performAnnotationSearch]);
 
   return (
-    <PanelWrapper isOpen={isOpen} onClose={onClose} side="right" title="학습 도구">
+    <PanelWrapper
+      isOpen={isOpen}
+      onClose={onClose}
+      side="right"
+      title="학습 도구"
+    >
       <div className="tools_panel_inner">
         <div className="right_panel_menu">
-        {/* <button
+          {/* <button
           onClick={() => handleTabChange("ai")}
           className={`ai ${activeToolTab === "ai" ? "on" : "off"}`}
           title="AI"
         >
           <MessageSquare size={14} />
         </button> */}
-        <button
-          onClick={() => handleTabChange("highlight")}
-          className={`highlight ${
-            activeToolTab === "highlight" ? "on" : "off"
-          }`}
-          title="Highlights"
-        >
-          <Highlighter size={14} />
-          마커
-        </button>
-        <button
-          onClick={() => handleTabChange("mynote")}
-          className={`mynote ${activeToolTab === "mynote" ? "on" : "off"}`}
-          title="mynote"
-        >
-          <Book size={14} />
-          마이노트
-        </button>
-        {/* <button
+          <button
+            onClick={() => handleTabChange("highlight")}
+            className={`highlight ${
+              activeToolTab === "highlight" ? "on" : "off"
+            }`}
+            title="Highlights"
+          >
+            <Highlighter size={14} />
+            하이라이트
+          </button>
+          <button
+            onClick={() => handleTabChange("mynote")}
+            className={`mynote ${activeToolTab === "mynote" ? "on" : "off"}`}
+            title="mynote"
+          >
+            <Book size={14} />
+            마이노트
+          </button>
+          {/* <button
           onClick={() => handleTabChange("reference")}
           className={`reference ${
             activeToolTab === "reference" ? "on" : "off"
@@ -710,539 +715,610 @@ ${contextString}
         >
           <FileText size={14} />
         </button> */}
-        <button
-          onClick={() => handleTabChange("search")}
-          className={`search ${activeToolTab === "search" ? "on" : "off"}`}
-          title="Search"
-        >
-          <Search size={14} />
-          검색
-        </button>
-      </div>
-      <div className="text_area">
-        {activeToolTab === "ai" && (
-          <div className="ai">
-            <div className="ai_talk">
-              {aiChatHistory.length === 0 && (
-                <div className="ai_talk_inner">
-                  <div className="icon">
-                    <MessageSquare className="text-blue-500" size={24} />
+          <button
+            onClick={() => handleTabChange("search")}
+            className={`search ${activeToolTab === "search" ? "on" : "off"}`}
+            title="Search"
+          >
+            <Search size={14} />
+            검색
+          </button>
+        </div>
+        <div className="text_area">
+          {activeToolTab === "ai" && (
+            <div className="ai">
+              <div className="ai_talk">
+                {aiChatHistory.length === 0 && (
+                  <div className="ai_talk_inner">
+                    <div className="icon">
+                      <MessageSquare className="text-blue-500" size={24} />
+                    </div>
+                    <p className="text_sm">AI Study Companion</p>
                   </div>
-                  <p className="text_sm">AI Study Companion</p>
-                </div>
-              )}
-              {aiChatHistory.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`txt ${
-                    msg.role === "user" ? "ai_user_txt" : "ai_txt"
-                  }`}
-                >
-                  <div className={` ${msg.role === "user" ? "on" : "off"}`}>
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-              {isAiThinking && (
-                <div className="flex flex-col items-start">
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl rounded-bl-none px-4 py-3 border border-slate-100 dark:border-slate-700">
-                    <div className="flex space-x-1">
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></div>
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></div>
+                )}
+                {aiChatHistory.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`txt ${
+                      msg.role === "user" ? "ai_user_txt" : "ai_txt"
+                    }`}
+                  >
+                    <div className={` ${msg.role === "user" ? "on" : "off"}`}>
+                      {msg.text}
                     </div>
                   </div>
-                </div>
-              )}
-              <div ref={aiTalkEndRef} />
-            </div>
-            <div className="ai_user">
-              <form onSubmit={handleAiSubmit} className="user_form">
-                <input
-                  type="text"
-                  value={aiInput}
-                  onChange={(e) => setAiInput(e.target.value)}
-                  placeholder="Ask AI..."
-                  className=""
-                />
-                <button
-                  type="submit"
-                  disabled={!aiInput.trim() || isAiThinking}
-                  className="enter"
-                >
-                  <MessageSquare size={16} />
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Highlights Tab with Local Search */}
-        {activeToolTab === "highlight" && (
-          <div className="absolute inset-0 flex flex-col">
-            <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Filter highlights..."
-                  value={localFilter}
-                  onChange={(e) => setLocalFilter(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 rounded-md text-xs border border-slate-200 dark:border-slate-700 focus:outline-none"
-                />
-                <Filter
-                  size={12}
-                  className="absolute left-2.5 top-2 text-slate-400"
-                />
+                ))}
+                {isAiThinking && (
+                  <div className="flex flex-col items-start">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl rounded-bl-none px-4 py-3 border border-slate-100 dark:border-slate-700">
+                      <div className="flex space-x-1">
+                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-75"></div>
+                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-150"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={aiTalkEndRef} />
               </div>
-              {filteredHighlights.length > visibleHighlightCount && (
-                <div className="mt-2 text-xs text-slate-500 text-center">
-                  Showing {visibleHighlightCount} of {filteredHighlights.length}
-                </div>
-              )}
+              <div className="ai_user">
+                <form onSubmit={handleAiSubmit} className="user_form">
+                  <input
+                    type="text"
+                    value={aiInput}
+                    onChange={(e) => setAiInput(e.target.value)}
+                    placeholder="Ask AI..."
+                    className=""
+                  />
+                  <button
+                    type="submit"
+                    disabled={!aiInput.trim() || isAiThinking}
+                    className="enter"
+                  >
+                    <MessageSquare size={16} />
+                  </button>
+                </form>
+              </div>
             </div>
-            <div
-              ref={highlightScrollRef}
-              className="flex-1 overflow-y-auto p-4 space-y-3"
-            >
-              {filteredHighlights.length === 0 && (
-                <div className="text-center py-10 opacity-50">
-                  <Highlighter size={24} className="mx-auto mb-2" />
-                  <p className="text-sm">No highlights</p>
+          )}
+
+          {/* Highlights Tab with Local Search */}
+          {activeToolTab === "highlight" && (
+            <div className="absolute inset-0 flex flex-col">
+              <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="하이라이트에서 검색..."
+                    value={localFilter}
+                    onChange={(e) => setLocalFilter(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 rounded-md text-xs border border-slate-200 dark:border-slate-700 focus:outline-none"
+                  />
+                  <Filter
+                    size={12}
+                    className="absolute left-2.5 top-2 text-slate-400"
+                  />
                 </div>
-              )}
-              {visibleHighlights.map((hl) => (
-                <div
-                  key={hl.id}
-                  onClick={() => goToHighlight(hl)}
-                  ref={(el) => {
-                    highlightItemRefs.current[hl.id] = el;
-                  }}
-                  tabIndex={-1}
-                  className={`p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-300 transition-all ${
-                    activeHighlightId === hl.id
-                      ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-white dark:ring-offset-slate-800"
-                      : ""
-                  }`}
-                >
-                  <div className="highlight_meta_row mb-2 text-xs text-slate-400">
-                    <div className="highlight_meta_group">
-                      <span className="highlight_chapter_label">
-                        {getHighlightChapterLabel(hl)}
-                      </span>
-                      <span className="highlight_page_label">
-                        {hl.pageNumber ? `P. ${hl.pageNumber}` : ""}
-                      </span>
+                {filteredHighlights.length > visibleHighlightCount && (
+                  <div className="mt-2 text-xs text-slate-500 text-center">
+                    Showing {visibleHighlightCount} of{" "}
+                    {filteredHighlights.length}
+                  </div>
+                )}
+              </div>
+              <div
+                ref={highlightScrollRef}
+                className="flex-1 overflow-y-auto p-4 space-y-3"
+              >
+                {filteredHighlights.length === 0 && (
+                  <div className="text-center py-10 opacity-50">
+                    <Highlighter size={24} className="mx-auto mb-2" />
+                    <p className="text-sm">저장된 하이라이트가 없습니다.</p>
+                  </div>
+                )}
+                {visibleHighlights.map((hl) => (
+                  <div
+                    key={hl.id}
+                    onClick={() => goToHighlight(hl)}
+                    ref={(el) => {
+                      highlightItemRefs.current[hl.id] = el;
+                    }}
+                    tabIndex={-1}
+                    className={`p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-blue-300 transition-all ${
+                      activeHighlightId === hl.id
+                        ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-white dark:ring-offset-slate-800"
+                        : ""
+                    }`}
+                  >
+                    <div className="highlight_meta_row mb-2 text-xs text-slate-400">
+                      <div className="highlight_meta_group">
+                        <span className="highlight_chapter_label">
+                          {getHighlightChapterLabel(hl)}
+                        </span>
+                        <span className="highlight_page_label">
+                          {hl.pageNumber ? `P. ${hl.pageNumber}` : ""}
+                        </span>
+                      </div>
+                      <div className="highlight_actions">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditHighlight(hl);
+                          }}
+                          title="Edit Note"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeHighlight(hl.id);
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="highlight_actions">
+
+                    {/* Use HighlightMatch component for text body */}
+                    <p className="highlight_txt highlight_body_clamp text-sm italic border-l-2 border-amber-400 pl-2 text-slate-600">
+                      "<HighlightMatch text={hl.text} query={localFilter} />"
+                    </p>
+
+                    {editingHighlightId === hl.id ? (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-2 animate-fade-in"
+                      >
+                        <textarea
+                          className="w-full p-2 text-xs border rounded bg-slate-50 outline-none focus:border-blue-500"
+                          value={highlightText}
+                          onChange={(e) => setHighlightText(e.target.value)}
+                          autoFocus
+                          rows={3}
+                        />
+                        <div className="flex justify-end gap-2 mt-2">
+                          <button
+                            onClick={() => setEditingHighlightId(null)}
+                            className="text-xs text-slate-500 hover:text-slate-700"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => saveHighlightNote(hl.id)}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : hl.note ? (
+                      <div className="mt-2 text-xs bg-yellow-50 p-2 rounded text-slate-700 border border-yellow-100">
+                        {/* Use HighlightMatch component for note body */}
+                        <HighlightMatch text={hl.note} query={localFilter} />
+                      </div>
+                    ) : (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           startEditHighlight(hl);
                         }}
-                        title="Edit Note"
+                        className="mt-2 text-xs text-blue-500 flex items-center gap-1 hover:underline opacity-50 hover:opacity-100"
                       >
-                        <Edit3 size={12} />
+                        <Plus size={10} /> Add Note
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeHighlight(hl.id);
-                        }}
-                        title="Delete"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* MyNote Tab with Local Search */}
+          {activeToolTab === "mynote" && (
+            <div className="mynote_tab_wrap">
+              {editingNote ? (
+                <div className="mynote_editor_wrap">
+                  {/* 헤더: 목록으로 + 수정/작성 상태 표시 */}
+                  <div className="mynote_editor_header">
+                    <button
+                      onClick={() => setEditingNote(null)}
+                      className="mynote_back_btn"
+                    >
+                      <ChevronRight
+                        size={16}
+                        style={{ transform: "rotate(180deg)" }}
+                      />
+                      <span>목록으로</span>
+                    </button>
+                    <span className="mynote_editor_mode_label">
+                      {editingNote.id ? "노트 수정" : "새 노트 작성"}
+                    </span>
                   </div>
 
-                  {/* Use HighlightMatch component for text body */}
-                  <p className="highlight_txt highlight_body_clamp text-sm italic border-l-2 border-amber-400 pl-2 text-slate-600">
-                    "<HighlightMatch text={hl.text} query={localFilter} />"
-                  </p>
+                  {/* 스크롤 가능한 본문 영역 */}
+                  <div className="mynote_editor_body">
+                    <input
+                      type="text"
+                      className="mynote_title_input"
+                      placeholder="노트 제목을 입력하세요"
+                      value={editingNote.title || ""}
+                      onChange={(e) => {
+                        const c = getCurrentContent();
+                        setEditingNote((prev) =>
+                          prev
+                            ? { ...prev, title: e.target.value, content: c }
+                            : null
+                        );
+                      }}
+                    />
 
-                  {editingHighlightId === hl.id ? (
+                    {/* 툴바: 둥근 박스 형태 */}
+                    <div className="mynote_toolbar_box">
+                      <button
+                        onMouseDown={(e) => handleToolbarAction(e, "bold")}
+                        className="mynote_toolbar_btn"
+                        title="진하게"
+                      >
+                        <Bold size={14} />
+                      </button>
+                      <button
+                        onMouseDown={(e) => handleToolbarAction(e, "italic")}
+                        className="mynote_toolbar_btn"
+                        title="기울임"
+                      >
+                        <span className="mynote_toolbar_italic">I</span>
+                      </button>
+                      <button
+                        onMouseDown={(e) =>
+                          handleToolbarAction(e, "insertUnorderedList")
+                        }
+                        className="mynote_toolbar_btn"
+                        title="글머리 기호"
+                      >
+                        <List size={14} />
+                      </button>
+                      {/* <button
+                        onMouseDown={insertTable}
+                        className="mynote_toolbar_btn"
+                        title="테이블 삽입"
+                      >
+                        <TableIcon size={14} />
+                      </button> */}
+                      <div className="mynote_toolbar_divider" />
+                      <button
+                        onMouseDown={(e) =>
+                          handleToolbarAction(e, "hiliteColor", "yellow")
+                        }
+                        className="mynote_toolbar_btn"
+                        title="하이라이트"
+                      >
+                        <Highlighter size={14} />
+                      </button>
+                      {/* <button
+                        onMouseDown={handleCaptureClick}
+                        className="mynote_toolbar_btn mynote_toolbar_btn_blue"
+                        title="캡처 이미지 첨부"
+                      >
+                        <Camera size={14} />
+                      </button> */}
+                      {/* <button
+                        onClick={printNote}
+                        className="mynote_toolbar_btn"
+                        title="인쇄"
+                      >
+                        <Printer size={14} />
+                      </button> */}
+                    </div>
+
+                    {/* 에디터 */}
                     <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-2 animate-fade-in"
-                    >
-                      <textarea
-                        className="w-full p-2 text-xs border rounded bg-slate-50 outline-none focus:border-blue-500"
-                        value={highlightText}
-                        onChange={(e) => setHighlightText(e.target.value)}
-                        autoFocus
-                        rows={3}
-                      />
-                      <div className="flex justify-end gap-2 mt-2">
+                      key={editingNote.id}
+                      ref={contentEditableRef}
+                      className="mynote_content_editable note-editor"
+                      contentEditable
+                      suppressContentEditableWarning={true}
+                      onBlur={handleEditorBlur}
+                    />
+
+                    {/* 캡처 이미지 미리보기 */}
+                    {capturedImage && (
+                      <div className="mynote_capture_preview">
+                        <img
+                          src={capturedImage}
+                          className="mynote_capture_img"
+                          alt="캡처 이미지"
+                        />
                         <button
-                          onClick={() => setEditingHighlightId(null)}
-                          className="text-xs text-slate-500 hover:text-slate-700"
+                          onClick={() => setCapturedImage(null)}
+                          className="mynote_capture_remove"
                         >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => saveHighlightNote(hl.id)}
-                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                          Save
+                          <X size={12} />
                         </button>
                       </div>
-                    </div>
-                  ) : hl.note ? (
-                    <div className="mt-2 text-xs bg-yellow-50 p-2 rounded text-slate-700 border border-yellow-100">
-                      {/* Use HighlightMatch component for note body */}
-                      <HighlightMatch text={hl.note} query={localFilter} />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startEditHighlight(hl);
-                      }}
-                      className="mt-2 text-xs text-blue-500 flex items-center gap-1 hover:underline opacity-50 hover:opacity-100"
-                    >
-                      <Plus size={10} /> Add Note
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                    )}
+                  </div>
 
-        {/* MyNote Tab with Local Search */}
-        {activeToolTab === "mynote" && (
-          <div className="absolute inset-0 flex flex-col bg-slate-50 dark:bg-slate-950">
-            {editingNote ? (
-              <div className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 animate-fade-in">
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                  <button
-                    onClick={() => setEditingNote(null)}
-                    className="text-xs font-medium text-slate-500"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveNote}
-                    className="text-xs font-bold text-green-600 flex items-center gap-1"
-                  >
-                    <Save size={14} /> Save
-                  </button>
+                  {/* 하단 footer: 캡처 첨부 + 저장 버튼 */}
+                  <div className="mynote_editor_footer">
+                    <button
+                      onClick={handleCaptureClick}
+                      className={`mynote_capture_btn${capturedImage ? " active" : ""}`}
+                    >
+                      <Camera size={16} />
+                      {capturedImage ? "이미지 교체" : "캡처 이미지 첨부"}
+                    </button>
+                    <button
+                      onClick={handleSaveNote}
+                      className="mynote_save_btn"
+                    >
+                      <Save size={16} />
+                      {editingNote.id ? "수정 사항 저장" : "노트 저장하기"}
+                    </button>
+                  </div>
                 </div>
-                <div className="px-4 pt-4 pb-2">
-                  <input
-                    type="text"
-                    className="w-full text-lg font-bold bg-transparent outline-none"
-                    value={editingNote.title || ""}
-                    onChange={(e) => {
-                      const c = getCurrentContent();
-                      setEditingNote((prev) =>
-                        prev
-                          ? { ...prev, title: e.target.value, content: c }
-                          : null
-                      );
-                    }}
-                  />
-                </div>
-                <div className="px-2 py-1.5 flex flex-wrap gap-1 border-y bg-slate-50 dark:bg-slate-900/50">
-                  <button
-                    onMouseDown={(e) => handleToolbarAction(e, "bold")}
-                    className="p-1.5 rounded hover:bg-slate-200"
-                  >
-                    <Bold size={14} />
-                  </button>
-                  <button
-                    onMouseDown={(e) => handleToolbarAction(e, "italic")}
-                    className="p-1.5 rounded hover:bg-slate-200"
-                  >
-                    <span className="italic">I</span>
-                  </button>
-                  <button
-                    onMouseDown={(e) =>
-                      handleToolbarAction(e, "hiliteColor", "yellow")
-                    }
-                    className="p-1.5 rounded hover:bg-slate-200"
-                  >
-                    <Highlighter size={14} />
-                  </button>
-                  <button
-                    onMouseDown={insertTable}
-                    className="p-1.5 rounded hover:bg-slate-200"
-                  >
-                    <TableIcon size={14} />
-                  </button>
-                  <button
-                    onMouseDown={handleCaptureClick}
-                    className="p-1.5 rounded hover:bg-slate-200 text-blue-600"
-                  >
-                    <Camera size={14} />
-                  </button>
-                  <button
-                    onClick={printNote}
-                    className="p-1.5 rounded hover:bg-slate-200"
-                  >
-                    <Printer size={14} />
-                  </button>
-                </div>
-                <div
-                  key={editingNote.id}
-                  ref={contentEditableRef}
-                  className="flex-1 p-4 overflow-y-auto outline-none text-sm note-editor"
-                  contentEditable
-                  suppressContentEditableWarning={true}
-                  onBlur={handleEditorBlur}
-                />
-              </div>
-            ) : (
-              <div className="absolute inset-0 flex flex-col">
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-3 bg-slate-50 dark:bg-slate-900">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold uppercase text-slate-500 tracking-wider">
-                      My Notes ({generalNotes.filter((n) => !n.deleted).length})
-                    </h3>
-                    <div className="flex gap-2">
-                      <label
-                        className="cursor-pointer p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+              ) : (
+                <div className="mynote_list_wrap">
+                  <div className="mynote_list_header">
+                    <button
+                      onClick={() =>
+                        setEditingNote({
+                          title: "",
+                          content: "",
+                          chapterId: currentChapter.id,
+                          chapterTitle: currentChapter.title,
+                        })
+                      }
+                      className="mynote_new_btn"
+                    >
+                      <Plus size={18} /> 새 노트 작성하기
+                    </button>
+                  </div>
+                  <div className="mynote_list_filter">
+                    <div className="mynote_filter_row">
+                      <span className="mynote_count_label">
+                        My Notes (
+                        {generalNotes.filter((n) => !n.deleted).length})
+                      </span>
+                      {/* <label
+                        className="mynote_import_btn"
                         title="Import Note"
                       >
-                        <Upload size={14} />
+                        <Upload size={13} />
                         <input
                           type="file"
                           className="hidden"
                           accept=".md,.json,.txt"
                           onChange={handleUploadRef}
                         />
-                      </label>
-                      <button
-                        onClick={() =>
-                          setEditingNote({
-                            title: "",
-                            content: "",
-                            chapterId: currentChapter.id,
-                            chapterTitle: currentChapter.title,
-                          })
-                        }
-                        className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-md text-xs font-medium hover:bg-green-700 shadow-sm transition-all"
-                      >
-                        <Plus size={14} /> New
-                      </button>
+                      </label> */}
+                    </div>
+                    <div className="mynote_search_wrap">
+                      <Filter size={12} className="mynote_search_icon" />
+                      <input
+                        type="text"
+                        placeholder="노트에서 검색..."
+                        value={localFilter}
+                        onChange={(e) => setLocalFilter(e.target.value)}
+                        className="mynote_search_input"
+                      />
                     </div>
                   </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search notes..."
-                      value={localFilter}
-                      onChange={(e) => setLocalFilter(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 rounded-md text-xs border border-slate-200 dark:border-slate-700 focus:outline-none"
-                    />
-                    <Filter
-                      size={12}
-                      className="absolute left-2.5 top-2 text-slate-400"
-                    />
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                  {filteredNotes.length === 0 && (
-                    <div className="text-center py-10 opacity-50">
-                      <Book size={32} className="mx-auto text-slate-300 mb-2" />
-                      <p className="text-sm text-slate-400">No notes found</p>
-                    </div>
-                  )}
-                  {filteredNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      onClick={() => setEditingNote(note)}
-                      className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border cursor-pointer hover:border-green-300 transition-all"
-                    >
-                      <div className="flex justify-between mb-1">
-                        <h4 className="font-semibold text-sm">
-                          {/* Highlight Match on Title */}
-                          <HighlightMatch
-                            text={note.title}
-                            query={localFilter}
-                          />
-                        </h4>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeGeneralNote(note.id);
-                          }}
-                        >
-                          <Trash2 size={12} text-slate-300 />
-                        </button>
+                  <div className="mynote_list_body">
+                    {filteredNotes.length === 0 && (
+                      <div className="mynote_empty">
+                        <StickyNote size={48} className="mynote_empty_icon" />
+                        <p className="mynote_empty_text">
+                          작성된 노트가 없습니다
+                          <br />
+                          학습 중에 떠오른 생각을 기록해 보세요
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-500 line-clamp-2">
-                        {/* Highlight Match on Snippet */}
-                        <HighlightMatch
-                          text={note.content.replace(/<[^>]+>/g, " ")}
-                          query={localFilter}
+                    )}
+                    {filteredNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        onClick={() => setEditingNote(note)}
+                        className="mynote_card"
+                      >
+                        <div className="mynote_card_header">
+                          <div className="mynote_card_meta">
+                            <h4 className="mynote_card_title">
+                              <HighlightMatch
+                                text={note.title || "제목 없음"}
+                                query={localFilter}
+                              />
+                            </h4>
+                            <span className="mynote_card_date">
+                              {new Date(note.updated_at).toLocaleDateString()} ·{" "}
+                              {note.chapterTitle}
+                            </span>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeGeneralNote(note.id);
+                            }}
+                            className="mynote_card_delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        <div
+                          className="mynote_card_body"
+                          dangerouslySetInnerHTML={{
+                            __html: note.content,
+                          }}
                         />
-                      </p>
-                    </div>
-                  ))}
+                        <div className="mynote_card_arrow">
+                          <ChevronRight size={16} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Reference Tab */}
-        {activeToolTab === "reference" && (
-          <div className="absolute inset-0 flex flex-col bg-white dark:bg-slate-900">
-            {referenceDocument ? (
-              <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
-                <ContentRenderer
-                  customChapter={referenceDocument}
-                  variant="side"
-                />
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-60">
-                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                  <FileText size={32} className="text-slate-400" />
-                </div>
-                <h3 className="font-medium text-slate-800 dark:text-white mb-2">
-                  No Reference Document
-                </h3>
-                <p className="text-sm text-slate-500 mb-6 max-w-[240px]">
-                  Upload a <strong>text-based PDF</strong> (e.g., papers,
-                  e-books). <br />
-                  Scanned image PDFs may not display correctly.
-                </p>
-                <label className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  <FileUp size={16} />
-                  <span>Upload PDF</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="application/pdf"
-                    onChange={handleUploadRef}
-                  />
-                </label>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Global Search Tab */}
-        {activeToolTab === "search" && (
-          <div className="absolute inset-0 flex flex-col bg-slate-50 dark:bg-slate-950">
-            <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search entire book & notes..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setPdfSearchHighlight(null);
-                  }}
-                  className="w-full pl-9 pr-4 py-2 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                />
-                <Search
-                  size={16}
-                  className="absolute left-3 top-2.5 text-slate-400"
-                />
-              </div>
+              )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {searchQuery.length > 1 ? (
-                activeToolTab === "search" && searchResults.length > 0 ? (
-                  searchResults.map((result) => (
-                    <div
-                      key={result.id}
-                      onClick={() => {
-                        if (result.type === "note") {
-                          const note = generalNotes.find(
-                            (n) => `note-${n.id}` === result.id
-                          );
-                          if (note) {
-                            setEditingNote(note);
-                            setActiveToolTab("mynote");
-                          }
-                        } else if (result.type === "book") {
-                          if (result.pageNumber) {
-                            goToPdfPage(result.pageNumber);
-                            setPdfSearchHighlight({
-                              page: result.pageNumber,
-                              term: searchQuery,
-                            });
-                          }
-                        } else {
-                          if (result.type === "highlight") {
-                            if (result.chapterId === "reference-doc") {
-                              const target = Number(result.pageNumber);
-                              if (Number.isFinite(target) && target > 0) {
-                                goToPdfPage(target);
+          )}
+
+          {/* Reference Tab */}
+          {activeToolTab === "reference" && (
+            <div className="absolute inset-0 flex flex-col bg-white dark:bg-slate-900">
+              {referenceDocument ? (
+                <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
+                  <ContentRenderer
+                    customChapter={referenceDocument}
+                    variant="side"
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-60">
+                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                    <FileText size={32} className="text-slate-400" />
+                  </div>
+                  <h3 className="font-medium text-slate-800 dark:text-white mb-2">
+                    No Reference Document
+                  </h3>
+                  <p className="text-sm text-slate-500 mb-6 max-w-[240px]">
+                    Upload a <strong>text-based PDF</strong> (e.g., papers,
+                    e-books). <br />
+                    Scanned image PDFs may not display correctly.
+                  </p>
+                  <label className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <FileUp size={16} />
+                    <span>Upload PDF</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="application/pdf"
+                      onChange={handleUploadRef}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Global Search Tab */}
+          {activeToolTab === "search" && (
+            <div className="absolute inset-0 flex flex-col bg-slate-50 dark:bg-slate-950">
+              <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="검색어 입력(2자 이상)"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setPdfSearchHighlight(null);
+                    }}
+                    className="w-full pl-9 pr-4 py-2 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-2.5 text-slate-400"
+                  />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {searchQuery.length > 1 ? (
+                  activeToolTab === "search" && searchResults.length > 0 ? (
+                    searchResults.map((result) => (
+                      <div
+                        key={result.id}
+                        onClick={() => {
+                          if (result.type === "note") {
+                            const note = generalNotes.find(
+                              (n) => `note-${n.id}` === result.id
+                            );
+                            if (note) {
+                              setEditingNote(note);
+                              setActiveToolTab("mynote");
+                            }
+                          } else if (result.type === "book") {
+                            if (result.pageNumber) {
+                              goToPdfPage(result.pageNumber);
+                              setPdfSearchHighlight({
+                                page: result.pageNumber,
+                                term: searchQuery,
+                              });
+                            }
+                          } else {
+                            if (result.type === "highlight") {
+                              if (result.chapterId === "reference-doc") {
+                                const target = Number(result.pageNumber);
+                                if (Number.isFinite(target) && target > 0) {
+                                  goToPdfPage(target);
+                                } else {
+                                  console.warn(
+                                    "[highlight] pageNumber missing for search result",
+                                    result.id
+                                  );
+                                }
                               } else {
-                                console.warn(
-                                  "[highlight] pageNumber missing for search result",
-                                  result.id
+                                const idx = chapters.findIndex(
+                                  (c) => c.id === result.chapterId
                                 );
+                                if (idx !== -1) goToChapter(idx);
                               }
+                              focusHighlight(result.id.replace("hl-", ""));
                             } else {
                               const idx = chapters.findIndex(
                                 (c) => c.id === result.chapterId
                               );
                               if (idx !== -1) goToChapter(idx);
                             }
-                            focusHighlight(result.id.replace("hl-", ""));
-                          } else {
-                            const idx = chapters.findIndex(
-                              (c) => c.id === result.chapterId
-                            );
-                            if (idx !== -1) goToChapter(idx);
                           }
-                        }
-                      }}
-                      className="bg-white dark:bg-slate-900 p-3 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-blue-300 transition-all"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
-                            result.type === "chapter"
-                              ? "bg-blue-100 text-blue-600"
-                              : result.type === "highlight"
-                              ? "bg-yellow-100 text-yellow-600"
-                              : result.type === "book"
-                              ? "bg-indigo-100 text-indigo-600"
-                              : "bg-green-100 text-green-600"
-                          }`}
-                        >
-                          {result.type}
-                        </span>
-                        <span className="text-xs text-slate-500 font-medium truncate flex-1">
-                          {result.title}
-                        </span>
+                        }}
+                        className="bg-white dark:bg-slate-900 p-3 rounded-lg shadow-sm border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-blue-300 transition-all"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                              result.type === "chapter"
+                                ? "bg-blue-100 text-blue-600"
+                                : result.type === "highlight"
+                                ? "bg-yellow-100 text-yellow-600"
+                                : result.type === "book"
+                                ? "bg-indigo-100 text-indigo-600"
+                                : "bg-green-100 text-green-600"
+                            }`}
+                          >
+                            {result.type}
+                          </span>
+                          <span className="text-xs text-slate-500 font-medium truncate flex-1">
+                            {result.title}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-2">
+                          <HighlightMatch
+                            text={result.contentSnippet}
+                            query={searchQuery}
+                          />
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-600 line-clamp-2">
-                        <HighlightMatch
-                          text={result.contentSnippet}
-                          query={searchQuery}
-                        />
+                    ))
+                  ) : (
+                    <div className="text-center py-10 opacity-50">
+                      <p className="text-sm text-slate-500">
+                        No results found for "{searchQuery}"
                       </p>
                     </div>
-                  ))
+                  )
                 ) : (
                   <div className="text-center py-10 opacity-50">
-                    <p className="text-sm text-slate-500">
-                      No results found for "{searchQuery}"
+                    <Search size={24} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-sm text-slate-400">
+                      검색어를 입력해주세요.
                     </p>
                   </div>
-                )
-              ) : (
-                <div className="text-center py-10 opacity-50">
-                  <Search size={24} className="mx-auto mb-2 text-slate-300" />
-                  <p className="text-sm text-slate-400">
-                    Type at least 2 characters to search
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
       </div>
     </PanelWrapper>
   );

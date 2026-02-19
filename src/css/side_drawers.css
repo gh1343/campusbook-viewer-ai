@@ -516,3 +516,454 @@
   gap: 8px;
   flex: 0 0 auto;
 }
+
+/* ===== 마이노트 탭 ===== */
+
+/* 마이노트 탭 전체 래퍼 */
+.mynote_tab_wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: rgb(248 250 252);
+  overflow: hidden;
+}
+
+/* ── 편집 모드 ── */
+.mynote_editor_wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #fff;
+  animation: fadein 0.15s ease;
+}
+
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 헤더: 목록으로 + 수정/작성 레이블 */
+.mynote_editor_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.mynote_back_btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgb(148 163 184);
+  transition: color 0.15s;
+}
+.mynote_back_btn:hover {
+  color: rgb(71 85 105);
+}
+
+.mynote_editor_mode_label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgb(22 163 74);
+}
+
+/* 스크롤 가능한 본문 영역 (제목 + 툴바 + 에디터) */
+.mynote_editor_body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0 1rem 1rem;
+  gap: 0.75rem;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+.mynote_title_input {
+  width: 100%;
+  font-size: 1.1rem;
+  font-weight: 700;
+  background: transparent;
+  outline: none;
+  border: none;
+  border-bottom: 1px solid rgb(241 245 249);
+  padding-bottom: 0.5rem;
+  color: rgb(30 41 59);
+  transition: border-color 0.15s;
+  flex-shrink: 0;
+}
+.mynote_title_input::placeholder {
+  color: rgb(203 213 225);
+}
+.mynote_title_input:focus {
+  border-bottom-color: rgb(22 163 74);
+}
+
+/* 툴바: 둥근 박스 형태 */
+.mynote_toolbar_box {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  background-color: rgb(248 250 252);
+  border-radius: 0.625rem;
+  flex-shrink: 0;
+}
+
+.mynote_toolbar_btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem;
+  border-radius: 0.375rem;
+  color: rgb(71 85 105);
+  transition: background-color 0.12s;
+}
+.mynote_toolbar_btn:hover {
+  background-color: #fff;
+}
+
+.mynote_toolbar_italic {
+  font-style: italic;
+  font-size: 0.875rem;
+  font-weight: 600;
+  width: 14px;
+  text-align: center;
+  display: inline-block;
+}
+
+.mynote_toolbar_btn_blue {
+  color: rgb(37 99 235);
+}
+
+.mynote_toolbar_divider {
+  width: 1px;
+  height: 1rem;
+  background-color: rgb(226 232 240);
+  margin: 0 0.25rem;
+}
+
+/* 에디터 본문 */
+.mynote_content_editable {
+  flex: 1;
+  min-height: 180px;
+  outline: none;
+  font-size: 0.875rem;
+  line-height: 1.75;
+  color: rgb(30 41 59);
+}
+
+/* 캡처 이미지 미리보기 */
+.mynote_capture_preview {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.mynote_capture_img {
+  height: 8rem;
+  width: auto;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  border: 2px solid rgb(96 165 250);
+  display: block;
+  transition: transform 0.15s;
+}
+.mynote_capture_preview:hover .mynote_capture_img {
+  transform: scale(1.02);
+}
+.mynote_capture_remove {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  background-color: rgb(239 68 68);
+  color: #fff;
+  border-radius: 9999px;
+  padding: 0.25rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  transition: transform 0.12s;
+}
+.mynote_capture_remove:hover {
+  transform: scale(1.15);
+}
+
+/* 하단 footer: 캡처 첨부 + 저장 버튼 */
+.mynote_editor_footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid rgb(241 245 249);
+  flex-shrink: 0;
+}
+
+.mynote_capture_btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background-color: rgb(248 250 252);
+  color: rgb(148 163 184);
+  transition: background-color 0.15s, color 0.15s;
+}
+.mynote_capture_btn:hover {
+  background-color: rgb(241 245 249);
+  color: rgb(71 85 105);
+}
+.mynote_capture_btn.active {
+  background-color: rgb(239 246 255);
+  color: rgb(37 99 235);
+}
+
+.mynote_save_btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 2rem;
+  background-color: rgb(37 99 235);
+  color: #fff;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: background-color 0.15s, transform 0.1s;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+}
+.mynote_save_btn:hover {
+  background-color: rgb(29 78 216);
+}
+.mynote_save_btn:active {
+  transform: scale(0.96);
+}
+
+/* ── 목록 모드 ── */
+.mynote_list_wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mynote_list_header {
+  padding: 0.75rem 1rem;
+  background-color: rgb(248 250 252);
+  border-bottom: 1px solid rgb(241 245 249);
+  flex-shrink: 0;
+}
+
+.mynote_new_btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: #fff;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.75rem;
+  color: rgb(22 163 74);
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+.mynote_new_btn:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.mynote_new_btn:active {
+  transform: scale(0.97);
+}
+
+.mynote_list_filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background-color: rgb(248 250 252);
+  border-bottom: 1px solid rgb(241 245 249);
+  flex-shrink: 0;
+}
+
+.mynote_filter_row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mynote_count_label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgb(100 116 139);
+}
+
+.mynote_import_btn {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0.3rem;
+  border-radius: 0.375rem;
+  color: rgb(100 116 139);
+  transition: background-color 0.12s;
+}
+.mynote_import_btn:hover {
+  background-color: rgb(226 232 240);
+}
+
+.mynote_search_wrap {
+  position: relative;
+}
+.mynote_search_icon {
+  position: absolute;
+  left: 0.625rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgb(148 163 184);
+  pointer-events: none;
+}
+.mynote_search_input {
+  width: 100%;
+  padding: 0.375rem 0.75rem 0.375rem 1.875rem;
+  background-color: #fff;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  color: rgb(30 41 59);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.mynote_search_input::placeholder {
+  color: rgb(148 163 184);
+}
+.mynote_search_input:focus {
+  border-color: rgb(22 163 74);
+}
+
+.mynote_list_body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+/* 빈 상태 */
+.mynote_empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  text-align: center;
+}
+.mynote_empty_icon {
+  color: rgb(203 213 225);
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+.mynote_empty_text {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  line-height: 1.8;
+  color: rgb(203 213 225);
+}
+
+/* 노트 카드 */
+.mynote_card {
+  position: relative;
+  background-color: #fff;
+  border: 1px solid rgb(241 245 249);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.mynote_card:hover {
+  border-color: rgb(134 239 172);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.mynote_card_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.mynote_card_meta {
+  flex: 1;
+  min-width: 0;
+  padding-right: 2rem;
+}
+
+.mynote_card_title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: rgb(30 41 59);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.125rem;
+}
+
+.mynote_card_date {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(148 163 184);
+}
+
+.mynote_card_delete {
+  color: rgb(203 213 225);
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  flex-shrink: 0;
+  transition: color 0.12s;
+}
+.mynote_card_delete:hover {
+  color: rgb(239 68 68);
+}
+
+.mynote_card_body {
+  font-size: 0.75rem;
+  color: rgb(100 116 139);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.mynote_card_arrow {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  color: rgb(22 163 74);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.mynote_card:hover .mynote_card_arrow {
+  opacity: 1;
+}
