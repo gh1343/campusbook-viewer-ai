@@ -28,8 +28,9 @@ import {
   saveProgressToServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
-const NAV_TOC_PATH =
-  "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
+// [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
+// const NAV_TOC_PATH =
+//   "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
 const NAV_TOC_ORIGIN =
   import.meta.env.VITE_PDF_PROXY_ORIGIN ||
   "https://d19t5saodanwfx.cloudfront.net";
@@ -104,8 +105,8 @@ const applyDevProxy = (rawUrl: string, proxyOrigin: string) => {
 const resolveNavTocUrl = () => {
   const runtime = readRuntimeViewerConfig();
   const runtimeUrl = buildNavTocFromRuntime(runtime);
-  const base = NAV_TOC_ORIGIN.replace(/\/+$/, "");
-  const rawUrl = runtimeUrl || `${base}${NAV_TOC_PATH}`;
+  if (!runtimeUrl) return "";
+  const rawUrl = runtimeUrl;
   const proxyOrigin =
     (typeof runtime?.pdfProxyOrigin === "string" &&
       runtime.pdfProxyOrigin.trim()) ||

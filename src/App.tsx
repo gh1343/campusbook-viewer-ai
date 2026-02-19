@@ -6,14 +6,17 @@ import { PdfViewerProvider } from "./contexts/PdfViewerContext";
 import { AnnotationProvider } from "./contexts/AnnotationContext";
 import { ReaderPage } from "./pages/ReaderPage";
 import { ReportPage } from "./pages/ReportPage";
-import { useDevToolsDetector } from "./hooks/useDevToolsDetector";
+// import { useDevToolsDetector } from "./hooks/useDevToolsDetector";
 
 const PersistentReader: React.FC = () => {
   const location = useLocation();
   const hideReader = location.pathname === "/report";
 
   return (
-    <div aria-hidden={hideReader} style={{ display: hideReader ? "none" : "block" }}>
+    <div
+      aria-hidden={hideReader}
+      style={{ display: hideReader ? "none" : "block" }}
+    >
       <ReaderPage />
     </div>
   );
@@ -33,7 +36,7 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  useDevToolsDetector();
+  // useDevToolsDetector();
 
   React.useEffect(() => {
     if (typeof CSS !== "undefined" && CSS.supports("height: 100dvh")) {
@@ -42,10 +45,7 @@ const App: React.FC = () => {
 
     const updateAppHeight = () => {
       const height = window.visualViewport?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty(
-        "--app-height",
-        `${height}px`
-      );
+      document.documentElement.style.setProperty("--app-height", `${height}px`);
     };
 
     updateAppHeight();

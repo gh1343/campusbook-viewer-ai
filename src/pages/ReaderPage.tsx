@@ -259,9 +259,10 @@ export const ReaderPage: React.FC = () => {
       (typeof runtimeConfig?.pdfPath === "string" &&
         runtimeConfig.pdfPath.trim()) ||
       "";
-    const fallbackPdfUrl =
-      "https://d19t5saodanwfx.cloudfront.net/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/CT-20260130090170748_source_1769734180619.pdf";
-    const raw = runtimePdfUrl || fallbackPdfUrl;
+    // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
+    // const fallbackPdfUrl =
+    //   "https://d19t5saodanwfx.cloudfront.net/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/CT-20260130090170748_source_1769734180619.pdf";
+    const raw = runtimePdfUrl; // 로컬 확인 시: runtimePdfUrl || fallbackPdfUrl
     const base = import.meta.env.BASE_URL || "/";
 
     // 절대 URL이면 그대로 사용
