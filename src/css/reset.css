@@ -150,6 +150,14 @@ a {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 } */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
 button {
   cursor: pointer;
 }

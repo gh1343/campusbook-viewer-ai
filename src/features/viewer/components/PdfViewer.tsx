@@ -1532,8 +1532,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     updateHighlight(id, { rects: mergedRects });
     const rectBytes = getJsonBytes(mergedRects);
     const chapterLabel = pageNumber
-      ? getChapterTitleByPage(pageNumber) || "Reference PDF"
-      : "Reference PDF";
+      ? getChapterTitleByPage(pageNumber) || "도서명"
+      : "도서명";
     const listInfo = {
       chapterLabel,
       pageNumber,

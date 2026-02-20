@@ -25,10 +25,12 @@ import {
   Minus,
   Plus,
   Highlighter,
+  HelpCircle,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DrawingColor } from "../../../types";
 import "../../css/header.css";
+import { HelpModal } from "./HelpModal";
 
 export const Header: React.FC<{
   toggleSidebar: () => void;
@@ -184,6 +186,7 @@ export const Header: React.FC<{
   const isReader = location.pathname === "/";
 
   const [showPenSettings, setShowPenSettings] = useState(false);
+  const [isHelpOpen, setHelpOpen] = useState(false);
 
   const currentPageBookmark = bookmarks.find(
     (b) => b.page === currentPdfPage && !b.deleted
@@ -506,6 +509,15 @@ export const Header: React.FC<{
                 )}
               </div>
 
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="guide_btn"
+                title="이용 가이드"
+              >
+                <HelpCircle size={15} className="guide_btn_icon" />
+                <span className="guide_btn_text">가이드</span>
+              </button>
+
               <div className="separate_bar"></div>
 
               <button
@@ -528,6 +540,7 @@ export const Header: React.FC<{
           )}
         </div>
       </div>
+      <HelpModal isOpen={isHelpOpen} onClose={() => setHelpOpen(false)} />
     </header>
   );
 };

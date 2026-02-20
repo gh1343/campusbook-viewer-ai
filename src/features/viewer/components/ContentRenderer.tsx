@@ -1,20 +1,20 @@
-import React, {useRef, useState, useEffect, useMemo} from 'react';
-import {useBook} from '../../../contexts/BookContext';
-import {useDrawing} from '../../../contexts/DrawingContext';
-import {usePdfViewer} from '../../../contexts/PdfViewerContext';
-import {useAnnotation} from '../../../contexts/AnnotationContext';
-import {Highlighter, MessageCircleQuestion, StickyNote} from 'lucide-react';
-import {Point, Stroke, Chapter} from '../../../../types';
-import html2canvas from 'html2canvas';
+import React, { useRef, useState, useEffect, useMemo } from "react";
+import { useBook } from "../../../contexts/BookContext";
+import { useDrawing } from "../../../contexts/DrawingContext";
+import { usePdfViewer } from "../../../contexts/PdfViewerContext";
+import { useAnnotation } from "../../../contexts/AnnotationContext";
+import { Highlighter, MessageCircleQuestion, StickyNote } from "lucide-react";
+import { Point, Stroke, Chapter } from "../../../../types";
+import html2canvas from "html2canvas";
 
 interface ContentRendererProps {
   customChapter?: Chapter;
-  variant?: 'main' | 'side';
+  variant?: "main" | "side";
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({
   customChapter,
-  variant = 'main',
+  variant = "main",
 }) => {
   const {
     currentChapter: contextChapter,
@@ -24,18 +24,21 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     setCaptureMode,
     setCapturedImage,
   } = useBook();
+  const { addHighlight, highlights, activeHighlightId, showAnnotations } =
+    useAnnotation();
   const {
-    addHighlight,
-    highlights,
-    activeHighlightId,
-    showAnnotations,
-  } = useAnnotation();
-  const {drawingMode, penColor, penWidth, penOpacity, chapterStrokes, addStroke, removeStroke} =
-    useDrawing();
-  const {viewMode} = usePdfViewer();
+    drawingMode,
+    penColor,
+    penWidth,
+    penOpacity,
+    chapterStrokes,
+    addStroke,
+    removeStroke,
+  } = useDrawing();
+  const { viewMode } = usePdfViewer();
 
   const targetChapter = customChapter || contextChapter;
-  const canCapture = variant === 'main';
+  const canCapture = variant === "main";
 
   const contentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,13 +49,13 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     top: number;
     left: number;
     show: boolean;
-  }>({text: '', top: 0, left: 0, show: false});
-  const [memoInput, setMemoInput] = useState<{show: boolean; text: string}>({
+  }>({ text: "", top: 0, left: 0, show: false });
+  const [memoInput, setMemoInput] = useState<{ show: boolean; text: string }>({
     show: false,
-    text: '',
+    text: "",
   });
   const [isTouchDevice] = useState(
-    () => 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    () => "ontouchstart" in window || navigator.maxTouchPoints > 0
   );
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
@@ -62,14 +65,14 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   useEffect(() => {
     if (!canCapture) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isCaptureMode) {
+      if (e.key === "Escape" && isCaptureMode) {
         setCaptureMode(false);
         setCaptureStart(null);
         setCaptureCurrent(null);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isCaptureMode, setCaptureMode, canCapture]);
 
   // Render Content
@@ -78,19 +81,19 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     if (!showAnnotations) return html;
 
     const chapterHighlights = highlights.filter(
-      h => h.chapterId === targetChapter.id && !h.deleted
+      (h) => h.chapterId === targetChapter.id && !h.deleted
     );
     const sortedHighlights = [...chapterHighlights].sort(
       (a, b) => b.text.length - a.text.length
     );
 
-    sortedHighlights.forEach(hl => {
-      const escapedText = hl.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escapedText, 'g');
+    sortedHighlights.forEach((hl) => {
+      const escapedText = hl.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escapedText, "g");
       const highlightHtml = `<mark id="hl-${
         hl.id
       }" style="background-color: #fef08a !important; color: #0f172a !important;" class="rounded-sm cursor-pointer hover:brightness-95 transition-colors border-b-2 border-yellow-400" title="${
-        hl.note || 'Highlight'
+        hl.note || "Highlight"
       }">${hl.text}</mark>`;
       html = html.replace(regex, highlightHtml);
     });
@@ -102,10 +105,10 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     if (activeHighlightId && showAnnotations) {
       const el = document.getElementById(`hl-${activeHighlightId}`);
       if (el && document.body.contains(el)) {
-        el.scrollIntoView({behavior: 'smooth', block: 'center'});
-        el.classList.add('ring-4', 'ring-blue-500', 'ring-offset-2');
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-4", "ring-blue-500", "ring-offset-2");
         setTimeout(() => {
-          el.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-2');
+          el.classList.remove("ring-4", "ring-blue-500", "ring-offset-2");
         }, 2000);
       }
     }
@@ -118,23 +121,27 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         !target.closest(`#selection-menu-${variant}`) &&
         !target.closest(`#memo-dialog-${variant}`)
       ) {
-        setSelection(prev => ({...prev, show: false}));
+        setSelection((prev) => ({ ...prev, show: false }));
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [variant]);
 
   // --- Unified Selection Logic: react to selection changes (works for touch & mouse) ---
   const checkSelection = () => {
-    if (drawingMode !== 'idle' || isCaptureMode) {
-      setSelection(prev => ({...prev, show: false}));
+    if (drawingMode !== "idle" || isCaptureMode) {
+      setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
 
     const winSelection = window.getSelection();
-    if (!winSelection || winSelection.isCollapsed || winSelection.rangeCount === 0) {
-      setSelection(prev => ({...prev, show: false}));
+    if (
+      !winSelection ||
+      winSelection.isCollapsed ||
+      winSelection.rangeCount === 0
+    ) {
+      setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
 
@@ -143,7 +150,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       contentRef.current?.contains(winSelection.focusNode);
 
     if (!isInside || !contentRef.current) {
-      setSelection(prev => ({...prev, show: false}));
+      setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
 
@@ -152,10 +159,10 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     const clientRects = Array.from(range.getClientRects());
     const rect =
       (primaryRect.width > 0 && primaryRect.height > 0 && primaryRect) ||
-      clientRects.find(r => r.width > 0 && r.height > 0);
+      clientRects.find((r) => r.width > 0 && r.height > 0);
 
     if (!rect || rect.width === 0) {
-      setSelection(prev => ({...prev, show: false}));
+      setSelection((prev) => ({ ...prev, show: false }));
       return;
     }
 
@@ -171,43 +178,48 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       left = window.innerWidth - menuWidth - margin;
     }
 
-    setSelection({text: winSelection.toString().trim(), top, left, show: true});
+    setSelection({
+      text: winSelection.toString().trim(),
+      top,
+      left,
+      show: true,
+    });
   };
 
   const scheduleSelectionCheck = () => {
     // Multiple passes to wait for OS selection handles to finalize (tablet/long-press)
     const delays = [0, 40, 120];
-    delays.forEach(delay => setTimeout(checkSelection, delay));
+    delays.forEach((delay) => setTimeout(checkSelection, delay));
   };
 
   const handleWrapperPointerUp = () => {
     if (canCapture && isCaptureMode) return;
-    if (drawingMode !== 'idle') return;
+    if (drawingMode !== "idle") return;
     scheduleSelectionCheck();
   };
 
   const handleHighlight = () => {
     addHighlight(selection.text, undefined, targetChapter.id);
-    setSelection(prev => ({...prev, show: false}));
+    setSelection((prev) => ({ ...prev, show: false }));
     window.getSelection()?.removeAllRanges();
   };
 
   const handleMemoClick = () => {
-    setSelection(prev => ({...prev, show: false}));
-    setMemoInput({show: true, text: ''});
+    setSelection((prev) => ({ ...prev, show: false }));
+    setMemoInput({ show: true, text: "" });
   };
 
   const submitMemo = () => {
     if (memoInput.text.trim()) {
       addHighlight(selection.text, memoInput.text, targetChapter.id);
     }
-    setMemoInput({show: false, text: ''});
+    setMemoInput({ show: false, text: "" });
     window.getSelection()?.removeAllRanges();
   };
 
   const handleAiExplain = () => {
     triggerSmartExplain(selection.text);
-    setSelection(prev => ({...prev, show: false}));
+    setSelection((prev) => ({ ...prev, show: false }));
     window.getSelection()?.removeAllRanges();
   };
 
@@ -230,7 +242,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
   const startDrawing = (e: React.PointerEvent) => {
     if (canCapture && isCaptureMode) return;
-    if (drawingMode === 'idle') return;
+    if (drawingMode === "idle") return;
 
     // Capture pointer to ensure we get move events even if cursor leaves canvas bounds slightly
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -242,7 +254,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     setCurrentPoints([point]);
 
     // Anchoring Logic
-    if (contentRef.current && drawingMode === 'pen') {
+    if (contentRef.current && drawingMode === "pen") {
       const children = Array.from(contentRef.current.children) as HTMLElement[];
       let bestIndex = 0;
 
@@ -270,7 +282,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
   const draw = (e: React.PointerEvent) => {
     if (canCapture && isCaptureMode) return;
-    if (!isDrawing || drawingMode === 'idle') return;
+    if (!isDrawing || drawingMode === "idle") return;
 
     // Prevent default on move to stop native behaviors
     e.preventDefault();
@@ -278,28 +290,31 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     const point = getCanvasCoordinates(e);
     if (!point) return;
 
-    if (drawingMode === 'pen') {
-      setCurrentPoints(prev => [...prev, point]);
-    } else if (drawingMode === 'eraser') {
-      const strokes = chapterStrokes.filter(s => !s.deleted);
+    if (drawingMode === "pen") {
+      setCurrentPoints((prev) => [...prev, point]);
+    } else if (drawingMode === "eraser") {
+      const strokes = chapterStrokes.filter((s) => !s.deleted);
       const children = contentRef.current
         ? (Array.from(contentRef.current.children) as HTMLElement[])
         : [];
       const canvasEl = canvasRef.current;
       const ew = canvasEl ? canvasEl.width : 1;
       const eh = canvasEl ? canvasEl.height : 1;
-      strokes.forEach(stroke => {
+      strokes.forEach((stroke) => {
         let strokePoints = stroke.points;
         // 정규화된 스트로크 복원
         if ((stroke as any).normalized) {
-          strokePoints = stroke.points.map(p => ({x: p.x * ew, y: p.y * eh}));
+          strokePoints = stroke.points.map((p) => ({
+            x: p.x * ew,
+            y: p.y * eh,
+          }));
         }
         if (stroke.anchorIndex !== undefined && children[stroke.anchorIndex]) {
           const offset = children[stroke.anchorIndex].offsetTop;
-          strokePoints = strokePoints.map(p => ({x: p.x, y: p.y + offset}));
+          strokePoints = strokePoints.map((p) => ({ x: p.x, y: p.y + offset }));
         }
         const hit = strokePoints.some(
-          p => Math.hypot(p.x - point.x, p.y - point.y) < 20
+          (p) => Math.hypot(p.x - point.x, p.y - point.y) < 20
         );
         if (hit) removeStroke(stroke.id);
       });
@@ -313,7 +328,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     setIsDrawing(false);
 
-    if (drawingMode === 'pen' && currentPoints.length > 1) {
+    if (drawingMode === "pen" && currentPoints.length > 1) {
       let finalPoints = currentPoints;
       let anchorIdx: number | undefined = undefined;
       if (contentRef.current) {
@@ -321,7 +336,10 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         const children = contentRef.current.children;
         if (children[anchorIdx]) {
           const anchorTop = (children[anchorIdx] as HTMLElement).offsetTop;
-          finalPoints = currentPoints.map(p => ({x: p.x, y: p.y - anchorTop}));
+          finalPoints = currentPoints.map((p) => ({
+            x: p.x,
+            y: p.y - anchorTop,
+          }));
         }
       }
       const newStroke: Stroke = {
@@ -340,13 +358,13 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   // --- Capture Logic ---
   const handleCaptureStart = (e: React.MouseEvent) => {
     if (!canCapture || !isCaptureMode) return;
-    const pt = {x: e.clientX, y: e.clientY};
+    const pt = { x: e.clientX, y: e.clientY };
     setCaptureStart(pt);
     setCaptureCurrent(pt);
   };
   const handleCaptureMove = (e: React.MouseEvent) => {
     if (!canCapture || !isCaptureMode || !captureStart) return;
-    setCaptureCurrent({x: e.clientX, y: e.clientY});
+    setCaptureCurrent({ x: e.clientX, y: e.clientY });
   };
   const handleCaptureEnd = async (e: React.MouseEvent) => {
     if (!canCapture || !isCaptureMode || !captureStart || !captureCurrent) {
@@ -355,7 +373,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       return;
     }
     const start = captureStart;
-    const end = {x: e.clientX, y: e.clientY};
+    const end = { x: e.clientX, y: e.clientY };
     const rect = {
       x: Math.min(start.x, end.x),
       y: Math.min(start.y, end.y),
@@ -373,7 +391,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         height: rect.height,
         useCORS: true,
         scale: window.devicePixelRatio,
-        ignoreElements: el => el.classList.contains('capture-overlay-ui'),
+        ignoreElements: (el) => el.classList.contains("capture-overlay-ui"),
       });
       setCapturedImage(canvas.toDataURL());
     } catch (err) {
@@ -392,7 +410,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       const dpr = window.devicePixelRatio || 1;
       canvas.width = contentRef.current.offsetWidth * dpr;
       canvas.height = contentRef.current.offsetHeight * dpr;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (ctx) ctx.scale(dpr, dpr);
     };
     resizeCanvas();
@@ -405,11 +423,11 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   useEffect(() => {
     const handleSelectionChange = () => scheduleSelectionCheck();
     const handleTouchEnd = () => scheduleSelectionCheck();
-    document.addEventListener('selectionchange', handleSelectionChange);
-    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("touchend", handleTouchEnd);
     return () => {
-      document.removeEventListener('selectionchange', handleSelectionChange);
-      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("touchend", handleTouchEnd);
     };
   }, [isCaptureMode, drawingMode, isTouchDevice]);
 
@@ -417,7 +435,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !contentRef.current) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     ctx.save();
@@ -436,8 +454,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       ctx.beginPath();
       ctx.lineWidth = width;
       ctx.strokeStyle = color;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.globalAlpha = opacity;
       ctx.moveTo(points[0].x, points[0].y);
       for (let i = 1; i < points.length - 1; i++) {
@@ -453,29 +471,24 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     };
 
     const children = Array.from(contentRef.current.children) as HTMLElement[];
-    const strokes = chapterStrokes.filter(s => !s.deleted);
+    const strokes = chapterStrokes.filter((s) => !s.deleted);
     const cw = canvas.width;
     const ch = canvas.height;
-    strokes.forEach(s => {
+    strokes.forEach((s) => {
       let pts = s.points;
       let w = s.width || 3;
       // 정규화된 스트로크 복원 (PDF 뷰어에서 저장된 경우)
       if ((s as any).normalized) {
-        pts = s.points.map(p => ({x: p.x * cw, y: p.y * ch}));
+        pts = s.points.map((p) => ({ x: p.x * cw, y: p.y * ch }));
         w = (s.width || 3 / cw) * cw;
       }
       if (s.anchorIndex !== undefined && children[s.anchorIndex]) {
         const offset = children[s.anchorIndex].offsetTop;
-        pts = pts.map(p => ({x: p.x, y: p.y + offset}));
+        pts = pts.map((p) => ({ x: p.x, y: p.y + offset }));
       }
-      drawStroke(
-        pts,
-        s.color,
-        w,
-        s.opacity !== undefined ? s.opacity : 1
-      );
+      drawStroke(pts, s.color, w, s.opacity !== undefined ? s.opacity : 1);
     });
-    if (isDrawing && currentPoints.length > 1 && drawingMode === 'pen')
+    if (isDrawing && currentPoints.length > 1 && drawingMode === "pen")
       drawStroke(currentPoints, penColor, penWidth, penOpacity);
   }, [
     chapterStrokes,
@@ -491,68 +504,72 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
   const getFontSizeClass = () => {
     switch (fontSize) {
-      case 'small':
-        return 'text-sm leading-6';
-      case 'large':
-        return 'text-xl leading-9';
-      case 'xlarge':
-        return 'text-2xl leading-10';
+      case "small":
+        return "text-sm leading-6";
+      case "large":
+        return "text-xl leading-9";
+      case "xlarge":
+        return "text-2xl leading-10";
       default:
-        return 'text-lg leading-8';
+        return "text-lg leading-8";
     }
   };
 
   const captureBoxStyle: React.CSSProperties =
     canCapture && isCaptureMode && captureStart && captureCurrent
       ? {
-          position: 'fixed',
+          position: "fixed",
           left: Math.min(captureStart.x, captureCurrent.x),
           top: Math.min(captureStart.y, captureCurrent.y),
           width: Math.abs(captureCurrent.x - captureStart.x),
           height: Math.abs(captureCurrent.y - captureStart.y),
-          border: '2px solid #3b82f6',
-          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          border: "2px solid #3b82f6",
+          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.5)",
+          backgroundColor: "rgba(59, 130, 246, 0.1)",
           zIndex: 10000,
-          pointerEvents: 'none',
+          pointerEvents: "none",
         }
       : {};
 
   // CSS styles specifically to handle touch/pen interactions
   // touch-action: none when drawing: prevents browser scrolling/zooming while drawing.
   const canvasStyle: React.CSSProperties = {
-    width: '100%',
-    height: '100%',
-    touchAction: drawingMode !== 'idle' ? 'none' : 'auto',
+    width: "100%",
+    height: "100%",
+    touchAction: drawingMode !== "idle" ? "none" : "auto",
   };
 
   const canvasClass = `absolute inset-0 z-20 ${
-    drawingMode !== 'idle'
-      ? 'cursor-crosshair pointer-events-auto'
-      : 'pointer-events-none'
+    drawingMode !== "idle"
+      ? "cursor-crosshair pointer-events-auto"
+      : "pointer-events-none"
   }`;
 
   // View Mode Styles
-  const isDouble = variant === 'main' && viewMode === 'double';
+  const isDouble = variant === "main" && viewMode === "double";
   const containerClass =
-    variant === 'main'
+    variant === "main"
       ? `relative w-full bg-white dark:bg-slate-950 shadow-lg min-h-[80vh] p-8 md:p-12 transition-all ${
-          isDouble ? 'max-w-full' : 'max-w-3xl'
+          isDouble ? "max-w-full" : "max-w-3xl"
         }`
-      : 'relative w-full bg-white dark:bg-slate-900 p-4 min-h-[500px]';
+      : "relative w-full bg-white dark:bg-slate-900 p-4 min-h-[500px]";
 
   // Prose class: add columns-2 if double mode
   const proseClass = `prose prose-slate dark:prose-invert max-w-none select-text cursor-text transition-all duration-200 relative z-10 selection:bg-yellow-200 selection:text-black dark:selection:bg-yellow-700 dark:selection:text-white ${getFontSizeClass()} ${
-    isDouble ? 'columns-1 md:columns-2 gap-12 [column-fill:auto]' : ''
+    isDouble ? "columns-1 md:columns-2 gap-12 [column-fill:auto]" : ""
   }`;
 
   const wrapperClass =
-    variant === 'main'
-      ? 'relative min-h-[50vh] pb-32 flex justify-center bg-slate-100 dark:bg-slate-900 pt-8'
-      : 'relative w-full bg-slate-50 dark:bg-slate-950';
+    variant === "main"
+      ? "relative min-h-[50vh] pb-32 flex justify-center bg-slate-100 dark:bg-slate-900 pt-8"
+      : "relative w-full bg-slate-50 dark:bg-slate-950";
 
   return (
-    <div className={wrapperClass} onPointerUp={handleWrapperPointerUp} onTouchEnd={handleWrapperPointerUp}>
+    <div
+      className={wrapperClass}
+      onPointerUp={handleWrapperPointerUp}
+      onTouchEnd={handleWrapperPointerUp}
+    >
       {canCapture && isCaptureMode && (
         <div
           className="fixed inset-0 z-[9999] cursor-crosshair capture-overlay-ui"
@@ -575,8 +592,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <div
           ref={contentRef}
           className={proseClass}
-          dangerouslySetInnerHTML={{__html: renderedContent}}
-          onContextMenu={e => e.preventDefault()}
+          dangerouslySetInnerHTML={{ __html: renderedContent }}
+          onContextMenu={(e) => e.preventDefault()}
         />
         <canvas
           ref={canvasRef}
@@ -593,7 +610,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <div
           id={`selection-menu-${variant}`}
           className="fixed z-50 flex items-center gap-2 bg-slate-800 text-white rounded-lg shadow-xl p-2 animate-fade-in"
-          style={{top: selection.top, left: selection.left}}
+          style={{ top: selection.top, left: selection.left }}
         >
           <button
             onClick={handleHighlight}
@@ -625,20 +642,20 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         >
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-4 w-80 animate-slide-up border border-slate-200 dark:border-slate-700">
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">
-              Add Note
+              메모 추가
             </h3>
             <textarea
               autoFocus
               value={memoInput.text}
-              onChange={e =>
-                setMemoInput(prev => ({...prev, text: e.target.value}))
+              onChange={(e) =>
+                setMemoInput((prev) => ({ ...prev, text: e.target.value }))
               }
               className="w-full h-24 p-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none dark:text-white"
               placeholder="Type your thoughts..."
             />
             <div className="flex justify-end gap-2 mt-3">
               <button
-                onClick={() => setMemoInput({show: false, text: ''})}
+                onClick={() => setMemoInput({ show: false, text: "" })}
                 className="px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
                 Cancel

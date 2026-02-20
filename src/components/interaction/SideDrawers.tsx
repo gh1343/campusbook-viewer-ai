@@ -345,9 +345,9 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
   const getHighlightChapterLabel = (hl: HighlightType) => {
     if (hl.chapterId === "reference-doc") {
-      if (!hl.pageNumber) return "Reference PDF";
+      if (!hl.pageNumber) return "도서명";
       const title = getChapterTitleByPage(hl.pageNumber);
-      return title || "Reference PDF";
+      return title || "도서명";
     }
     const chapterIndex = chapters.findIndex((c) => c.id === hl.chapterId);
     if (chapterIndex === -1) return "Chapter";
@@ -883,13 +883,13 @@ ${contextString}
                             onClick={() => setEditingHighlightId(null)}
                             className="text-xs text-slate-500 hover:text-slate-700"
                           >
-                            Cancel
+                            취소
                           </button>
                           <button
                             onClick={() => saveHighlightNote(hl.id)}
                             className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
                           >
-                            Save
+                            저장
                           </button>
                         </div>
                       </div>
@@ -906,7 +906,7 @@ ${contextString}
                         }}
                         className="mt-2 text-xs text-blue-500 flex items-center gap-1 hover:underline opacity-50 hover:opacity-100"
                       >
-                        <Plus size={10} /> Add Note
+                        <Plus size={10} /> 메모 추가
                       </button>
                     )}
                   </div>
@@ -1044,7 +1044,9 @@ ${contextString}
                   <div className="mynote_editor_footer">
                     <button
                       onClick={handleCaptureClick}
-                      className={`mynote_capture_btn${capturedImage ? " active" : ""}`}
+                      className={`mynote_capture_btn${
+                        capturedImage ? " active" : ""
+                      }`}
                     >
                       <Camera size={16} />
                       {capturedImage ? "이미지 교체" : "캡처 이미지 첨부"}
