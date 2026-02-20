@@ -40,12 +40,12 @@ export const PdfSelectionMenu: React.FC<PdfSelectionMenuProps> = ({
           {copyStatus === "ok" ? "복사됨" : "선택 없음"}
         </span>
       )}
-      <button onClick={onHighlight}>Highlight</button>
+      <button onClick={onHighlight}>하이라이트</button>
       {/* <div className="pdf_selection_menu_copy_block">
         <button onClick={onCopy}>Copy</button>
       </div> */}
       {/* <button onClick={onAskAi}>AI</button> */}
-      <button onClick={onMemo}>Memo</button>
+      <button onClick={onMemo}>메모</button>
       {/* <button onClick={onCancel}>Cancel</button> */}
     </div>
   );

@@ -782,7 +782,17 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         (currentScale * availableWidth) / pageWidth
       );
       if (Math.abs(nextScale - currentScale) >= 0.01) {
+        // 스크롤 위치 보정: 현재 보고 있는 위치를 유지
+        const viewportX = containerEl.clientWidth / 2;
+        const viewportY = containerEl.clientHeight / 2;
+        const contentX = containerEl.scrollLeft + viewportX;
+        const contentY = containerEl.scrollTop + viewportY;
+        const scaleRatio = nextScale / currentScale;
+
         viewer.currentScale = nextScale;
+
+        containerEl.scrollLeft = contentX * scaleRatio - viewportX;
+        containerEl.scrollTop = contentY * scaleRatio - viewportY;
       }
     });
 

@@ -1042,7 +1042,7 @@ ${contextString}
 
                   {/* 하단 footer: 캡처 첨부 + 저장 버튼 */}
                   <div className="mynote_editor_footer">
-                    <button
+                    {/* <button
                       onClick={handleCaptureClick}
                       className={`mynote_capture_btn${
                         capturedImage ? " active" : ""
@@ -1050,7 +1050,7 @@ ${contextString}
                     >
                       <Camera size={16} />
                       {capturedImage ? "이미지 교체" : "캡처 이미지 첨부"}
-                    </button>
+                    </button> */}
                     <button
                       onClick={handleSaveNote}
                       className="mynote_save_btn"
