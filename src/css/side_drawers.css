@@ -6,11 +6,11 @@
 
 /* 스크롤바 숨기기 */
 .no-scrollbar {
-  -ms-overflow-style: none;  /* Internet Explorer 10+ */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+  scrollbar-width: none; /* Firefox */
 }
 .no-scrollbar::-webkit-scrollbar {
-  display: none;  /* Safari and Chrome */
+  display: none; /* Safari and Chrome */
 }
 
 /* PanelWrapper 스타일 */
@@ -540,8 +540,14 @@
 }
 
 @keyframes fadein {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 헤더: 목록으로 + 수정/작성 레이블 */
@@ -673,7 +679,7 @@
   height: 8rem;
   width: auto;
   border-radius: 0.75rem;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   border: 2px solid rgb(96 165 250);
   display: block;
   transition: transform 0.15s;
@@ -689,7 +695,7 @@
   color: #fff;
   border-radius: 9999px;
   padding: 0.25rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   transition: transform 0.12s;
 }
 .mynote_capture_remove:hover {
@@ -700,7 +706,7 @@
 .mynote_editor_footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0.75rem 1rem 1rem;
   border-top: 1px solid rgb(241 245 249);
   flex-shrink: 0;
@@ -777,11 +783,11 @@
   color: rgb(22 163 74);
   font-size: 0.875rem;
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   transition: box-shadow 0.15s, transform 0.1s;
 }
 .mynote_new_btn:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 .mynote_new_btn:active {
   transform: scale(0.97);
@@ -894,13 +900,13 @@
   border: 1px solid rgb(241 245 249);
   border-radius: 1rem;
   padding: 1rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .mynote_card:hover {
   border-color: rgb(134 239 172);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .mynote_card_header {

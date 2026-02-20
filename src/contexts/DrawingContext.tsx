@@ -36,17 +36,17 @@ const DrawingProviderInner: React.FC<{ children: ReactNode }> = ({
   const annotation = useAnnotation();
   const [drawingMode, setDrawingMode] = useState<DrawingMode>("idle");
   const [penColor, setPenColor] = useState<DrawingColor>("#ef4444");
-  const [penWidth, setPenWidth] = useState<number>(3);
+  const [penWidth, setPenWidth] = useState<number>(1);
   const [penOpacity, setPenOpacity] = useState<number>(1.0);
 
   // 형광펜 모드일 때 자동으로 투명도 적용
   useEffect(() => {
     if (drawingMode === "highlighter") {
-      setPenOpacity(0.3);
-      setPenWidth(20);
+      setPenOpacity(0.2);
+      setPenWidth(10);
     } else if (drawingMode === "pen") {
       setPenOpacity(1.0);
-      setPenWidth(3);
+      setPenWidth(1);
     }
   }, [drawingMode]);
 

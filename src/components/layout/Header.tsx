@@ -107,16 +107,13 @@ export const Header: React.FC<{
         saveAnnotations("manual"),
         saveDrawings(),
       ]);
-      alert("저장이 완료되었습니다.");
     } catch (err) {
       if (err instanceof MultiAccessError) {
-        alert("다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요.\n다시 로그인해 주세요.");
         try { window.close(); } catch {}
         location.href = "/error/multiaccess";
         return;
       }
       console.error("Save failed:", err);
-      alert("저장 중 오류가 발생했습니다.");
     }
   };
 
