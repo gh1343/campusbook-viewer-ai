@@ -1495,3 +1495,47 @@ export const loadNotesFromServer = async ({
 
   return result;
 };
+
+export const fetchPdfUrl = async ({
+  apiBase,
+  bookCd,
+}: {
+  apiBase: string;
+  bookCd: string;
+}): Promise<string> => {
+  if (typeof window === "undefined") {
+    throw new Error("fetchPdfUrl is only available in the browser.");
+  }
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing configuration (apiBase/bookCd).");
+  }
+
+  const url = `${apiBase}/v3/viewerdata/pdf?bookCode=${encodeURIComponent(bookCd)}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: buildRmsHeaders(),
+  });
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch (err) {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `PDF URL fetch failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  const pdfUrl = result?.pdfUrl || result?.result?.pdfUrl || "";
+  if (!pdfUrl) {
+    throw new Error("PDF URL not found in response.");
+  }
+
+  return pdfUrl;
+};

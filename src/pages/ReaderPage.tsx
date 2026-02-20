@@ -10,6 +10,7 @@ import { ContentRenderer, ControlBar, PdfViewer } from "../features/viewer";
 import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
 import { useBook } from "../contexts/BookContext";
 import { usePdfViewer } from "../contexts/PdfViewerContext";
+import { getRmsConfig, fetchPdfUrl } from "../services/rmsService";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
@@ -19,10 +20,7 @@ export const ReaderPage: React.FC = () => {
   const [isNarrow, setIsNarrow] = useState(false);
   const { registerPdfNavigator, setCurrentPdfPage, setPdfTotalPages } =
     usePdfViewer();
-  const {
-    isToolsOpen,
-    setToolsOpen,
-  } = useBook();
+  const { isToolsOpen, setToolsOpen } = useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
   const pdfGoToPageRef = useRef<(page: number) => void>();
@@ -105,7 +103,9 @@ export const ReaderPage: React.FC = () => {
   const rightPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const panels = [leftPanelRef.current, rightPanelRef.current].filter(Boolean) as HTMLDivElement[];
+    const panels = [leftPanelRef.current, rightPanelRef.current].filter(
+      Boolean
+    ) as HTMLDivElement[];
     if (panels.length === 0) return;
 
     const preventZoom = (e: WheelEvent) => {
@@ -136,7 +136,7 @@ export const ReaderPage: React.FC = () => {
       let scrollable: HTMLElement | null = target;
       while (scrollable && scrollable !== document.body) {
         const overflowY = window.getComputedStyle(scrollable).overflowY;
-        if (overflowY === 'auto' || overflowY === 'scroll') {
+        if (overflowY === "auto" || overflowY === "scroll") {
           break;
         }
         scrollable = scrollable.parentElement;
@@ -145,22 +145,30 @@ export const ReaderPage: React.FC = () => {
       // If trying to pull down (deltaY > 0)
       if (deltaY > 0) {
         // If there's no scrollable element, or if scrollable is at top, prevent pull-to-refresh
-        if (!scrollable || scrollable === document.body || scrollable.scrollTop === 0) {
+        if (
+          !scrollable ||
+          scrollable === document.body ||
+          scrollable.scrollTop === 0
+        ) {
           e.preventDefault();
         }
       }
     };
 
-    panels.forEach(panel => {
+    panels.forEach((panel) => {
       panel.addEventListener("wheel", preventZoom, { passive: false });
-      panel.addEventListener("touchstart", preventTouchZoom, { passive: false });
+      panel.addEventListener("touchstart", preventTouchZoom, {
+        passive: false,
+      });
       panel.addEventListener("touchmove", preventTouchZoom, { passive: false });
-      panel.addEventListener("touchstart", preventPullToRefresh, { passive: true });
+      panel.addEventListener("touchstart", preventPullToRefresh, {
+        passive: true,
+      });
       panel.addEventListener("touchmove", preventPullMove, { passive: false });
     });
 
     return () => {
-      panels.forEach(panel => {
+      panels.forEach((panel) => {
         panel.removeEventListener("wheel", preventZoom);
         panel.removeEventListener("touchstart", preventTouchZoom);
         panel.removeEventListener("touchmove", preventTouchZoom);
@@ -232,70 +240,38 @@ export const ReaderPage: React.FC = () => {
     }
     setTocOpen(!isTocOpen);
   };
-  const runtimeConfig = (() => {
-    if (typeof window === "undefined") return null;
-    const raw = (window as any).__RMS_CONFIG__;
-    if (!raw || typeof raw !== "object") return null;
-    return raw as {
-      pdfUrl?: string;
-      pdfPath?: string;
-      pdfProxyOrigin?: string;
-      pdfProxyPrefix?: string;
+  // PDF URL을 API 호출로 가져오기
+  const [pdfUrl, setPdfUrlState] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPdfUrl = async () => {
+      const config = getRmsConfig();
+      if (!config) {
+        // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
+        // setPdfUrlState("https://d19t5saodanwfx.cloudfront.net/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/CT-20260130090170748_source_1769734180619.pdf");
+        return;
+      }
+
+      try {
+        const url = await fetchPdfUrl({
+          apiBase: config.apiBase,
+          bookCd: config.bookCd,
+        });
+        if (!cancelled) {
+          setPdfUrlState(url);
+        }
+      } catch (err) {
+        console.error("[ReaderPage] Failed to fetch PDF URL:", err);
+      }
     };
-  })();
-  const pdfUrl = (() => {
-    const pdfProxyPrefix =
-      (typeof runtimeConfig?.pdfProxyPrefix === "string" &&
-        runtimeConfig.pdfProxyPrefix.trim()) ||
-      "/pdf_proxy";
-    const pdfProxyOrigin =
-      (typeof runtimeConfig?.pdfProxyOrigin === "string" &&
-        runtimeConfig.pdfProxyOrigin.trim()) ||
-      import.meta.env.VITE_PDF_PROXY_ORIGIN ||
-      "https://d19t5saodanwfx.cloudfront.net";
-    const runtimePdfUrl =
-      (typeof runtimeConfig?.pdfUrl === "string" &&
-        runtimeConfig.pdfUrl.trim()) ||
-      (typeof runtimeConfig?.pdfPath === "string" &&
-        runtimeConfig.pdfPath.trim()) ||
-      "";
-    // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
-    // const fallbackPdfUrl =
-    //   "https://d19t5saodanwfx.cloudfront.net/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/CT-20260130090170748_source_1769734180619.pdf";
-    const raw = runtimePdfUrl; // 로컬 확인 시: runtimePdfUrl || fallbackPdfUrl
-    const base = import.meta.env.BASE_URL || "/";
 
-    // 절대 URL이면 그대로 사용
-    if (raw && /^https?:\/\//i.test(raw)) {
-      if (import.meta.env.DEV && raw.startsWith(pdfProxyOrigin)) {
-        const parsed = new URL(raw);
-        return `${pdfProxyPrefix}${parsed.pathname}${parsed.search}${parsed.hash}`;
-      }
-      return raw;
-    }
-
-    // 상대/루트 경로면 base에 붙여서 GitHub Pages에서도 동작하도록 정규화
-    const normalizedBase = base.endsWith("/") ? base : `${base}/`;
-    const normalizedPath = raw && raw.replace(/^\/+/, "");
-
-    const pagesUrl = `${normalizedBase}${normalizedPath}`;
-
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname || "";
-      const isGithubPages = host.toLowerCase().endsWith("github.io");
-      const owner = isGithubPages ? host.split(".")[0] : "";
-      const repo = normalizedBase.replace(/^\/+|\/+$/g, "");
-      if (isGithubPages && owner && repo) {
-        const branch = import.meta.env.VITE_GITHUB_BRANCH || "main";
-        const repoPath = normalizedPath.startsWith("public/")
-          ? normalizedPath
-          : `public/${normalizedPath}`;
-        return `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${repoPath}`;
-      }
-    }
-
-    return pagesUrl;
-  })();
+    loadPdfUrl();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="layout_container">
@@ -322,14 +298,17 @@ export const ReaderPage: React.FC = () => {
         {/* Center Panel: Reader & Controls */}
         <main className="content_container">
           <div className="cc_top">
-            {/* TODO: 나중에 조건부 렌더링으로 바꿀 수 있음 */}
-            <PdfViewer
-              file={pdfUrl}
-              onPageChange={handlePdfPageChange}
-              onPagesCount={handlePdfPagesCount}
-              registerGoToPage={handleRegisterGoToPage}
-              forceSinglePage={forceSinglePage}
-            />
+            {pdfUrl ? (
+              <PdfViewer
+                file={pdfUrl}
+                onPageChange={handlePdfPageChange}
+                onPagesCount={handlePdfPagesCount}
+                registerGoToPage={handleRegisterGoToPage}
+                forceSinglePage={forceSinglePage}
+              />
+            ) : (
+              <div className="pdf_loading">PDF 로딩 중...</div>
+            )}
           </div>
 
           <div className="cc_bottom">
