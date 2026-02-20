@@ -42,6 +42,7 @@ interface AnnotationContextType {
   showAnnotations: boolean;
   syncStatus: SyncStatus;
   lastSavedAt: string | null;
+  lastSaveSource: "manual" | "auto" | null;
   toggleAnnotations: () => void;
   addPdfBookmark: (page: number, label?: string) => void;
   removePdfBookmark: (id: string) => void;
@@ -68,7 +69,9 @@ interface AnnotationContextType {
   performAnnotationSearch: (query: string) => SearchResult[];
   addStroke: (stroke: Stroke) => void;
   removeStroke: (strokeId: string) => void;
-  saveAnnotations: () => Promise<void>;
+  saveAnnotations: (source?: "manual" | "auto") => Promise<void>;
+  getDataFingerprint: () => string;
+  getLastSavedFingerprint: () => string | null;
 }
 
 const AnnotationContext = createContext<AnnotationContextType | undefined>(
@@ -180,10 +183,14 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("SAVED");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [lastSaveSource, setLastSaveSource] = useState<"manual" | "auto" | null>(null);
 
   const indexedDbWorkerRef = useRef<Worker | null>(null);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
   const indexedDbSnapshotRef = useRef<IndexedDbSnapshot | null>(null);
+
+  // 자동저장을 위한 이전 데이터 스냅샷 ref
+  const lastSavedDataRef = useRef<string | null>(null);
 
   const getIndexedDbWorker = useCallback(() => {
     if (indexedDbWorkerRef.current) return indexedDbWorkerRef.current;
@@ -660,9 +667,10 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     return finalSnapshot;
   }, [buildIndexedDbKey, bookmarks, highlights, generalNotes, strokes, bookTitle, loadSnapshot, saveSnapshot]);
 
-  const saveAnnotations = useCallback(async () => {
+  const saveAnnotations = useCallback(async (source: "manual" | "auto" = "manual") => {
     try {
       setSyncStatus("SYNCING");
+      setLastSaveSource(source);
       const currentSnapshot = await persistCurrentAnnotationToIndexedDb();
 
       if (!navigator.onLine) {
@@ -982,6 +990,24 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     loadAnnotationFromIndexedDb(storageKey);
   }, [buildIndexedDbKey, loadAnnotationFromIndexedDb]);
 
+  // 현재 데이터의 fingerprint 생성 (변경 감지용)
+  const buildDataFingerprint = useCallback(() => {
+    const data = {
+      bookmarks: bookmarks.map(b => ({ id: b.id, page: b.page, deleted: b.deleted, updated_at: b.updated_at })),
+      highlights: highlights.map(h => ({ id: h.id, text: h.text, note: h.note, color: h.color, deleted: h.deleted, updated_at: h.updated_at })),
+      notes: generalNotes.map(n => ({ id: n.id, title: n.title, content: n.content, deleted: n.deleted, updated_at: n.updated_at })),
+      strokes: strokes.map(s => ({ id: s.id, deleted: s.deleted, updated_at: s.updated_at })),
+    };
+    return JSON.stringify(data);
+  }, [bookmarks, highlights, generalNotes, strokes]);
+
+  // 수동/자동 저장 시에도 fingerprint 갱신
+  useEffect(() => {
+    if (syncStatus === "SAVED" || syncStatus === "LOCAL_ONLY") {
+      lastSavedDataRef.current = buildDataFingerprint();
+    }
+  }, [syncStatus, buildDataFingerprint]);
+
   useEffect(() => {
     const handleOnline = () => {
       if (syncStatus === "LOCAL_ONLY") {
@@ -1014,6 +1040,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       showAnnotations,
       syncStatus,
       lastSavedAt,
+      lastSaveSource,
       toggleAnnotations: () => setShowAnnotations((prev) => !prev),
       addPdfBookmark,
       removePdfBookmark,
@@ -1033,6 +1060,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       addStroke,
       removeStroke,
       saveAnnotations,
+      getDataFingerprint: buildDataFingerprint,
+      getLastSavedFingerprint: () => lastSavedDataRef.current,
     }),
     [
       bookmarks,
@@ -1044,6 +1073,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       showAnnotations,
       syncStatus,
       lastSavedAt,
+      lastSaveSource,
       addPdfBookmark,
       removePdfBookmark,
       addHighlight,
@@ -1062,6 +1092,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       addStroke,
       removeStroke,
       saveAnnotations,
+      buildDataFingerprint,
     ]
   );
 

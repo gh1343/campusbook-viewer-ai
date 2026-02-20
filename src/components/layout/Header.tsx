@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useBook } from "../../contexts/BookContext";
 import { useDrawing } from "../../contexts/DrawingContext";
 import { usePdfViewer } from "../../contexts/PdfViewerContext";
@@ -42,9 +42,12 @@ export const Header: React.FC<{
     bookmarks,
     syncStatus: annotationSyncStatus,
     lastSavedAt,
+    lastSaveSource,
     saveAnnotations,
     addPdfBookmark,
     removePdfBookmark,
+    getDataFingerprint,
+    getLastSavedFingerprint,
   } = useAnnotation();
   const {
     viewMode,
@@ -90,7 +93,7 @@ export const Header: React.FC<{
       await saveProgress();
       // 2. 그 다음 annotations와 drawings 저장
       await Promise.all([
-        saveAnnotations(),
+        saveAnnotations("manual"),
         saveDrawings(),
       ]);
       alert("저장이 완료되었습니다.");
@@ -99,6 +102,56 @@ export const Header: React.FC<{
       alert("저장 중 오류가 발생했습니다.");
     }
   };
+
+  // 자동저장 (3분 간격) - 변경 감지 후 저장
+  const autosaveInProgressRef = useRef(false);
+  const saveProgressRef = useRef(saveProgress);
+  const saveAnnotationsRef = useRef(saveAnnotations);
+  const saveDrawingsRef = useRef(saveDrawings);
+  const getDataFingerprintRef = useRef(getDataFingerprint);
+  const getLastSavedFingerprintRef = useRef(getLastSavedFingerprint);
+  const syncStatusRef = useRef(syncStatus);
+
+  useEffect(() => { saveProgressRef.current = saveProgress; }, [saveProgress]);
+  useEffect(() => { saveAnnotationsRef.current = saveAnnotations; }, [saveAnnotations]);
+  useEffect(() => { saveDrawingsRef.current = saveDrawings; }, [saveDrawings]);
+  useEffect(() => { getDataFingerprintRef.current = getDataFingerprint; }, [getDataFingerprint]);
+  useEffect(() => { getLastSavedFingerprintRef.current = getLastSavedFingerprint; }, [getLastSavedFingerprint]);
+  useEffect(() => { syncStatusRef.current = syncStatus; }, [syncStatus]);
+
+  useEffect(() => {
+    const AUTOSAVE_INTERVAL = 3 * 60 * 1000; // 3분
+
+    const intervalId = setInterval(async () => {
+      if (autosaveInProgressRef.current) return;
+
+      // SYNCING 중이면 스킵
+      if (syncStatusRef.current === "SYNCING") return;
+
+      // 현재 데이터와 마지막 저장 데이터 비교
+      const currentFingerprint = getDataFingerprintRef.current();
+      const lastFingerprint = getLastSavedFingerprintRef.current();
+      if (lastFingerprint === currentFingerprint) {
+        // 변경 없음 → 스킵
+        return;
+      }
+
+      autosaveInProgressRef.current = true;
+      try {
+        await saveProgressRef.current();
+        await Promise.all([
+          saveAnnotationsRef.current("auto"),
+          saveDrawingsRef.current(),
+        ]);
+      } catch (err) {
+        console.error("Autosave failed:", err);
+      } finally {
+        autosaveInProgressRef.current = false;
+      }
+    }, AUTOSAVE_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, []); // 의존성 없음 → interval이 한 번만 생성되고 3분마다 안정적으로 실행
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -395,7 +448,7 @@ export const Header: React.FC<{
                   >
                     <div className="save_btn saved_btn">
                       <CheckCircle2 size={12} />
-                      <span>저장 완료</span>
+                      <span>{lastSaveSource === "auto" ? "자동 저장 완료" : "저장 완료"}</span>
                     </div>
                     {lastSavedAt && (
                       <span className="saved_time">
