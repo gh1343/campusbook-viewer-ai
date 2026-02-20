@@ -15,8 +15,12 @@
 }
 
 @keyframes help_overlay_in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 모달 컨테이너 */
@@ -292,6 +296,7 @@
   line-height: 1.6;
   margin: 0;
   font-weight: 500;
+  white-space: pre-line;
 }
 
 /* 줌 배지 */
@@ -445,13 +450,27 @@
 }
 
 /* 아이콘 색상 */
-.help_icon_blue    { color: rgb(37 99 235); }
-.help_icon_emerald { color: rgb(5 150 105); }
-.help_icon_rose    { color: rgb(244 63 94); }
-.help_icon_amber   { color: rgb(245 158 11); }
-.help_icon_purple  { color: rgb(139 92 246); }
-.help_icon_indigo  { color: rgb(79 70 229); }
-.help_icon_slate   { color: rgb(148 163 184); }
+.help_icon_blue {
+  color: rgb(37 99 235);
+}
+.help_icon_emerald {
+  color: rgb(5 150 105);
+}
+.help_icon_rose {
+  color: rgb(244 63 94);
+}
+.help_icon_amber {
+  color: rgb(245 158 11);
+}
+.help_icon_purple {
+  color: rgb(139 92 246);
+}
+.help_icon_indigo {
+  color: rgb(79 70 229);
+}
+.help_icon_slate {
+  color: rgb(148 163 184);
+}
 
 /* 반응형 */
 @media (max-width: 540px) {
