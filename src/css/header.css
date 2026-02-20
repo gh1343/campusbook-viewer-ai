@@ -827,14 +827,14 @@
   .header_nav {
     display: none;
   }
+  .logo_wrap {
+    display: none;
+  }
   /* .center_hub {
     display: none;
   } */
 }
 @media (max-width: 768px) {
-  .logo_wrap {
-    display: none;
-  }
   .center_hub {
     position: static;
     transform: none;

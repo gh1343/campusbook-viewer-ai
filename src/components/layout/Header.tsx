@@ -92,10 +92,12 @@ export const Header: React.FC<{
   // 통합 저장 함수
   const handleSaveAll = async () => {
     try {
-      // 저장 전 뷰어 세션 유효성 확인
-      const config = getRmsConfig();
-      if (config) {
-        await checkViewerAlive({ apiBase: config.apiBase });
+      // 저장 전 뷰어 세션 유효성 확인 (온라인일 때만)
+      if (navigator.onLine) {
+        const config = getRmsConfig();
+        if (config) {
+          await checkViewerAlive({ apiBase: config.apiBase });
+        }
       }
 
       // 1. 먼저 progress 저장 (BookContext)
@@ -134,6 +136,32 @@ export const Header: React.FC<{
   useEffect(() => { getLastSavedFingerprintRef.current = getLastSavedFingerprint; }, [getLastSavedFingerprint]);
   useEffect(() => { syncStatusRef.current = syncStatus; }, [syncStatus]);
 
+  // 중복 기기 체크 (30초 간격, 저장과 무관하게 독립 수행)
+  useEffect(() => {
+    const ALIVE_CHECK_INTERVAL = 30 * 1000; // 30초
+
+    const aliveIntervalId = setInterval(async () => {
+      if (!navigator.onLine) return;
+      try {
+        const config = getRmsConfig();
+        if (config) {
+          await checkViewerAlive({ apiBase: config.apiBase });
+        }
+      } catch (err) {
+        if (err instanceof MultiAccessError) {
+          clearInterval(aliveIntervalId);
+          alert("다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요.\n다시 로그인해 주세요.");
+          try { window.close(); } catch {}
+          location.href = "/error/multiaccess";
+          return;
+        }
+      }
+    }, ALIVE_CHECK_INTERVAL);
+
+    return () => clearInterval(aliveIntervalId);
+  }, []);
+
+  // 자동저장 (3분 간격)
   useEffect(() => {
     const AUTOSAVE_INTERVAL = 3 * 60 * 1000; // 3분
 
@@ -153,25 +181,12 @@ export const Header: React.FC<{
 
       autosaveInProgressRef.current = true;
       try {
-        // 저장 전 뷰어 세션 유효성 확인
-        const config = getRmsConfig();
-        if (config) {
-          await checkViewerAlive({ apiBase: config.apiBase });
-        }
-
         await saveProgressRef.current();
         await Promise.all([
           saveAnnotationsRef.current("auto"),
           saveDrawingsRef.current(),
         ]);
       } catch (err) {
-        if (err instanceof MultiAccessError) {
-          clearInterval(intervalId);
-          alert("다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요.\n다시 로그인해 주세요.");
-          try { window.close(); } catch {}
-          location.href = "/error/multiaccess";
-          return;
-        }
         console.error("Autosave failed:", err);
       } finally {
         autosaveInProgressRef.current = false;

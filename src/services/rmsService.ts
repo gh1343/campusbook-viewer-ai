@@ -1564,6 +1564,8 @@ export const checkViewerAlive = async ({
     headers: buildRmsHeaders(),
   });
 
+  console.log(`[viewer-alive] status=${response.status}`);
+
   if (response.status === 400) {
     let result: any = null;
     try {
@@ -1571,6 +1573,7 @@ export const checkViewerAlive = async ({
     } catch {
       result = null;
     }
+    console.log("[viewer-alive] 400 response:", result);
     throw new MultiAccessError(result?.message);
   }
 };
