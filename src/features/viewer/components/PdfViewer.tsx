@@ -658,7 +658,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   // pdfZoom 상태가 외부에서 변경되었을 때 (예: resetPdfZoom 버튼 클릭) viewer에 반영
   useEffect(() => {
     const viewer = pdfViewerRef.current;
-    if (!viewer) return;
+    const container = viewerContainerRef.current;
+    if (!viewer || !container) return;
 
     // 수동 줌 변경 중이 아니고, 현재 스케일과 다를 때만 적용
     if (pdfZoomManualRef.current) {
@@ -668,9 +669,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     const currentScale = viewer.currentScale || 1;
     if (Math.abs(currentScale - pdfZoom) > 0.001) {
+      // 스크롤 위치 보정: 현재 보고 있는 위치를 유지
+      const viewportX = container.clientWidth / 2;
+      const viewportY = container.clientHeight / 2;
+      const contentX = container.scrollLeft + viewportX;
+      const contentY = container.scrollTop + viewportY;
+      const scaleRatio = pdfZoom / currentScale;
+
       // 외부에서 줌이 리셋되면 사용자 줌 상태도 초기화
       userHasZoomedRef.current = false;
       viewer.currentScale = pdfZoom;
+
+      // 스크롤 위치 보정
+      container.scrollLeft = contentX * scaleRatio - viewportX;
+      container.scrollTop = contentY * scaleRatio - viewportY;
+
       scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
     }

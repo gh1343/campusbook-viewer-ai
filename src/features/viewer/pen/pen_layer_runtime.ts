@@ -115,62 +115,6 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     return directDist / totalDist;
   };
 
-  // 원형 감지: 바운딩 박스 기반 + 유연한 판정
-  const analyzeCircle = (
-    points: { x: number; y: number }[]
-  ): { cx: number; cy: number; r: number } | null => {
-    if (points.length < 15) return null;
-
-    // 바운딩 박스로 중심과 반지름 계산
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const p of points) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    const w = maxX - minX;
-    const h = maxY - minY;
-    const cx = minX + w / 2;
-    const cy = minY + h / 2;
-    const avgR = (w + h) / 4;
-
-    if (avgR < 8) return null;
-
-    // 종횡비 체크: 너무 길쭉하면 원이 아님 (0.4 ~ 2.5 허용)
-    const aspect = w / (h || 1);
-    if (aspect < 0.4 || aspect > 2.5) return null;
-
-    // 시작-끝 갭: 반지름 대비 유연하게 (반지름의 2배까지 허용)
-    const start = points[0];
-    const end = points[points.length - 1];
-    const gap = Math.hypot(end.x - start.x, end.y - start.y);
-    if (gap > avgR * 2) return null;
-
-    // 둘레 체크: 전체 경로 길이가 원 둘레의 60% 이상이어야 함 (반원 이상)
-    let pathLen = 0;
-    for (let i = 1; i < points.length; i++) {
-      pathLen += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-    }
-    const expectedCircum = 2 * Math.PI * avgR;
-    if (pathLen < expectedCircum * 0.6) return null;
-
-    // 원형도: 각 포인트가 중심에서 평균 반지름만큼 떨어져 있는지
-    let totalError = 0;
-    for (const p of points) {
-      const dist = Math.hypot(p.x - cx, p.y - cy);
-      totalError += Math.abs(dist - avgR);
-    }
-    const avgError = totalError / points.length;
-    const circularity = 1 - avgError / avgR;
-
-    // 원형도 0.75 이상이면 원으로 판정 (유연하게)
-    if (circularity > 0.75) {
-      return { cx, cy, r: avgR };
-    }
-    return null;
-  };
-
   const createCanvas = (className: string, ariaHidden?: string) => {
     const canvas = document.createElement("canvas");
     canvas.className = className;
@@ -518,20 +462,9 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       const pageEl = getPageElementByNumber(pageNumber);
       const pageSize = pageEl ? getPageSize(pageEl) : null;
       const straightness = calculateStraightness(livePointsRef.current);
-      const circle = analyzeCircle(livePointsRef.current);
       let finalPoints = livePointsRef.current;
 
-      if (circle) {
-        // 원 보정: 72개 포인트로 정원 생성
-        finalPoints = [];
-        for (let i = 0; i <= 72; i++) {
-          const angle = (i / 72) * Math.PI * 2;
-          finalPoints.push({
-            x: circle.cx + Math.cos(angle) * circle.r,
-            y: circle.cy + Math.sin(angle) * circle.r,
-          });
-        }
-      } else if (straightness > 0.88 && livePointsRef.current.length > 5) {
+      if (straightness > 0.88 && livePointsRef.current.length > 5) {
         finalPoints = [
           livePointsRef.current[0],
           livePointsRef.current[livePointsRef.current.length - 1],
@@ -770,21 +703,6 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       ctx.globalAlpha = penOpacityRef.current;
       ctx.arc(p.x, p.y, adjustedWidth / 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = 1;
-      return;
-    }
-
-    // 원 감지 미리보기
-    const circlePreview = analyzeCircle(livePointsRef.current);
-    if (circlePreview) {
-      ctx.beginPath();
-      ctx.lineWidth = adjustedWidth;
-      ctx.strokeStyle = penColorRef.current;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.globalAlpha = penOpacityRef.current;
-      ctx.arc(circlePreview.cx, circlePreview.cy, circlePreview.r, 0, Math.PI * 2);
-      ctx.stroke();
       ctx.globalAlpha = 1;
       return;
     }
