@@ -3,6 +3,7 @@ import { useBook } from "../../contexts/BookContext";
 import { useDrawing } from "../../contexts/DrawingContext";
 import { usePdfViewer } from "../../contexts/PdfViewerContext";
 import { useAnnotation } from "../../contexts/AnnotationContext";
+import { getRmsConfig, checkViewerAlive, MultiAccessError } from "../../services/rmsService";
 import {
   Book,
   Sidebar,
@@ -89,6 +90,12 @@ export const Header: React.FC<{
   // 통합 저장 함수
   const handleSaveAll = async () => {
     try {
+      // 저장 전 뷰어 세션 유효성 확인
+      const config = getRmsConfig();
+      if (config) {
+        await checkViewerAlive({ apiBase: config.apiBase });
+      }
+
       // 1. 먼저 progress 저장 (BookContext)
       await saveProgress();
       // 2. 그 다음 annotations와 drawings 저장
@@ -98,6 +105,12 @@ export const Header: React.FC<{
       ]);
       alert("저장이 완료되었습니다.");
     } catch (err) {
+      if (err instanceof MultiAccessError) {
+        alert("다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요.\n다시 로그인해 주세요.");
+        try { window.close(); } catch {}
+        location.href = "/error/multiaccess";
+        return;
+      }
       console.error("Save failed:", err);
       alert("저장 중 오류가 발생했습니다.");
     }
@@ -138,12 +151,25 @@ export const Header: React.FC<{
 
       autosaveInProgressRef.current = true;
       try {
+        // 저장 전 뷰어 세션 유효성 확인
+        const config = getRmsConfig();
+        if (config) {
+          await checkViewerAlive({ apiBase: config.apiBase });
+        }
+
         await saveProgressRef.current();
         await Promise.all([
           saveAnnotationsRef.current("auto"),
           saveDrawingsRef.current(),
         ]);
       } catch (err) {
+        if (err instanceof MultiAccessError) {
+          clearInterval(intervalId);
+          alert("다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요.\n다시 로그인해 주세요.");
+          try { window.close(); } catch {}
+          location.href = "/error/multiaccess";
+          return;
+        }
         console.error("Autosave failed:", err);
       } finally {
         autosaveInProgressRef.current = false;

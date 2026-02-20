@@ -1539,3 +1539,38 @@ export const fetchPdfUrl = async ({
 
   return pdfUrl;
 };
+
+export class MultiAccessError extends Error {
+  constructor(message?: string) {
+    super(message || "다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요. 다시 로그인해 주세요.");
+    this.name = "MultiAccessError";
+  }
+}
+
+/**
+ * GET /v3/viewer/alive — 뷰어 세션 유효성 확인
+ * 200: 정상, 400: 중복 로그인 감지, 500: 서버 오류
+ * 400이면 MultiAccessError를 throw한다.
+ */
+export const checkViewerAlive = async ({
+  apiBase,
+}: {
+  apiBase: string;
+}): Promise<void> => {
+  if (!apiBase) return;
+
+  const response = await fetch(`${apiBase}/v3/viewer/alive`, {
+    method: "GET",
+    headers: buildRmsHeaders(),
+  });
+
+  if (response.status === 400) {
+    let result: any = null;
+    try {
+      result = await response.json();
+    } catch {
+      result = null;
+    }
+    throw new MultiAccessError(result?.message);
+  }
+};
