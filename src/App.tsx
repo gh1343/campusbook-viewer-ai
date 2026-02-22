@@ -6,7 +6,7 @@ import { PdfViewerProvider } from "./contexts/PdfViewerContext";
 import { AnnotationProvider } from "./contexts/AnnotationContext";
 import { ReaderPage } from "./pages/ReaderPage";
 import { ReportPage } from "./pages/ReportPage";
-// import { useDevToolsDetector } from "./hooks/useDevToolsDetector";
+import { useDevToolsDetector } from "./hooks/useDevToolsDetector";
 
 const PersistentReader: React.FC = () => {
   const location = useLocation();
@@ -36,7 +36,7 @@ const AppRoutes: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  // useDevToolsDetector();
+  useDevToolsDetector();
 
   React.useEffect(() => {
     if (typeof CSS !== "undefined" && CSS.supports("height: 100dvh")) {
