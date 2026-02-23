@@ -29,10 +29,9 @@ import {
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
-// const NAV_TOC_PATH =
-//   "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
-const NAV_TOC_ORIGIN =
-  import.meta.env.VITE_PDF_PROXY_ORIGIN || "";
+const NAV_TOC_PATH =
+  "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
+const NAV_TOC_ORIGIN = import.meta.env.VITE_PDF_PROXY_ORIGIN || "";
 
 type RuntimeViewerConfig = {
   navTocUrl?: string;
@@ -102,6 +101,10 @@ const applyDevProxy = (rawUrl: string, proxyOrigin: string) => {
 };
 
 const resolveNavTocUrl = () => {
+  // 로컬 테스트용: VITE_DEV_NAV_TOC_URL이 있으면 그것을 우선 사용
+  if (import.meta.env.DEV && import.meta.env.VITE_DEV_NAV_TOC_URL) {
+    return import.meta.env.VITE_DEV_NAV_TOC_URL as string;
+  }
   const runtime = readRuntimeViewerConfig();
   const runtimeUrl = buildNavTocFromRuntime(runtime);
   if (!runtimeUrl) return "";
@@ -521,7 +524,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }));
   }, [currentChapter.id]);
 
-
   useEffect(() => {
     let cancelled = false;
 
@@ -537,8 +539,12 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           const data = await response.json();
           if (cancelled) return;
 
-          const toc: Array<{ url: string; title: string; idx: number; depth: number }> =
-            Array.isArray(data.toc) ? data.toc : [];
+          const toc: Array<{
+            url: string;
+            title: string;
+            idx: number;
+            depth: number;
+          }> = Array.isArray(data.toc) ? data.toc : [];
           const title: string = data.info?.title ?? "";
 
           if (toc.length > 0) {
@@ -814,7 +820,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
     const loadSnapshot = async () =>
       await new Promise<IndexedDbSnapshot | null>((resolve, reject) => {
-        const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const requestId = `${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`;
         const cleanup = () => {
           worker.removeEventListener("message", handleMessage);
           worker.removeEventListener("error", handleError);
@@ -849,7 +857,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
     const saveSnapshot = async (snapshot: IndexedDbSnapshot) => {
       await new Promise<void>((resolve, reject) => {
-        const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const requestId = `${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2)}`;
         const cleanup = () => {
           worker.removeEventListener("message", handleMessage);
           worker.removeEventListener("error", handleError);
@@ -932,7 +942,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         const savedPage = progress.currentPdfPage;
         const savedMode = progress.viewMode;
         const totalPages =
-          typeof progress.pdfTotalPages === "number" ? progress.pdfTotalPages : null;
+          typeof progress.pdfTotalPages === "number"
+            ? progress.pdfTotalPages
+            : null;
         if (savedMode === "single" || savedMode === "double") {
           setViewMode(savedMode);
         }
@@ -987,9 +999,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
               if (response.type === "load_complete") {
                 resolve((response.payload as IndexedDbSnapshot) || null);
               } else {
-                reject(
-                  new Error(response.error || "IndexedDB load failed.")
-                );
+                reject(new Error(response.error || "IndexedDB load failed."));
               }
             };
             const handleError = () => {

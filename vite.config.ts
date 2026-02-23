@@ -19,7 +19,10 @@ function removeSourcemaps(): Plugin {
         const originalSetHeader = res.setHeader.bind(res);
         res.setHeader = (name: string, value: unknown) => {
           // SourceMap 관련 응답 헤더 제거
-          if (name.toLowerCase() === "sourcemap" || name.toLowerCase() === "x-sourcemap") {
+          if (
+            name.toLowerCase() === "sourcemap" ||
+            name.toLowerCase() === "x-sourcemap"
+          ) {
             return res;
           }
           return originalSetHeader(name, value);
@@ -41,6 +44,7 @@ export default defineConfig(({ mode }) => {
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
     },
     server: {
+      port: 5173,
       proxy: {
         "/pdf_proxy": {
           target: "https://d19t5saodanwfx.cloudfront.net",

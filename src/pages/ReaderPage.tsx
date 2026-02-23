@@ -247,6 +247,15 @@ export const ReaderPage: React.FC = () => {
     let cancelled = false;
 
     const loadPdfUrl = async () => {
+      // 로컬 테스트용 PDF URL 오버라이드
+      const DEV_PDF_URL = import.meta.env.DEV
+        ? import.meta.env.VITE_DEV_PDF_URL
+        : undefined;
+      if (DEV_PDF_URL) {
+        if (!cancelled) setPdfUrlState(DEV_PDF_URL);
+        return;
+      }
+
       const config = getRmsConfig();
       if (!config) {
         return;
