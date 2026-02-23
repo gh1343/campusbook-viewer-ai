@@ -41,8 +41,6 @@ type RuntimeViewerConfig = {
   webPath?: string;
   pdfProxyOrigin?: string;
   contentOrigin?: string;
-  // v2 페이지 오프셋: PDF 물리 페이지와 toc url 번호 간의 차이 보정
-  startOfPages?: number;
 };
 
 const readRuntimeViewerConfig = (): RuntimeViewerConfig | null => {
@@ -115,47 +113,37 @@ const resolveNavTocUrl = () => {
   return applyDevProxy(rawUrl, proxyOrigin);
 };
 
-// v2 방식: epubPath/pp_db/base.json URL 및 페이지 오프셋 반환
-const resolveBaseJsonConfig = (): { url: string; pageOffset: number } => {
+// v2 방식: epubPath/pp_db/base.json URL 반환
+const resolveBaseJsonConfig = (): { url: string } => {
   const runtime = readRuntimeViewerConfig();
-  if (!runtime) return { url: "", pageOffset: 0 };
+  if (!runtime) return { url: "" };
   const epubPath =
     typeof runtime.epubPath === "string" ? runtime.epubPath.trim() : "";
-  if (!epubPath) return { url: "", pageOffset: 0 };
+  if (!epubPath) return { url: "" };
   const rawUrl = `${epubPath.replace(/\/+$/, "")}/pp_db/base.json`;
   const proxyOrigin =
     (typeof runtime.pdfProxyOrigin === "string" &&
       runtime.pdfProxyOrigin.trim()) ||
     NAV_TOC_ORIGIN;
-  // startOfPages: v2의 0-based 시작 페이지 → v3 1-based와의 오프셋 보정값
-  // v2 toc url에서 추출한 번호(1-based)에 startOfPages를 더해 PDF 물리 페이지에 맞춤
-  const startOfPages =
-    typeof runtime.startOfPages === "number" && Number.isFinite(runtime.startOfPages)
-      ? runtime.startOfPages
-      : 0;
-  return { url: applyDevProxy(rawUrl, proxyOrigin), pageOffset: startOfPages };
+  return { url: applyDevProxy(rawUrl, proxyOrigin) };
 };
 
 // v2 base.json toc 배열 → Chapter[] 변환
-// pageOffset: viewer.jsp의 startOfPages 값 (v2 0-based → v3 1-based 보정)
+// toc url에서 추출한 페이지 번호를 그대로 사용
 const parseBaseJsonChapters = (
-  tocItems: Array<{ url: string; title: string; idx: number; depth: number }>,
-  pageOffset: number = 0
+  tocItems: Array<{ url: string; title: string; idx: number; depth: number }>
 ): { chapters: Chapter[]; pageMap: Record<string, number> } => {
   const pageMap: Record<string, number> = {};
   const chapters = tocItems
     .map((item) => {
       if (!item.title?.trim()) return null;
       const id = `toc-${item.idx}`;
-      // nav.xhtml 방식과 동일한 패턴으로 페이지 번호 추출
       const pageMatch =
         item.url.match(/p0*([0-9]+)_/i) || item.url.match(/p0*([0-9]+)/i);
       if (pageMatch && pageMatch[1]) {
-        const rawPageNum = parseInt(pageMatch[1], 10);
-        if (Number.isFinite(rawPageNum)) {
-          // v2는 toc url 번호가 1-based이나 PDF 물리 페이지와 오프셋 차이가 있을 수 있음
-          // startOfPages 만큼 보정하여 v3 1-based PDF 페이지에 맞춤
-          pageMap[id] = rawPageNum + pageOffset;
+        const pageNum = parseInt(pageMatch[1], 10);
+        if (Number.isFinite(pageNum)) {
+          pageMap[id] = pageNum;
         }
       }
       return {
@@ -539,7 +527,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
     const loadToc = async () => {
       // 1순위: v2 방식 - base.json
-      const { url: baseJsonUrl, pageOffset } = resolveBaseJsonConfig();
+      const { url: baseJsonUrl } = resolveBaseJsonConfig();
       if (baseJsonUrl) {
         try {
           const response = await fetch(baseJsonUrl);
@@ -555,7 +543,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
           if (toc.length > 0) {
             const { chapters: parsedChapters, pageMap } =
-              parseBaseJsonChapters(toc, pageOffset);
+              parseBaseJsonChapters(toc);
             setChapters(parsedChapters);
             setChapterPageMap(pageMap);
             setCurrentChapterIndex(0);

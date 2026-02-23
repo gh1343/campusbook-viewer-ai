@@ -35,7 +35,7 @@ export const ReaderPage: React.FC = () => {
 
   // viewMode에 따라 1쪽 보기/2쪽 보기 결정 (패널 상태와 무관)
   const forceSinglePage = viewMode === "single";
-  const pdfPageStep = !forceSinglePage && !isPdfMobileLike ? 2 : 1;
+  const pdfPageStep = 1; // v3 한쪽보기 고정
 
   // Stable handlers to avoid rerunning PdfViewer effect
   const handlePdfPageChange = useCallback(

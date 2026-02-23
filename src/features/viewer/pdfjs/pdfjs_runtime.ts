@@ -90,7 +90,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   }
   const pdfViewer = new PDFViewer(pdfViewerOptions);
   pdfViewerRef.current = pdfViewer;
-  const spreadViewPreferred = preferSpreadView ?? !isMobileLike;
+
 
   const INTERNAL_SCALE = 1; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
   let firstPageRendered = false;
@@ -155,9 +155,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   eventBus.on("pagesinit", () => {
     pdfViewer.currentScale = INTERNAL_SCALE;
-    pdfViewer.spreadMode = spreadViewPreferred
-      ? SpreadMode.ODD
-      : SpreadMode.NONE; // 데스크톱에서는 좌우 2페이지씩 배치
+    pdfViewer.spreadMode = SpreadMode.NONE; // v3 디폴트 한쪽보기 고정
     scheduleRenderRefresh();
   });
 

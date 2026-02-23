@@ -825,10 +825,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // 현재 보고 있는 페이지 번호 저장
     const currentPage = viewer.currentPageNumber;
 
-    // forceSinglePage에 따라 SpreadMode 결정 (화면 크기와 무관)
-    const nextMode = forceSinglePage ? SpreadMode.NONE : SpreadMode.ODD;
-    if (viewer.spreadMode !== nextMode) {
-      viewer.spreadMode = nextMode;
+    // v3 한쪽보기 고정: 항상 SpreadMode.NONE
+    if (viewer.spreadMode !== SpreadMode.NONE) {
+      viewer.spreadMode = SpreadMode.NONE;
       scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
     }
