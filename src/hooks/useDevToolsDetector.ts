@@ -3,7 +3,7 @@ import { useEffect } from "react";
 export function useDevToolsDetector() {
   useEffect(() => {
     const THRESHOLD_MS = 100;
-    const SIZE_THRESHOLD = 160;
+    const SIZE_THRESHOLD = 300;
     let intervalId: ReturnType<typeof setInterval>;
 
     const handleDetected = () => {
@@ -29,7 +29,7 @@ export function useDevToolsDetector() {
     };
 
     const check = () => {
-      checkWindowSize();
+      // checkWindowSize();
       checkDebuggerTiming();
     };
 

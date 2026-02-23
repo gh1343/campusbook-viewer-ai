@@ -103,6 +103,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfLoadTime,
     setPdfIsLoading,
     currentPdfPage,
+    viewMode,
   } = usePdfViewer();
   const {
     drawingMode,
@@ -825,13 +826,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // 현재 보고 있는 페이지 번호 저장
     const currentPage = viewer.currentPageNumber;
 
-    // v3 한쪽보기 고정: 항상 SpreadMode.NONE
-    if (viewer.spreadMode !== SpreadMode.NONE) {
-      viewer.spreadMode = SpreadMode.NONE;
-      scheduleRenderRefresh();
-      setLayoutTick((prev) => prev + 1);
-    }
-
     // 패널 토글로 인한 레이아웃 변경 후 현재 페이지로 스크롤 복원
     if (container && viewerRoot && currentPage) {
       requestAnimationFrame(() => {
@@ -867,6 +861,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       });
     }
   }, [forceSinglePage, scheduleRenderRefresh]);
+
+  // viewMode 변경 시 PDF spreadMode 적용
+  useEffect(() => {
+    const viewer = pdfViewerRef.current;
+    if (!viewer) return;
+    viewer.spreadMode = viewMode === "double" ? SpreadMode.ODD : SpreadMode.NONE;
+    scheduleRenderRefresh();
+    setLayoutTick((prev) => prev + 1);
+  }, [viewMode, scheduleRenderRefresh]);
 
   const getClosestPageEl = (node: Node | null) => {
     if (!node) return null;

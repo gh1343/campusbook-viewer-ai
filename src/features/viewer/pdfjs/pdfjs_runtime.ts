@@ -155,7 +155,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   eventBus.on("pagesinit", () => {
     pdfViewer.currentScale = INTERNAL_SCALE;
-    pdfViewer.spreadMode = SpreadMode.NONE; // v3 디폴트 한쪽보기 고정
     scheduleRenderRefresh();
   });
 
