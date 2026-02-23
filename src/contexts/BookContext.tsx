@@ -32,8 +32,7 @@ import type { IndexedDbSnapshot } from "../services/rmsService";
 // const NAV_TOC_PATH =
 //   "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
 const NAV_TOC_ORIGIN =
-  import.meta.env.VITE_PDF_PROXY_ORIGIN ||
-  "https://d19t5saodanwfx.cloudfront.net";
+  import.meta.env.VITE_PDF_PROXY_ORIGIN || "";
 
 type RuntimeViewerConfig = {
   navTocUrl?: string;

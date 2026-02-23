@@ -249,8 +249,6 @@ export const ReaderPage: React.FC = () => {
     const loadPdfUrl = async () => {
       const config = getRmsConfig();
       if (!config) {
-        // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
-        // setPdfUrlState("https://d19t5saodanwfx.cloudfront.net/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/CT-20260130090170748_source_1769734180619.pdf");
         return;
       }
 
