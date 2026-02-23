@@ -109,6 +109,7 @@ export const Header: React.FC<{
       ]);
     } catch (err) {
       if (err instanceof MultiAccessError) {
+        alert("다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요.\n다시 로그인해 주세요.");
         try { window.close(); } catch {}
         location.href = "/error/multiaccess";
         return;
