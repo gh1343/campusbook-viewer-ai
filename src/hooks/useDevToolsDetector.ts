@@ -1,7 +1,25 @@
 import { useEffect } from "react";
 
+const DEV_API_HOST = "o2o-gwapi-devqa.campusbook.co.kr";
+
+function isDevEnvironment(): boolean {
+  const hostname = window.location.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+
+  const params = new URLSearchParams(window.location.search);
+  const apiBase =
+    params.get("rmsApiBase") ||
+    (window as any).__RMS_CONFIG__?.apiBase ||
+    "";
+  if (apiBase.includes(DEV_API_HOST)) return true;
+
+  return false;
+}
+
 export function useDevToolsDetector() {
   useEffect(() => {
+    if (isDevEnvironment()) return;
+
     const THRESHOLD_MS = 100;
     const SIZE_THRESHOLD = 300;
     let intervalId: ReturnType<typeof setInterval>;
