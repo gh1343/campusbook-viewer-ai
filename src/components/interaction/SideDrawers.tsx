@@ -147,33 +147,53 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         </div>
         <div className="chapter_list" ref={chapterListRef}>
           {activeTab === "contents" &&
-            chapters.map((chapter, idx) => (
-              <button
-                key={chapter.id}
-                ref={(el) => {
-                  chapterItemRefs.current[idx] = el;
-                }}
-                onClick={() => {
-                  goToChapter(idx);
-                  if (window.innerWidth < 768) onClose();
-                }}
-                className={` ${idx === currentChapterIndex ? "on" : "off"}`}
-              >
-                <div className="chapter_list_inner">
-                  <div className="">
-                    <span
-                      className={`text_xs ${
-                        idx === currentChapterIndex ? "on" : "off"
-                      }`}
-                    >
-                      {String(idx + 1).padStart(2, "0")}
-                    </span>
-                    <span className="line_clamp_1">{chapter.title}</span>
+            chapters.map((chapter, idx) => {
+              const depth = chapter.depth ?? 1;
+              const depthPaddingMap: Record<number, string> = {
+                1: "pl-0",
+                2: "pl-4",
+                3: "pl-7",
+                4: "pl-10",
+              };
+              const depthPadding = depthPaddingMap[depth] ?? "pl-0";
+              const isDepth1 = depth === 1;
+              return (
+                <button
+                  key={chapter.id}
+                  ref={(el) => {
+                    chapterItemRefs.current[idx] = el;
+                  }}
+                  onClick={() => {
+                    goToChapter(idx);
+                    if (window.innerWidth < 768) onClose();
+                  }}
+                  className={`${depthPadding} ${idx === currentChapterIndex ? "on" : "off"}`}
+                >
+                  <div className="chapter_list_inner">
+                    <div className="">
+                      {isDepth1 && (
+                        <span
+                          className={`text_xs ${
+                            idx === currentChapterIndex ? "on" : "off"
+                          }`}
+                        >
+                          {String(idx + 1).padStart(2, "0")}
+                        </span>
+                      )}
+                      <span
+                        className={`line_clamp_1 ${
+                          isDepth1
+                            ? "font-semibold"
+                            : "text-slate-500 dark:text-slate-400 text-[0.8em]"
+                        }`}
+                      >
+                        {chapter.title}
+                      </span>
+                    </div>
                   </div>
-                  {/* Note: Strokes are now stored globally, not per chapter */}
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           {activeTab === "bookmarks" &&
             bookmarks
               .filter((bm) => !bm.deleted)

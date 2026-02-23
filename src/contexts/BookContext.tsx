@@ -42,6 +42,8 @@ type RuntimeViewerConfig = {
   webPath?: string;
   pdfProxyOrigin?: string;
   contentOrigin?: string;
+  // v2 페이지 오프셋: PDF 물리 페이지와 toc url 번호 간의 차이 보정
+  startOfPages?: number;
 };
 
 const readRuntimeViewerConfig = (): RuntimeViewerConfig | null => {
@@ -112,6 +114,60 @@ const resolveNavTocUrl = () => {
       runtime.pdfProxyOrigin.trim()) ||
     NAV_TOC_ORIGIN;
   return applyDevProxy(rawUrl, proxyOrigin);
+};
+
+// v2 방식: epubPath/pp_db/base.json URL 및 페이지 오프셋 반환
+const resolveBaseJsonConfig = (): { url: string; pageOffset: number } => {
+  const runtime = readRuntimeViewerConfig();
+  if (!runtime) return { url: "", pageOffset: 0 };
+  const epubPath =
+    typeof runtime.epubPath === "string" ? runtime.epubPath.trim() : "";
+  if (!epubPath) return { url: "", pageOffset: 0 };
+  const rawUrl = `${epubPath.replace(/\/+$/, "")}/pp_db/base.json`;
+  const proxyOrigin =
+    (typeof runtime.pdfProxyOrigin === "string" &&
+      runtime.pdfProxyOrigin.trim()) ||
+    NAV_TOC_ORIGIN;
+  // startOfPages: v2의 0-based 시작 페이지 → v3 1-based와의 오프셋 보정값
+  // v2 toc url에서 추출한 번호(1-based)에 startOfPages를 더해 PDF 물리 페이지에 맞춤
+  const startOfPages =
+    typeof runtime.startOfPages === "number" && Number.isFinite(runtime.startOfPages)
+      ? runtime.startOfPages
+      : 0;
+  return { url: applyDevProxy(rawUrl, proxyOrigin), pageOffset: startOfPages };
+};
+
+// v2 base.json toc 배열 → Chapter[] 변환
+// pageOffset: viewer.jsp의 startOfPages 값 (v2 0-based → v3 1-based 보정)
+const parseBaseJsonChapters = (
+  tocItems: Array<{ url: string; title: string; idx: number; depth: number }>,
+  pageOffset: number = 0
+): { chapters: Chapter[]; pageMap: Record<string, number> } => {
+  const pageMap: Record<string, number> = {};
+  const chapters = tocItems
+    .map((item) => {
+      if (!item.title?.trim()) return null;
+      const id = `toc-${item.idx}`;
+      // nav.xhtml 방식과 동일한 패턴으로 페이지 번호 추출
+      const pageMatch =
+        item.url.match(/p0*([0-9]+)_/i) || item.url.match(/p0*([0-9]+)/i);
+      if (pageMatch && pageMatch[1]) {
+        const rawPageNum = parseInt(pageMatch[1], 10);
+        if (Number.isFinite(rawPageNum)) {
+          // v2는 toc url 번호가 1-based이나 PDF 물리 페이지와 오프셋 차이가 있을 수 있음
+          // startOfPages 만큼 보정하여 v3 1-based PDF 페이지에 맞춤
+          pageMap[id] = rawPageNum + pageOffset;
+        }
+      }
+      return {
+        id,
+        title: item.title.trim(),
+        content: "",
+        depth: Number(item.depth) || 1,
+      } as Chapter;
+    })
+    .filter(Boolean) as Chapter[];
+  return { chapters, pageMap };
 };
 
 const MOCK_CHAPTERS: Chapter[] = [
@@ -229,7 +285,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [chapters, setChapters] = useState<Chapter[]>(MOCK_CHAPTERS);
-  const [navTocRaw, setNavTocRaw] = useState("");
   const [referenceDocument, setReferenceDocument] = useState<Chapter | null>(
     null
   );
@@ -483,44 +538,68 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     let cancelled = false;
 
-    const loadNavToc = async () => {
+    const loadToc = async () => {
+      // 1순위: v2 방식 - base.json
+      const { url: baseJsonUrl, pageOffset } = resolveBaseJsonConfig();
+      if (baseJsonUrl) {
+        try {
+          const response = await fetch(baseJsonUrl);
+          if (!response.ok) {
+            throw new Error(`base.json fetch failed (${response.status})`);
+          }
+          const data = await response.json();
+          if (cancelled) return;
+
+          const toc: Array<{ url: string; title: string; idx: number; depth: number }> =
+            Array.isArray(data.toc) ? data.toc : [];
+          const title: string = data.info?.title ?? "";
+
+          if (toc.length > 0) {
+            const { chapters: parsedChapters, pageMap } =
+              parseBaseJsonChapters(toc, pageOffset);
+            setChapters(parsedChapters);
+            setChapterPageMap(pageMap);
+            setCurrentChapterIndex(0);
+          }
+          if (title) setBookTitle(title);
+          return; // base.json 성공 시 nav.xhtml은 시도 안 함
+        } catch (err) {
+          console.warn("base.json load failed, falling back to nav.xhtml", err);
+        }
+      }
+
+      // 2순위: 폴백 - nav.xhtml
+      const navTocUrl = resolveNavTocUrl();
+      if (!navTocUrl) return;
       try {
-        const response = await fetch(resolveNavTocUrl());
+        const response = await fetch(navTocUrl);
         if (!response.ok) {
           throw new Error(`nav.xhtml fetch failed (${response.status})`);
         }
         const raw = await response.text();
-        if (!cancelled) {
-          setNavTocRaw(raw);
+        if (cancelled) return;
+
+        const {
+          chapters: parsedChapters,
+          pageMap,
+          bookTitle: parsedBookTitle,
+        } = parseNavChapters(raw);
+        if (parsedChapters.length > 0) {
+          setChapters(parsedChapters);
+          setChapterPageMap(pageMap);
+          setCurrentChapterIndex(0);
         }
+        if (parsedBookTitle) setBookTitle(parsedBookTitle);
       } catch (err) {
         console.error("Failed to load nav.xhtml", err);
       }
     };
 
-    loadNavToc();
+    loadToc();
     return () => {
       cancelled = true;
     };
   }, []);
-
-  // nav.xhtml을 chapters로 반영
-  useEffect(() => {
-    if (!navTocRaw) return;
-    const {
-      chapters: parsedChapters,
-      pageMap,
-      bookTitle: parsedBookTitle,
-    } = parseNavChapters(navTocRaw);
-    if (parsedChapters.length > 0) {
-      setChapters(parsedChapters);
-      setChapterPageMap(pageMap);
-      setCurrentChapterIndex(0);
-    }
-    if (parsedBookTitle) {
-      setBookTitle(parsedBookTitle);
-    }
-  }, [navTocRaw]);
 
   const updateReadingTime = () => {
     setStats((prev) => ({

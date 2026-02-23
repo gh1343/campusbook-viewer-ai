@@ -2,6 +2,7 @@ export interface Chapter {
   id: string;
   title: string;
   content: string;
+  depth?: number; // v2 base.json toc depth (1=장, 2=절, 3=소절, 4=항)
 }
 
 export interface RagChunk {
