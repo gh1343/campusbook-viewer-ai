@@ -1503,16 +1503,26 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       }
     };
 
+    // Ctrl + A 전체 선택 차단
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
     container.addEventListener("wheel", handleContainerWheel, {
       passive: false,
     });
     window.addEventListener("wheel", handleGlobalWheel, {
       passive: false,
     });
+    document.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
       container.removeEventListener("wheel", handleContainerWheel);
       window.removeEventListener("wheel", handleGlobalWheel);
+      document.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [applyPdfZoom]);
 
