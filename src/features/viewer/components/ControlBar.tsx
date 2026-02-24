@@ -50,6 +50,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
     else goToChapter(page - 1);
   };
 
+  const handleInputPageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const numericValue = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
+    setInputPage(numericValue);
+  };
+
   const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value);
     if (isPdfMode) {
@@ -115,8 +120,11 @@ export const ControlBar: React.FC<ControlBarProps> = ({
             <span className="text_xs">Page</span>
             <input
               type="text"
+              inputMode="numeric"
+              maxLength={4}
+              pattern="[0-9]*"
               value={inputPage}
-              onChange={(e) => setInputPage(e.target.value)}
+              onChange={handleInputPageChange}
               className=""
             />
             <span className="slash">/ {totalPages}</span>
