@@ -36,6 +36,8 @@ export const Header: React.FC<{
   toggleSidebar: () => void;
   isSidebarOpen?: boolean;
 }> = ({ toggleSidebar, isSidebarOpen }) => {
+  const isPreview = !!(window as any).__RMS_CONFIG__?.isPreview;
+
   const {
     isToolsOpen,
     setToolsOpen,
@@ -93,6 +95,8 @@ export const Header: React.FC<{
 
   // 통합 저장 함수
   const handleSaveAll = async () => {
+    if (isPreview) return;
+
     try {
       // 저장 전 뷰어 세션 유효성 확인 (온라인일 때만)
       if (navigator.onLine) {
@@ -138,6 +142,8 @@ export const Header: React.FC<{
 
   // 중복 기기 체크 (30초 간격, 저장과 무관하게 독립 수행)
   useEffect(() => {
+    if (isPreview) return;
+
     const ALIVE_CHECK_INTERVAL = 30 * 1000; // 30초
 
     const aliveIntervalId = setInterval(async () => {
@@ -163,6 +169,8 @@ export const Header: React.FC<{
 
   // 자동저장 (3분 간격)
   useEffect(() => {
+    if (isPreview) return;
+
     const AUTOSAVE_INTERVAL = 3 * 60 * 1000; // 3분
 
     const intervalId = setInterval(async () => {
@@ -249,7 +257,7 @@ export const Header: React.FC<{
       <div className="header_inner">
         {/* 좌측: 로고 및 내비게이션 */}
         <div className="header_main">
-          {isReader && (
+          {isReader && !isPreview && (
             <button
               onClick={toggleSidebar}
               className={`left_toggle ${isSidebarOpen ? "open" : "off"}`}
@@ -469,7 +477,7 @@ export const Header: React.FC<{
           {isReader && (
             <>
               {/* 저장 상태 인터페이스 */}
-              <div className="save_status_wrap">
+              {!isPreview && <div className="save_status_wrap">
                 {syncStatus === "UNSAVED" && (
                   <button
                     onClick={handleSaveAll}
@@ -538,7 +546,7 @@ export const Header: React.FC<{
                     <span>동기화 차단됨</span>
                   </button>
                 )}
-              </div>
+              </div>}
 
               <button
                 onClick={() => setHelpOpen(true)}

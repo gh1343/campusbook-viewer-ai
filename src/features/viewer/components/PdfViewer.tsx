@@ -63,6 +63,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   registerGoToPage,
   forceSinglePage = false,
 }) => {
+  const _rmsConfig = (window as any).__RMS_CONFIG__;
+  const _isPreview = !!_rmsConfig?.isPreview;
+  const previewMaxPage: number | undefined = (() => {
+    if (!_isPreview) return undefined;
+    const v = Number(_rmsConfig?.endOfPages);
+    return Number.isFinite(v) && v > 0 ? v : undefined;
+  })();
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scaleWrapperRef = useRef<HTMLDivElement>(null);
@@ -721,6 +728,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfLoadTime,
     setPdfIsLoading,
     setPdfLoadProgress,
+    previewMaxPage,
   });
 
   usePdfPenLayer({

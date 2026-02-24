@@ -599,10 +599,17 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   const performAnnotationSearch = useCallback(
     (query: string): SearchResult[] => {
       if (!query || query.length < 2) return [];
+
+      const _cfg = (window as any).__RMS_CONFIG__;
+      const _isPreview = !!_cfg?.isPreview;
+      const _previewStart = _isPreview ? (Number(_cfg?.startOfPages) || 1) : 1;
+      const _previewEnd = _isPreview ? (Number.isFinite(Number(_cfg?.endOfPages)) ? Number(_cfg.endOfPages) : Infinity) : Infinity;
+
       const lowerQuery = query.toLowerCase();
       const results: SearchResult[] = [];
 
       highlights.forEach((hl) => {
+        if (_isPreview && hl.pageNumber != null && (hl.pageNumber < _previewStart || hl.pageNumber > _previewEnd)) return;
         if (
           !hl.deleted &&
           (hl.text.toLowerCase().includes(lowerQuery) ||

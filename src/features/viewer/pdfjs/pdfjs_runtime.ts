@@ -41,6 +41,7 @@ interface PdfJsRuntimeOptions {
   setPdfLoadTime?: (time: number) => void;
   setPdfIsLoading?: (isLoading: boolean) => void;
   setPdfLoadProgress?: (progress: number) => void;
+  previewMaxPage?: number;
 }
 
 export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
@@ -68,6 +69,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     setPdfLoadTime,
     setPdfIsLoading,
     setPdfLoadProgress,
+    previewMaxPage,
   } = opts;
 
   const eventBus = new EventBus();
@@ -160,6 +162,10 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   eventBus.on("pagechanging", (evt: any) => {
     if (evt?.pageNumber) {
+      if (previewMaxPage && evt.pageNumber > previewMaxPage) {
+        attemptPageNavigation(previewMaxPage);
+        return;
+      }
       onPageChange?.(evt.pageNumber);
     }
   });
@@ -203,7 +209,8 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       return false;
     }
     const maxPage = pdfViewerRef.current.pdfDocument.numPages;
-    const target = Math.min(Math.max(page, 1), maxPage);
+    const effectiveMax = previewMaxPage ? Math.min(previewMaxPage, maxPage) : maxPage;
+    const target = Math.min(Math.max(page, 1), effectiveMax);
     pdfViewerRef.current.currentPageNumber = target;
 
     // 페이지가 렌더링될 때까지 재시도하는 함수
@@ -252,6 +259,25 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   registerGoToPage?.((page: number) => {
     attemptPageNavigation(page);
   });
+
+  // 프리뷰 모드: previewMaxPage 이후로 스크롤 불가
+  let scrollLimitHandler: (() => void) | null = null;
+  if (previewMaxPage) {
+    scrollLimitHandler = () => {
+      const lastPageEl = viewer.querySelector<HTMLElement>(
+        `.page[data-page-number="${previewMaxPage}"]`
+      );
+      if (!lastPageEl) return;
+      const maxScrollTop = Math.max(
+        0,
+        lastPageEl.offsetTop + lastPageEl.offsetHeight - viewerContainer.clientHeight
+      );
+      if (viewerContainer.scrollTop > maxScrollTop) {
+        viewerContainer.scrollTop = maxScrollTop;
+      }
+    };
+    viewerContainer.addEventListener("scroll", scrollLimitHandler);
+  }
 
   linkService.setViewer(pdfViewer);
 
@@ -353,6 +379,10 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     if (updateTimeInterval !== null) {
       clearInterval(updateTimeInterval);
       updateTimeInterval = null;
+    }
+    if (scrollLimitHandler) {
+      viewerContainer.removeEventListener("scroll", scrollLimitHandler);
+      scrollLimitHandler = null;
     }
     loadingTask.destroy();
     pdfViewerRef.current = null;

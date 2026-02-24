@@ -754,6 +754,11 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const performSearch = (query: string): SearchResult[] => {
     if (!query || query.length < 2) return [];
 
+    const _cfg = (window as any).__RMS_CONFIG__;
+    const _isPreview = !!_cfg?.isPreview;
+    const _previewStart = _isPreview ? (Number(_cfg?.startOfPages) || 1) : 1;
+    const _previewEnd = _isPreview ? (Number.isFinite(Number(_cfg?.endOfPages)) ? Number(_cfg.endOfPages) : Infinity) : Infinity;
+
     const results: SearchResult[] = [];
     const lowerQuery = query.toLowerCase();
 
@@ -780,6 +785,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     pdfTextPages.forEach((p) => {
+      if (_isPreview && (p.page < _previewStart || p.page > _previewEnd)) return;
       const idx = p.text.toLowerCase().indexOf(lowerQuery);
       if (idx !== -1) {
         const start = Math.max(0, idx - 40);
