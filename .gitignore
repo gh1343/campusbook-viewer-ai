@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 로컬 테스트용 PDF (git에 올리지 않음)
+local-pdfs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

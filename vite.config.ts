@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
@@ -33,12 +34,32 @@ function removeSourcemaps(): Plugin {
   };
 }
 
+/** 로컬 PDF 파일을 /local-pdfs/ 경로로 서빙 (dev 전용, 빌드 미포함) */
+function serveLocalPdfs(): Plugin {
+  return {
+    name: "serve-local-pdfs",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/local-pdfs", (req, res, next) => {
+        const fileName = (req.url || "/").replace(/^\//, "");
+        const filePath = path.join(__dirname, "local-pdfs", fileName);
+        if (fileName && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          res.setHeader("Content-Type", "application/pdf");
+          fs.createReadStream(filePath).pipe(res);
+        } else {
+          next();
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
   return {
     base: "/campusbook-viewer-ai/", // 본인 리포 이름으로 교체, 또는 './' 사용
-    plugins: [react(), tailwindcss(), removeSourcemaps()],
+    plugins: [react(), tailwindcss(), removeSourcemaps(), serveLocalPdfs()],
     define: {
       "process.env.API_KEY": JSON.stringify(env.GEMINI_API_KEY),
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
