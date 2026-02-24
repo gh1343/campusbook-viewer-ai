@@ -83,6 +83,8 @@ export const Header: React.FC<{
       ? "SYNCING"
       : annotationSyncStatus === "UNSAVED" || drawingSyncStatus === "UNSAVED"
       ? "UNSAVED"
+      : annotationSyncStatus === "SERVER_ONLY" || drawingSyncStatus === "SERVER_ONLY"
+      ? "SERVER_ONLY"
       : annotationSyncStatus === "LOCAL_ONLY" || drawingSyncStatus === "LOCAL_ONLY"
       ? "LOCAL_ONLY"
       : annotationSyncStatus === "BLOCKED" || drawingSyncStatus === "BLOCKED"
@@ -512,6 +514,22 @@ export const Header: React.FC<{
                       <RefreshCw size={8} />
                       클릭하여 재시도
                     </span>
+                  </button>
+                )}
+                {syncStatus === "SERVER_ONLY" && (
+                  <button
+                    onClick={handleSaveAll}
+                    className="save_btn_group server_only"
+                  >
+                    <div className="save_btn server_only_btn">
+                      <AlertCircle size={12} />
+                      <span>서버 저장됨 (기기 공간 부족)</span>
+                    </div>
+                    {lastSavedAt && (
+                      <span className="saved_time">
+                        최근 저장: {lastSavedAt}
+                      </span>
+                    )}
                   </button>
                 )}
                 {syncStatus === "BLOCKED" && (

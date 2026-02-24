@@ -123,7 +123,7 @@ export interface TTSConfig {
   continuous: boolean;
 }
 
-export type SyncStatus = "UNSAVED" | "SYNCING" | "SAVED" | "LOCAL_ONLY" | "BLOCKED";
+export type SyncStatus = "UNSAVED" | "SYNCING" | "SAVED" | "LOCAL_ONLY" | "BLOCKED" | "SERVER_ONLY";
 
 export interface BookContextType {
   chapters: Chapter[];

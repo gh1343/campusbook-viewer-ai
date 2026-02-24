@@ -31,6 +31,7 @@ import {
   saveDrawingsToServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
+import { StorageQuotaExceededError } from "../utils/errors";
 
 interface AnnotationContextType {
   bookmarks: PdfBookmark[];
@@ -273,11 +274,14 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
             type?: string;
             requestId?: string;
             error?: string;
+            quotaExceeded?: boolean;
           };
           if (!response || response.requestId !== requestId) return;
           cleanup();
           if (response.type === "save_complete") {
             resolve();
+          } else if (response.quotaExceeded) {
+            reject(new StorageQuotaExceededError());
           } else {
             reject(new Error(response.error || "IndexedDB save failed."));
           }
@@ -662,16 +666,39 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     };
     const migrated = migrate_snapshot(nextSnapshot);
     const finalSnapshot = migrated.snapshot || nextSnapshot;
-    await saveSnapshot(finalSnapshot);
+    try {
+      await saveSnapshot(finalSnapshot);
+    } catch (err) {
+      if (err instanceof StorageQuotaExceededError) {
+        // 저장은 실패했지만 ref는 현재 상태로 업데이트 (stale 방지)
+        indexedDbSnapshotRef.current = finalSnapshot;
+        throw err;
+      }
+      throw err;
+    }
     indexedDbSnapshotRef.current = finalSnapshot;
     return finalSnapshot;
   }, [buildIndexedDbKey, bookmarks, highlights, generalNotes, strokes, bookTitle, loadSnapshot, saveSnapshot]);
 
   const saveAnnotations = useCallback(async (source: "manual" | "auto" = "manual") => {
+    let indexedDbQuotaExceeded = false;
+    let currentSnapshot: IndexedDbSnapshot | undefined;
+
     try {
       setSyncStatus("SYNCING");
       setLastSaveSource(source);
-      const currentSnapshot = await persistCurrentAnnotationToIndexedDb();
+
+      // IndexedDB 1차 저장 시도 (용량 초과 시 스킵하고 계속 진행)
+      try {
+        currentSnapshot = await persistCurrentAnnotationToIndexedDb();
+      } catch (err) {
+        if (err instanceof StorageQuotaExceededError) {
+          indexedDbQuotaExceeded = true;
+          console.warn("[Storage] Quota exceeded. Skipping IndexedDB save.");
+        } else {
+          throw err;
+        }
+      }
 
       if (!navigator.onLine) {
         // 오프라인일 때도 메모리에서 deleted 항목 제거
@@ -679,7 +706,15 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         setBookmarks((prev) => prev.filter((item) => !item.deleted));
         setGeneralNotes((prev) => prev.filter((item) => !item.deleted));
         setStrokes((prev) => prev.filter((item) => !item.deleted));
-        setSyncStatus("LOCAL_ONLY");
+        if (indexedDbQuotaExceeded) {
+          // 오프라인 + 용량 초과: 어디에도 저장 안 된 상태
+          alert(
+            "기기 저장 공간이 부족하고 오프라인 상태입니다.\n인터넷에 연결되면 자동으로 서버에 저장됩니다."
+          );
+          setSyncStatus("UNSAVED");
+        } else {
+          setSyncStatus("LOCAL_ONLY");
+        }
         setLastSavedAt(formatSavedAt(new Date()));
         return;
       }
@@ -760,22 +795,27 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         }
       }
 
-      const postSyncSnapshot: IndexedDbSnapshot = {
-        ...currentSnapshot,
-        savedAt: Date.now(),
-        data: {
-          ...currentSnapshot.data,
-          bookmarks: updatedBookmarks,
-          highlights: updatedHighlights,
-          notes: updatedNotes,
-          strokes: updatedStrokes,
-          // Progress는 BookContext에서 관리
-          progress: currentSnapshot.data.progress,
-        },
-      };
-      await saveSnapshot(postSyncSnapshot);
-      indexedDbSnapshotRef.current = postSyncSnapshot;
-      setSyncStatus("SAVED");
+      // IndexedDB 2차 저장 (용량 초과 시 스킵)
+      if (!indexedDbQuotaExceeded && currentSnapshot) {
+        const postSyncSnapshot: IndexedDbSnapshot = {
+          ...currentSnapshot,
+          savedAt: Date.now(),
+          data: {
+            ...currentSnapshot.data,
+            bookmarks: updatedBookmarks,
+            highlights: updatedHighlights,
+            notes: updatedNotes,
+            strokes: updatedStrokes,
+            // Progress는 BookContext에서 관리
+            progress: currentSnapshot.data.progress,
+          },
+        };
+        await saveSnapshot(postSyncSnapshot);
+        indexedDbSnapshotRef.current = postSyncSnapshot;
+      }
+
+      // 로컬 저장 성공 여부에 따라 상태 분기
+      setSyncStatus(indexedDbQuotaExceeded ? "SERVER_ONLY" : "SAVED");
       setLastSavedAt(formatSavedAt(new Date()));
     } catch (err) {
       console.error("saveAnnotations failed", err);

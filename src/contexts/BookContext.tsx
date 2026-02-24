@@ -28,6 +28,7 @@ import {
   saveProgressToServer,
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
+import { StorageQuotaExceededError } from "../utils/errors";
 // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
 const NAV_TOC_PATH =
   "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
@@ -1051,11 +1052,18 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             worker.removeEventListener("error", handleError);
           };
           const handleMessage = (event: MessageEvent) => {
-            const response = event.data;
+            const response = event.data as {
+              type?: string;
+              requestId?: string;
+              error?: string;
+              quotaExceeded?: boolean;
+            };
             if (!response || response.requestId !== requestId) return;
             cleanup();
             if (response.type === "save_complete") {
               resolve();
+            } else if (response.quotaExceeded) {
+              reject(new StorageQuotaExceededError());
             } else {
               reject(new Error(response.error || "IndexedDB save failed."));
             }
@@ -1074,8 +1082,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         });
       }
     } catch (err) {
-      console.error("Failed to save progress to IndexedDB", err);
-      throw err; // IndexedDB 저장 실패는 에러로 처리
+      if (err instanceof StorageQuotaExceededError) {
+        console.warn("[Storage] Quota exceeded. Skipping IndexedDB save for progress.");
+        // throw 하지 않음 → 아래 서버 저장으로 계속 진행
+      } else {
+        console.error("Failed to save progress to IndexedDB", err);
+        throw err; // 다른 에러는 기존과 동일하게 처리
+      }
     }
 
     // 2. 서버에 저장 (RMS config 있고 온라인일 때만)

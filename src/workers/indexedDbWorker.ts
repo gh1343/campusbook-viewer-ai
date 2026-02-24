@@ -255,10 +255,13 @@ self.addEventListener("message", async (event) => {
       self.postMessage({ type: "save_complete", requestId: message.requestId });
     } catch (err) {
       const messageText = err instanceof Error ? err.message : String(err);
+      const quotaExceeded =
+        err instanceof DOMException && err.name === "QuotaExceededError";
       self.postMessage({
         type: "save_error",
         requestId: message.requestId,
         error: messageText,
+        quotaExceeded,
       });
     }
   }
