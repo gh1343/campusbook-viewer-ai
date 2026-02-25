@@ -32,6 +32,7 @@ import {
   Filter,
   Lock,
 } from "lucide-react";
+import { getPreviewConfig } from "../../utils/previewConfig";
 import { findRelevantChunks } from "../../services/pdfRagService";
 import { GeneralNote, Highlight as HighlightType } from "../../../types";
 import { ContentRenderer } from "../../features/viewer";
@@ -111,9 +112,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   const chapterListRef = useRef<HTMLDivElement | null>(null);
   const chapterItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const _rmsConfig = (window as any).__RMS_CONFIG__;
-  // 미리보기: isPreview=true, endOfPages > 0 (페이지 제한 있음)
-  const isPreviewMode = !!_rmsConfig?.isPreview && Number(_rmsConfig?.endOfPages) > 0;
+  const { isPreviewMode } = getPreviewConfig();
 
   // 활성 챕터가 보이도록 사이드바 스크롤 자동 조정
   useEffect(() => {

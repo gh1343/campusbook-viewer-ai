@@ -11,6 +11,7 @@ import { PDFViewer, SpreadMode } from "pdfjs-dist/web/pdf_viewer.mjs";
 import "pdfjs-dist/web/pdf_viewer.css";
 import "../../../css/pdf_viewer.css";
 
+import { getPreviewConfig } from "../../../utils/previewConfig";
 import {
   applySearchHighlightWithRetry,
   askAiAction,
@@ -63,13 +64,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   registerGoToPage,
   forceSinglePage = false,
 }) => {
-  const _rmsConfig = (window as any).__RMS_CONFIG__;
-  const _isPreview = !!_rmsConfig?.isPreview;
-  const previewMaxPage: number | undefined = (() => {
-    if (!_isPreview) return undefined;
-    const v = Number(_rmsConfig?.endOfPages);
-    return Number.isFinite(v) && v > 0 ? v : undefined;
-  })();
+  const { previewMaxPage } = getPreviewConfig();
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scaleWrapperRef = useRef<HTMLDivElement>(null);

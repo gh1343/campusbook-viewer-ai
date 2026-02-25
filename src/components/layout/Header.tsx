@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { getPreviewConfig } from "../../utils/previewConfig";
 import { useBook } from "../../contexts/BookContext";
 import { useDrawing } from "../../contexts/DrawingContext";
 import { usePdfViewer } from "../../contexts/PdfViewerContext";
@@ -36,13 +37,7 @@ export const Header: React.FC<{
   toggleSidebar: () => void;
   isSidebarOpen?: boolean;
 }> = ({ toggleSidebar, isSidebarOpen }) => {
-  const _rmsConfig = (window as any).__RMS_CONFIG__;
-  // isPreview=true인 경우 (미리보기 + 뉴논문 관련 링크 모두)
-  const isPreview = !!_rmsConfig?.isPreview;
-  // 미리보기: isPreview=true, endOfPages > 0 (페이지 제한 있음)
-  const isPreviewMode = isPreview && Number(_rmsConfig?.endOfPages) > 0;
-  // 뉴논문 관련 링크: isPreview=true, endOfPages = 0 (페이지 제한 없음)
-  const isNewPaperLink = isPreview && Number(_rmsConfig?.endOfPages) === 0;
+  const { isPreview, isPreviewMode, isNewPaperLink } = getPreviewConfig();
 
   const {
     isToolsOpen,

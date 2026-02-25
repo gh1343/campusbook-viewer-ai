@@ -16,6 +16,7 @@ import {
   Stroke,
   SyncStatus,
 } from "../../types";
+import { getPreviewConfig } from "../utils/previewConfig";
 import { useBook } from "./BookContext";
 import { usePdfViewer } from "./PdfViewerContext";
 import {
@@ -600,11 +601,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     (query: string): SearchResult[] => {
       if (!query || query.length < 2) return [];
 
-      const _cfg = (window as any).__RMS_CONFIG__;
       // 미리보기(endOfPages > 0)일 때만 페이지 범위 제한 적용
-      const _isPreviewMode = !!_cfg?.isPreview && Number(_cfg?.endOfPages) > 0;
-      const _previewStart = _isPreviewMode ? (Number(_cfg?.startOfPages) || 1) : 1;
-      const _previewEnd = _isPreviewMode ? (Number.isFinite(Number(_cfg?.endOfPages)) ? Number(_cfg.endOfPages) : Infinity) : Infinity;
+      const { isPreviewMode: _isPreviewMode, previewStartPage: _previewStart, previewEndPage: _previewEnd } = getPreviewConfig();
 
       const lowerQuery = query.toLowerCase();
       const results: SearchResult[] = [];
