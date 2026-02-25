@@ -1,13 +1,12 @@
 import React from 'react';
 import { HelpCircle, ArrowRight } from 'lucide-react';
-import { getRmsConfig } from '../../services/rmsService';
+import { getRmsConfig, getAccessStoreHeader } from '../../services/rmsService';
 import '../../css/legacy_viewer_button.css';
 
-const handleLegacyClick = async () => {
+const handleLegacyClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+  e.preventDefault();
+
   const config = getRmsConfig();
-
-  console.log('[LegacyViewerButton] getRmsConfig():', config);
-
   if (!config) {
     console.warn('[LegacyViewerButton] config 없음 — apiBase 또는 bookCd를 찾을 수 없습니다.');
     return;
@@ -16,21 +15,32 @@ const handleLegacyClick = async () => {
   const { apiBase, bookCd } = config;
   const url = `${apiBase}/v2/book/info/${bookCd}`;
 
-  console.log(`[LegacyViewerButton] 요청 URL: ${url}`);
+  const headers = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-ealice-store": getAccessStoreHeader(),
+  };
+  console.log('[LegacyViewerButton] 요청 URL:', url);
+  console.log('[LegacyViewerButton] 요청 헤더:', headers);
 
   try {
-    const res = await fetch(url);
-    const text = await res.text();
-
-    let parsed: unknown;
+    const res = await fetch(url, { headers });
+    let parsed: any;
     try {
-      parsed = JSON.parse(text);
+      parsed = await res.json();
     } catch {
-      parsed = text;
+      parsed = null;
     }
 
-    console.log('[LegacyViewerButton] 응답 status:', res.status);
-    console.log('[LegacyViewerButton] 응답 body:', parsed);
+    console.log('[LegacyViewerButton] 응답 status:', res.status, parsed);
+
+    const previewUrl = parsed?.result?.bookInfo?.previewUrl;
+    if (!previewUrl) {
+      console.error('[LegacyViewerButton] previewUrl을 찾을 수 없습니다.', parsed);
+      return;
+    }
+
+    console.log('[LegacyViewerButton] window.open:', previewUrl);
+    window.open(previewUrl, '_blank', '');
   } catch (err) {
     console.error('[LegacyViewerButton] 요청 실패:', err);
   }
@@ -46,9 +56,7 @@ export const LegacyViewerButton: React.FC = () => {
       </div>
 
       <a
-        href="https://v2.campusbook.co.kr"
-        target="_blank"
-        rel="noopener noreferrer"
+        href="#"
         className="legacy-viewer-link"
         onClick={handleLegacyClick}
       >

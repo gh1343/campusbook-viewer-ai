@@ -347,10 +347,18 @@ const getRmsAuthToken = () => {
   return raw.trim();
 };
 
-const buildRmsHeaders = () => {
+export const getAccessStoreHeader = () => {
+  if (typeof window === "undefined") return "www.campusbook.co.kr";
+  const host = window.location.host;
+  const isDevqa = host === "localhost:5173" || host.indexOf("devqa") >= 0;
+  return isDevqa ? "www-devqa.campusbook.co.kr" : "www.campusbook.co.kr";
+};
+
+export const buildRmsHeaders = () => {
   const authToken = getRmsAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json; charset=utf-8",
+    "Access-ealice-store": getAccessStoreHeader(),
   };
   if (authToken) {
     headers.Authorization = /^Bearer\s+/i.test(authToken)
