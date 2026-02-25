@@ -1,3 +1,67 @@
+/* 미리보기 마지막 페이지 오버레이 */
+.pdf_viewer_container.preview_end_blur {
+  filter: blur(5px);
+  pointer-events: none;
+  transition: filter 0.2s ease;
+}
+
+.preview_end_overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: preview_end_fade_in 0.2s ease both;
+}
+
+@keyframes preview_end_fade_in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.preview_end_card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 1.75rem 2.25rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(226 232 240);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+  animation: preview_end_card_in 0.22s ease both;
+  pointer-events: none;
+}
+
+@keyframes preview_end_card_in {
+  from { opacity: 0; transform: scale(0.94) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+
+.preview_end_icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  background-color: rgb(241 245 249);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(100 116 139);
+}
+
+.preview_end_text {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: rgb(51 65 85);
+  letter-spacing: -0.01em;
+  text-align: center;
+  line-height: 1.5;
+}
+
 .pdf_viewer_container {
   -webkit-user-select: none;
   -ms-user-select: none;

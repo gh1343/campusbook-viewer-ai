@@ -14,11 +14,11 @@ const root = ReactDOM.createRoot(rootElement);
 // 미리보기:        { isPreview: true,  startOfPages: 1, endOfPages: 14 }
 // 뉴논문 관련 링크: { isPreview: true,  startOfPages: 0, endOfPages: 0  }
 // 일반 도서:       { isPreview: false }
-// (window as any).__RMS_CONFIG__ = {
-//   isPreview: true,
-//   startOfPages: 1,
-//   endOfPages: 14,
-// };
+(window as any).__RMS_CONFIG__ = {
+  isPreview: true,
+  startOfPages: 1,
+  endOfPages: 14,
+};
 root.render(
   <React.StrictMode>
     <App />

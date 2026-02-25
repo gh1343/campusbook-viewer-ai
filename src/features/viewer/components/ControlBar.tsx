@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useBook } from "../../../contexts/BookContext";
+import { getPreviewConfig } from "../../../utils/previewConfig";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import "../../../css/page_navigation.css";
 interface ControlBarProps {
@@ -25,6 +26,12 @@ export const ControlBar: React.FC<ControlBarProps> = ({
 
   const isPdfMode = !!onPdfGoToPage && (pdfPageCount || 0) > 0;
   const totalPages = isPdfMode ? pdfPageCount || 1 : chapters.length;
+  const { previewMaxPage } = getPreviewConfig();
+  // 미리보기 모드일 때 표시용 총 페이지는 previewMaxPage로 제한
+  const displayTotalPages =
+    previewMaxPage !== undefined
+      ? Math.min(previewMaxPage, totalPages)
+      : totalPages;
   const currentPageNumber = isPdfMode
     ? pdfCurrentPage || 1
     : currentChapterIndex + 1;
@@ -127,7 +134,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
               onChange={handleInputPageChange}
               className=""
             />
-            <span className="slash">/ {totalPages}</span>
+            <span className="slash">/ {displayTotalPages}</span>
           </form>
           <span className="chapter_name">{chapterLabel}</span>
         </div>

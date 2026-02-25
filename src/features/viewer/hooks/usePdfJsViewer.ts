@@ -29,6 +29,7 @@ interface UsePdfJsViewerParams {
   setPdfIsLoading?: (isLoading: boolean) => void;
   setPdfLoadProgress?: (progress: number) => void;
   previewMaxPage?: number;
+  onPreviewLimitReached?: () => void;
 }
 
 export const usePdfJsViewer = ({
@@ -56,6 +57,7 @@ export const usePdfJsViewer = ({
   setPdfIsLoading,
   setPdfLoadProgress,
   previewMaxPage,
+  onPreviewLimitReached,
 }: UsePdfJsViewerParams) => {
   useEffect(() => {
     if (!viewerContainerRef.current || !viewerRef.current) return;
@@ -92,6 +94,7 @@ export const usePdfJsViewer = ({
       setPdfIsLoading,
       setPdfLoadProgress,
       previewMaxPage,
+      onPreviewLimitReached,
     });
 
     return cleanup;

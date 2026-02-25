@@ -150,6 +150,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const [loading, setLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showPreviewEndOverlay, setShowPreviewEndOverlay] = useState(false);
+  const previewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayTouchStartYRef = useRef<number | null>(null);
   const [copyStatus, setCopyStatus] = useState<"" | "ok" | "fail">("");
   const [selection, setSelection] = useState<{
     text: string;
@@ -565,6 +568,25 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     ]
   );
 
+  // 미리보기 한계 도달 → 블러 오버레이 표시 후 4초 뒤 자동 dismiss
+  const handlePreviewLimitReached = useCallback(() => {
+    setShowPreviewEndOverlay(true);
+    if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+    previewEndTimerRef.current = setTimeout(() => {
+      setShowPreviewEndOverlay(false);
+    }, 4000);
+  }, []);
+
+  // 페이지가 previewMaxPage 미만으로 변경되면 오버레이 dismiss
+  // (navigation_bottom_box 이전 버튼 클릭 시 포함)
+  useEffect(() => {
+    if (!showPreviewEndOverlay || !previewMaxPage) return;
+    if (currentPdfPage < previewMaxPage) {
+      setShowPreviewEndOverlay(false);
+      if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+    }
+  }, [currentPdfPage, showPreviewEndOverlay, previewMaxPage]);
+
   const scheduleRenderRefresh = useCallback(() => {
     if (rafRefreshId.current !== null) return;
     // 핀치줌 중에는 렌더링 스킵하지 않고 진행 (깜박임 방지)
@@ -724,6 +746,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfIsLoading,
     setPdfLoadProgress,
     previewMaxPage,
+    onPreviewLimitReached: handlePreviewLimitReached,
   });
 
   usePdfPenLayer({
@@ -1633,10 +1656,55 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           } as React.CSSProperties
         }
       >
+        {/* 미리보기 마지막 페이지 오버레이 */}
+        {showPreviewEndOverlay && (
+          <div
+            className="preview_end_overlay"
+            onClick={() => {
+              setShowPreviewEndOverlay(false);
+              if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+            }}
+            onWheel={(e) => {
+              if (e.deltaY < 0) {
+                // 위로 스크롤 → 오버레이 dismiss + 컨테이너 동시 스크롤
+                setShowPreviewEndOverlay(false);
+                if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+                const container = viewerContainerRef.current;
+                if (container) container.scrollTop += e.deltaY;
+              }
+            }}
+            onTouchStart={(e) => {
+              overlayTouchStartYRef.current = e.touches[0].clientY;
+            }}
+            onTouchMove={(e) => {
+              if (overlayTouchStartYRef.current === null) return;
+              const deltaY = e.touches[0].clientY - overlayTouchStartYRef.current;
+              if (deltaY > 15) {
+                // 손가락이 아래로 이동 = 위로 스크롤 → dismiss
+                setShowPreviewEndOverlay(false);
+                if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+                overlayTouchStartYRef.current = null;
+              }
+            }}
+          >
+            <div className="preview_end_card">
+              <div className="preview_end_icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <p className="preview_end_text">
+                미리보기 마지막 페이지입니다.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ⭐ pdf.js에서 요구하는 container는 그대로 absolute 유지 ⭐ */}
         <div
           ref={viewerContainerRef}
-          className="pdf_viewer_container"
+          className={`pdf_viewer_container${showPreviewEndOverlay ? " preview_end_blur" : ""}`}
           data-drawing-mode={drawingMode}
           style={{
             cursor:

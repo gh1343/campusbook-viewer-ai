@@ -42,6 +42,7 @@ interface PdfJsRuntimeOptions {
   setPdfIsLoading?: (isLoading: boolean) => void;
   setPdfLoadProgress?: (progress: number) => void;
   previewMaxPage?: number;
+  onPreviewLimitReached?: () => void;
 }
 
 export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
@@ -70,6 +71,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     setPdfIsLoading,
     setPdfLoadProgress,
     previewMaxPage,
+    onPreviewLimitReached,
   } = opts;
 
   const eventBus = new EventBus();
@@ -257,12 +259,17 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   };
 
   registerGoToPage?.((page: number) => {
+    // 미리보기 최대 페이지 초과 시도 → 오버레이 트리거
+    if (previewMaxPage && page > previewMaxPage) {
+      onPreviewLimitReached?.();
+    }
     attemptPageNavigation(page);
   });
 
   // 프리뷰 모드: previewMaxPage 이후로 스크롤 불가
   let scrollLimitHandler: (() => void) | null = null;
   if (previewMaxPage) {
+    let previewScrollLimitTriggered = false;
     scrollLimitHandler = () => {
       const lastPageEl = viewer.querySelector<HTMLElement>(
         `.page[data-page-number="${previewMaxPage}"]`
@@ -274,6 +281,12 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       );
       if (viewerContainer.scrollTop > maxScrollTop) {
         viewerContainer.scrollTop = maxScrollTop;
+        // 연속 스크롤 이벤트 중 한 번만 트리거 (debounce)
+        if (!previewScrollLimitTriggered) {
+          previewScrollLimitTriggered = true;
+          onPreviewLimitReached?.();
+          setTimeout(() => { previewScrollLimitTriggered = false; }, 1500);
+        }
       }
     };
     viewerContainer.addEventListener("scroll", scrollLimitHandler);
