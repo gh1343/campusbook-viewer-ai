@@ -8,12 +8,15 @@ import React, {
 import { Header } from "../components/layout/Header";
 import { ContentRenderer, ControlBar, PdfViewer } from "../features/viewer";
 import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
+import { LegacyViewerButton } from "../components/ui/LegacyViewerButton";
 import { useBook } from "../contexts/BookContext";
 import { usePdfViewer } from "../contexts/PdfViewerContext";
 import { getRmsConfig, fetchPdfUrl } from "../services/rmsService";
+import { getPreviewConfig } from "../utils/previewConfig";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
+  const { isPreviewMode } = getPreviewConfig();
 
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
@@ -284,6 +287,7 @@ export const ReaderPage: React.FC = () => {
   return (
     <div className="layout_container">
       <Header toggleSidebar={toggleToc} isSidebarOpen={isTocOpen} />
+      {isPreviewMode && <LegacyViewerButton />}
 
       {/* Main Split Layout Container */}
       <div ref={containerRef} className="split_container">
