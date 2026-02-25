@@ -30,6 +30,7 @@ import {
   Edit3,
   Search,
   Filter,
+  Lock,
 } from "lucide-react";
 import { findRelevantChunks } from "../../services/pdfRagService";
 import { GeneralNote, Highlight as HighlightType } from "../../../types";
@@ -110,6 +111,10 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   const chapterListRef = useRef<HTMLDivElement | null>(null);
   const chapterItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  const _rmsConfig = (window as any).__RMS_CONFIG__;
+  // 미리보기: isPreview=true, endOfPages > 0 (페이지 제한 있음)
+  const isPreviewMode = !!_rmsConfig?.isPreview && Number(_rmsConfig?.endOfPages) > 0;
+
   // 활성 챕터가 보이도록 사이드바 스크롤 자동 조정
   useEffect(() => {
     if (activeTab !== "contents") return;
@@ -145,7 +150,11 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
             <Bookmark size={14} /> 북마크
           </button>
         </div>
-        <div className="chapter_list" ref={chapterListRef}>
+        <div className="toc_content_area">
+        <div
+          className={`chapter_list${isPreviewMode && activeTab === "contents" ? " toc_blur" : ""}`}
+          ref={chapterListRef}
+        >
           {activeTab === "contents" &&
             chapters.map((chapter, idx) => {
               const depth = chapter.depth ?? 1;
@@ -246,6 +255,21 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                 <p className="text_sm">북마크한 페이지가 없습니다.</p>
               </div>
             )}
+        </div>
+
+        {/* 미리보기 모드: 목차 탭일 때 잠금 오버레이 */}
+        {isPreviewMode && activeTab === "contents" && (
+          <div className="toc_preview_overlay">
+            <div className="toc_preview_card">
+              <div className="toc_preview_icon">
+                <Lock size={20} />
+              </div>
+              <p className="toc_preview_text">
+                미리보기 모드에서는<br />목차를 사용하실 수 없습니다.
+              </p>
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </PanelWrapper>

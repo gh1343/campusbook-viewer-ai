@@ -286,6 +286,65 @@
   color: rgb(239 68 68);
 }
 
+/* 미리보기 모드 - 목차 잠금 오버레이 */
+.toc_content_area {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.toc_content_area .chapter_list {
+  flex: 1 1 auto;
+}
+.chapter_list.toc_blur {
+  filter: blur(3px);
+  pointer-events: none;
+  user-select: none;
+}
+.toc_preview_overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  z-index: 10;
+}
+.toc_preview_card {
+  background-color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 1.5rem 1.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(226 232 240);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.09), 0 2px 8px rgba(0, 0, 0, 0.05);
+  animation: toc_card_in 0.2s ease both;
+}
+@keyframes toc_card_in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.toc_preview_icon {
+  width: 3rem;
+  height: 3rem;
+  background-color: rgb(241 245 249);
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  color: rgb(148 163 184);
+}
+.toc_preview_text {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: rgb(71 85 105);
+  line-height: 1.7;
+  letter-spacing: -0.01em;
+}
+
 /* 오른쪽 패널 */
 .right_panel_wrap .separate {
   position: absolute;

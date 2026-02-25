@@ -36,7 +36,13 @@ export const Header: React.FC<{
   toggleSidebar: () => void;
   isSidebarOpen?: boolean;
 }> = ({ toggleSidebar, isSidebarOpen }) => {
-  const isPreview = !!(window as any).__RMS_CONFIG__?.isPreview;
+  const _rmsConfig = (window as any).__RMS_CONFIG__;
+  // isPreview=true인 경우 (미리보기 + 뉴논문 관련 링크 모두)
+  const isPreview = !!_rmsConfig?.isPreview;
+  // 미리보기: isPreview=true, endOfPages > 0 (페이지 제한 있음)
+  const isPreviewMode = isPreview && Number(_rmsConfig?.endOfPages) > 0;
+  // 뉴논문 관련 링크: isPreview=true, endOfPages = 0 (페이지 제한 없음)
+  const isNewPaperLink = isPreview && Number(_rmsConfig?.endOfPages) === 0;
 
   const {
     isToolsOpen,
@@ -257,7 +263,7 @@ export const Header: React.FC<{
       <div className="header_inner">
         {/* 좌측: 로고 및 내비게이션 */}
         <div className="header_main">
-          {isReader && !isPreview && (
+          {isReader && (
             <button
               onClick={toggleSidebar}
               className={`left_toggle ${isSidebarOpen ? "open" : "off"}`}

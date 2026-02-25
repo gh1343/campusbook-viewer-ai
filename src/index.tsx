@@ -10,6 +10,15 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+// 로컬 테스트 설정:
+// 미리보기:        { isPreview: true,  startOfPages: 1, endOfPages: 14 }
+// 뉴논문 관련 링크: { isPreview: true,  startOfPages: 0, endOfPages: 0  }
+// 일반 도서:       { isPreview: false }
+// (window as any).__RMS_CONFIG__ = {
+//   isPreview: false,
+//   startOfPages: 0,
+//   endOfPages: 0,
+// };
 root.render(
   <React.StrictMode>
     <App />

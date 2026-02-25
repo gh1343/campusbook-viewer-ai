@@ -14,7 +14,6 @@ import { getRmsConfig, fetchPdfUrl } from "../services/rmsService";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
-  const isPreview = !!(window as any).__RMS_CONFIG__?.isPreview;
 
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
@@ -288,23 +287,21 @@ export const ReaderPage: React.FC = () => {
 
       {/* Main Split Layout Container */}
       <div ref={containerRef} className="split_container">
-        {/* 왼쪽 사이드바 */}
-        {!isPreview && (
-          <aside
-            ref={leftPanelRef}
-            className={`left_side_wrap ${!isTocOpen ? "off" : "on"}`}
-            style={{
-              width: isTocOpen
-                ? window.innerWidth < 480
-                  ? "0px"
-                  : `${leftWidth}px`
-                : "0px",
-            }}
-          >
-            {/* Render Panel Content */}
-            <TocPanel isOpen={isTocOpen} onClose={() => setTocOpen(false)} />
-          </aside>
-        )}
+        {/* 왼쪽 사이드바 - 모든 모드에서 표시 */}
+        <aside
+          ref={leftPanelRef}
+          className={`left_side_wrap ${!isTocOpen ? "off" : "on"}`}
+          style={{
+            width: isTocOpen
+              ? window.innerWidth < 480
+                ? "0px"
+                : `${leftWidth}px`
+              : "0px",
+          }}
+        >
+          {/* Render Panel Content */}
+          <TocPanel isOpen={isTocOpen} onClose={() => setTocOpen(false)} />
+        </aside>
 
         {/* Center Panel: Reader & Controls */}
         <main className="content_container">

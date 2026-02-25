@@ -755,9 +755,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (!query || query.length < 2) return [];
 
     const _cfg = (window as any).__RMS_CONFIG__;
-    const _isPreview = !!_cfg?.isPreview;
-    const _previewStart = _isPreview ? (Number(_cfg?.startOfPages) || 1) : 1;
-    const _previewEnd = _isPreview ? (Number.isFinite(Number(_cfg?.endOfPages)) ? Number(_cfg.endOfPages) : Infinity) : Infinity;
+    // 미리보기(endOfPages > 0)일 때만 페이지 범위 제한 적용
+    const _isPreviewMode = !!_cfg?.isPreview && Number(_cfg?.endOfPages) > 0;
+    const _previewStart = _isPreviewMode ? (Number(_cfg?.startOfPages) || 1) : 1;
+    const _previewEnd = _isPreviewMode ? (Number.isFinite(Number(_cfg?.endOfPages)) ? Number(_cfg.endOfPages) : Infinity) : Infinity;
 
     const results: SearchResult[] = [];
     const lowerQuery = query.toLowerCase();
@@ -785,7 +786,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     pdfTextPages.forEach((p) => {
-      if (_isPreview && (p.page < _previewStart || p.page > _previewEnd)) return;
+      if (_isPreviewMode && (p.page < _previewStart || p.page > _previewEnd)) return;
       const idx = p.text.toLowerCase().indexOf(lowerQuery);
       if (idx !== -1) {
         const start = Math.max(0, idx - 40);
