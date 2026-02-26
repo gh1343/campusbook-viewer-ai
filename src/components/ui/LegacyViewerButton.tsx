@@ -1,5 +1,5 @@
-import React from 'react';
-import { HelpCircle, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { HelpCircle, ArrowRight, X } from 'lucide-react';
 import { getRmsConfig, getAccessStoreHeader } from '../../services/rmsService';
 import '../../css/legacy_viewer_button.css';
 
@@ -47,6 +47,10 @@ const handleLegacyClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
 };
 
 export const LegacyViewerButton: React.FC = () => {
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+
   return (
     <div className="legacy-viewer-btn-wrap">
       <div className="legacy-viewer-tooltip">
@@ -70,6 +74,14 @@ export const LegacyViewerButton: React.FC = () => {
             <ArrowRight size={14} className="legacy-viewer-arrow" />
           </div>
         </div>
+
+        <button
+          className="legacy-viewer-close-btn"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDismissed(true); }}
+          aria-label="닫기"
+        >
+          <X size={14} />
+        </button>
       </a>
     </div>
   );
