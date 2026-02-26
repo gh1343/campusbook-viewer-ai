@@ -152,3 +152,9 @@
 .legacy-viewer-link:hover .legacy-viewer-arrow {
   transform: translateX(4px);
 }
+@media (max-width: 1300px) {
+  .legacy-viewer-btn-wrap {
+    bottom: 7rem;
+    right: 0.5rem;
+  }
+}
