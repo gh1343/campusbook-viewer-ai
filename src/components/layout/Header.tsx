@@ -32,6 +32,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { DrawingColor } from "../../../types";
 import "../../css/header.css";
 import { HelpModal } from "./HelpModal";
+import { TIMERS } from "../../constants/config";
 
 export const Header: React.FC<{
   toggleSidebar: () => void;
@@ -145,7 +146,7 @@ export const Header: React.FC<{
   useEffect(() => {
     if (isPreview) return;
 
-    const ALIVE_CHECK_INTERVAL = 30 * 1000; // 30초
+    const ALIVE_CHECK_INTERVAL = TIMERS.ALIVE_CHECK_INTERVAL;
 
     const aliveIntervalId = setInterval(async () => {
       if (!navigator.onLine) return;
@@ -172,7 +173,7 @@ export const Header: React.FC<{
   useEffect(() => {
     if (isPreview) return;
 
-    const AUTOSAVE_INTERVAL = 3 * 60 * 1000; // 3분
+    const AUTOSAVE_INTERVAL = TIMERS.AUTOSAVE_INTERVAL;
 
     const intervalId = setInterval(async () => {
       if (autosaveInProgressRef.current) return;

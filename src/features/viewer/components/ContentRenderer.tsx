@@ -6,6 +6,7 @@ import { useAnnotation } from "../../../contexts/AnnotationContext";
 import { Highlighter, MessageCircleQuestion, StickyNote } from "lucide-react";
 import { Point, Stroke, Chapter } from "../../../../types";
 import html2canvas from "html2canvas";
+import { TIMERS, SELECTION_MENU, CONTENT } from "../../../constants/config";
 
 interface ContentRendererProps {
   customChapter?: Chapter;
@@ -109,7 +110,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         el.classList.add("ring-4", "ring-blue-500", "ring-offset-2");
         setTimeout(() => {
           el.classList.remove("ring-4", "ring-blue-500", "ring-offset-2");
-        }, 2000);
+        }, TIMERS.HIGHLIGHT_RING_DURATION);
       }
     }
   }, [activeHighlightId, renderedContent, showAnnotations]);
@@ -167,9 +168,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     }
 
     // On touch devices, position the menu below the native copy/paste bar to avoid overlap
-    const menuWidth = 240;
-    const margin = 12;
-    let top = isTouchDevice ? rect.bottom + margin : rect.top - 56;
+    const menuWidth = SELECTION_MENU.WIDTH;
+    const margin = SELECTION_MENU.MARGIN;
+    let top = isTouchDevice ? rect.bottom + margin : rect.top - SELECTION_MENU.VERTICAL_OFFSET;
     let left = rect.left + rect.width / 2 - menuWidth / 2;
 
     if (top < margin) top = rect.bottom + margin;
@@ -188,8 +189,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
   const scheduleSelectionCheck = () => {
     // Multiple passes to wait for OS selection handles to finalize (tablet/long-press)
-    const delays = [0, 40, 120];
-    delays.forEach((delay) => setTimeout(checkSelection, delay));
+    TIMERS.SELECTION_CHECK_DELAYS.forEach((delay) => setTimeout(checkSelection, delay));
   };
 
   const handleWrapperPointerUp = () => {
@@ -314,7 +314,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           strokePoints = strokePoints.map((p) => ({ x: p.x, y: p.y + offset }));
         }
         const hit = strokePoints.some(
-          (p) => Math.hypot(p.x - point.x, p.y - point.y) < 20
+          (p) => Math.hypot(p.x - point.x, p.y - point.y) < CONTENT.ERASER_HIT_RADIUS
         );
         if (hit) removeStroke(stroke.id);
       });
@@ -382,7 +382,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     };
     setCaptureStart(null);
     setCaptureCurrent(null);
-    if (rect.width < 10 || rect.height < 10) return;
+    if (rect.width < CONTENT.MIN_CAPTURE_SIZE || rect.height < CONTENT.MIN_CAPTURE_SIZE) return;
     try {
       const canvas = await html2canvas(document.body, {
         x: rect.x + window.scrollX,

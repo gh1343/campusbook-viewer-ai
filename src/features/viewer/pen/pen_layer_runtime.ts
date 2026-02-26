@@ -1,5 +1,6 @@
 import type React from "react";
 import { PageCanvasEntry } from "../utils/pdfUtils";
+import { PEN_LAYER } from "../../../constants/config";
 
 interface MutableRef<T> {
   current: T;
@@ -133,8 +134,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     if (!width || !height) return;
 
     // 메모리 최적화: 최대 캔버스 크기 제한 (iPad Safari 메모리 한계 고려)
-    // 4096x4096 = 67MB per canvas, 안전한 상한선
-    const MAX_CANVAS_DIMENSION = 4096;
+    const MAX_CANVAS_DIMENSION = PEN_LAYER.MAX_CANVAS_DIMENSION;
 
     let targetWidth = width * dpr;
     let targetHeight = height * dpr;
@@ -191,7 +191,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     if (!viewerRef.current || !viewerContainerRef.current) return;
     const viewRect = viewerContainerRef.current.getBoundingClientRect();
     const visualScale = getVisualScale();
-    const BUFFER = Math.max(100, Math.floor(400 / visualScale));
+    const BUFFER = Math.max(PEN_LAYER.VIEWPORT_BUFFER_MIN, Math.floor(PEN_LAYER.VIEWPORT_BUFFER_BASE / visualScale));
 
     const visiblePages = new Set<number>();
     const pages = Array.from(
@@ -334,7 +334,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
           if (stroke.normalized) {
             hit = stroke.points.some(
               (p: any) =>
-                Math.hypot(p.x * pageSize.width - pt.x, p.y * pageSize.height - pt.y) < 16
+                Math.hypot(p.x * pageSize.width - pt.x, p.y * pageSize.height - pt.y) < PEN_LAYER.ERASER_HIT_RADIUS
             );
           } else {
             const { scaleX, scaleY } = getStrokeScale(
@@ -345,7 +345,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
             hit = stroke.points.some(
               (p: any) =>
                 Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
-                16 * scaleX
+                PEN_LAYER.ERASER_HIT_RADIUS * scaleX
             );
           }
           if (hit) removeStroke(stroke.id);
@@ -401,7 +401,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
         if (stroke.normalized) {
           hit = stroke.points.some(
             (p: any) =>
-              Math.hypot(p.x * pageSize.width - pt.x, p.y * pageSize.height - pt.y) < 16
+              Math.hypot(p.x * pageSize.width - pt.x, p.y * pageSize.height - pt.y) < PEN_LAYER.ERASER_HIT_RADIUS
           );
         } else {
           const { scaleX, scaleY } = getStrokeScale(
@@ -412,7 +412,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
           hit = stroke.points.some(
             (p: any) =>
               Math.hypot(p.x * scaleX - pt.x, p.y * scaleY - pt.y) <
-              16 * scaleX
+              PEN_LAYER.ERASER_HIT_RADIUS * scaleX
           );
         }
         if (hit) removeStroke(stroke.id);
@@ -464,7 +464,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       const straightness = calculateStraightness(livePointsRef.current);
       let finalPoints = livePointsRef.current;
 
-      if (straightness > 0.88 && livePointsRef.current.length > 5) {
+      if (straightness > PEN_LAYER.STRAIGHTNESS_THRESHOLD && livePointsRef.current.length > PEN_LAYER.STRAIGHTNESS_MIN_POINTS) {
         finalPoints = [
           livePointsRef.current[0],
           livePointsRef.current[livePointsRef.current.length - 1],
@@ -579,7 +579,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     const visualScale = getVisualScale();
     // 배율이 높을수록 버퍼를 줄여서 메모리 절약
     // 1.0배율: 400px, 2.0배율: 200px, 3.0배율: 133px
-    const BUFFER = Math.max(100, Math.floor(400 / visualScale));
+    const BUFFER = Math.max(PEN_LAYER.VIEWPORT_BUFFER_MIN, Math.floor(PEN_LAYER.VIEWPORT_BUFFER_BASE / visualScale));
 
     const pages: HTMLElement[] = Array.from(
       viewerRef.current.querySelectorAll<HTMLElement>(".page")
@@ -709,7 +709,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
     const straightness = calculateStraightness(livePointsRef.current);
     const isStraightIntent =
-      straightness > 0.92 && livePointsRef.current.length > 10;
+      straightness > PEN_LAYER.STRAIGHT_INTENT_THRESHOLD && livePointsRef.current.length > PEN_LAYER.STRAIGHT_INTENT_MIN_POINTS;
     if (isStraightIntent) {
       const start = livePointsRef.current[0];
       const end = livePointsRef.current[livePointsRef.current.length - 1];

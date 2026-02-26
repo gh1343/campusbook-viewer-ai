@@ -13,6 +13,7 @@ import { useBook } from "../contexts/BookContext";
 import { usePdfViewer } from "../contexts/PdfViewerContext";
 import { getRmsConfig, fetchPdfUrl } from "../services/rmsService";
 import { getPreviewConfig } from "../utils/previewConfig";
+import { BREAKPOINTS, PANEL } from "../constants/config";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
@@ -34,7 +35,7 @@ export const ReaderPage: React.FC = () => {
   const isPdfMobileLike = useMemo(() => {
     if (typeof window === "undefined") return false;
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
-    return touchUA || window.innerWidth <= 1300;
+    return touchUA || window.innerWidth <= BREAKPOINTS.TABLET;
   }, [ua]);
 
   // viewMode에 따라 1쪽 보기/2쪽 보기 결정 (패널 상태와 무관)
@@ -64,8 +65,8 @@ export const ReaderPage: React.FC = () => {
   );
 
   // Resizable Panel State
-  const [leftWidth, setLeftWidth] = useState(300);
-  const [rightWidth, setRightWidth] = useState(350);
+  const [leftWidth, setLeftWidth] = useState(PANEL.LEFT_DEFAULT_WIDTH);
+  const [rightWidth, setRightWidth] = useState(PANEL.RIGHT_DEFAULT_WIDTH);
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -74,7 +75,7 @@ export const ReaderPage: React.FC = () => {
   // Handle responsive defaults and exclusive sidebars
   useEffect(() => {
     const applyLayout = () => {
-      const narrow = window.innerWidth <= 1300;
+      const narrow = window.innerWidth <= BREAKPOINTS.TABLET;
       setIsNarrow(narrow);
       if (didApplyInitialLayoutRef.current) return;
       didApplyInitialLayoutRef.current = true;
@@ -196,16 +197,14 @@ export const ReaderPage: React.FC = () => {
 
       if (isDraggingLeft) {
         const newWidth = e.clientX - containerRect.left;
-        // Min 200px, Max 500px
-        if (newWidth > 200 && newWidth < 500) {
+        if (newWidth > PANEL.LEFT_MIN_WIDTH && newWidth < PANEL.LEFT_MAX_WIDTH) {
           setLeftWidth(newWidth);
         }
       }
 
       if (isDraggingRight) {
         const newWidth = containerRect.right - e.clientX;
-        // Min 280px, Max 600px
-        if (newWidth > 280 && newWidth < 600) {
+        if (newWidth > PANEL.RIGHT_MIN_WIDTH && newWidth < PANEL.RIGHT_MAX_WIDTH) {
           setRightWidth(newWidth);
         }
       }
@@ -304,7 +303,7 @@ export const ReaderPage: React.FC = () => {
           className={`left_side_wrap ${!isTocOpen ? "off" : "on"}`}
           style={{
             width: isTocOpen
-              ? window.innerWidth < 480
+              ? window.innerWidth < BREAKPOINTS.MOBILE
                 ? "0px"
                 : `${leftWidth}px`
               : "0px",
@@ -347,7 +346,7 @@ export const ReaderPage: React.FC = () => {
           className={`right_panel_wrap ${!isToolsOpen ? "off" : "on"}`}
           style={{
             width: isToolsOpen
-              ? window.innerWidth < 480
+              ? window.innerWidth < BREAKPOINTS.MOBILE
                 ? "0px"
                 : `${rightWidth}px`
               : "0px",
