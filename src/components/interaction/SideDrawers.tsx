@@ -173,7 +173,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                   }}
                   onClick={() => {
                     goToChapter(idx);
-                    if (window.innerWidth < 768) onClose();
+                    if (window.innerWidth < 480) onClose();
                   }}
                   className={`${depthPadding} ${idx === currentChapterIndex ? "on" : "off"}`}
                 >
@@ -215,7 +215,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                   <button
                     onClick={() => {
                       goToPdfPage(bm.page);
-                      if (window.innerWidth < 768) onClose();
+                      if (window.innerWidth < 480) onClose();
                     }}
                     className="bookmark_item_button"
                   >

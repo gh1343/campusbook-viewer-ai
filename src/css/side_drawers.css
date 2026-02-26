@@ -28,7 +28,7 @@
   opacity: 0;
   pointer-events: none;
 }
-@media (min-width: 768px) {
+@media (min-width: 480px) {
   .panel_overlay {
     display: none;
   }
@@ -45,7 +45,7 @@
   flex-direction: column;
   width: 20rem;
 }
-@media (min-width: 768px) {
+@media (min-width: 480px) {
   .panel_aside {
     position: relative;
     box-shadow: none;
@@ -72,7 +72,7 @@
 .panel_aside.right.closed {
   transform: translateX(100%);
 }
-@media (min-width: 768px) {
+@media (min-width: 480px) {
   .panel_aside.closed {
     transform: translateX(0);
   }
