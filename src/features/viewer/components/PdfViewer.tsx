@@ -12,6 +12,7 @@ import "pdfjs-dist/web/pdf_viewer.css";
 import "../../../css/pdf_viewer.css";
 
 import { getPreviewConfig } from "../../../utils/previewConfig";
+import { isBrowser } from "../../../utils/common";
 import {
   applySearchHighlightWithRetry,
   askAiAction,
@@ -133,7 +134,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const highlightScrollBehavior =
     isMobileSafari || isTouchDevice ? "auto" : "smooth";
   const isMobileLike = useMemo(() => {
-    if (typeof window === "undefined") return false;
+    if (!isBrowser()) return false;
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
     return touchUA || window.innerWidth <= 1300;
   }, [ua]);

@@ -17,6 +17,7 @@ import {
   SyncStatus,
 } from "../../types";
 import { getPreviewConfig } from "../utils/previewConfig";
+import { isBrowser, toFiniteNumber } from "../utils/common";
 import { useBook } from "./BookContext";
 import { usePdfViewer } from "./PdfViewerContext";
 import {
@@ -91,14 +92,7 @@ const formatSavedAt = (date: Date) => {
   return `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`;
 };
 
-const toFiniteNumber = (value: unknown) => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-};
+// toFiniteNumber is imported from ../utils/common
 
 const getStrokeTimestamp = (stroke: Partial<Stroke>) => {
   const updatedAt = toFiniteNumber(stroke.updated_at);
@@ -196,7 +190,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
   const getIndexedDbWorker = useCallback(() => {
     if (indexedDbWorkerRef.current) return indexedDbWorkerRef.current;
-    if (typeof window === "undefined") return null;
+    if (!isBrowser()) return null;
     const worker = new Worker(
       new URL("../workers/indexedDbWorker.ts", import.meta.url),
       { type: "module" }
@@ -213,7 +207,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     if (bookTitle) {
       return `title_${bookTitle.replace(/\s+/g, "_")}`;
     }
-    if (typeof window === "undefined") return "local_default";
+    if (!isBrowser()) return "local_default";
     const rawPath = window.location.pathname || "";
     const normalized = rawPath.replace(/[^a-zA-Z0-9_-]+/g, "_");
     return normalized ? `path_${normalized}` : "local_default";

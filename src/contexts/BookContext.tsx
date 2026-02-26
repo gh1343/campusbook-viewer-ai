@@ -30,6 +30,7 @@ import {
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 import { StorageQuotaExceededError } from "../utils/errors";
+import { isBrowser } from "../utils/common";
 // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
 const NAV_TOC_PATH =
   "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
@@ -45,7 +46,7 @@ type RuntimeViewerConfig = {
 };
 
 const readRuntimeViewerConfig = (): RuntimeViewerConfig | null => {
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   const raw = (window as any).__RMS_CONFIG__;
   if (!raw || typeof raw !== "object") return null;
   return raw as RuntimeViewerConfig;
@@ -209,7 +210,7 @@ const parseNavChapters = (
   pageMap: Record<string, number>;
   bookTitle: string;
 } => {
-  if (typeof window === "undefined")
+  if (!isBrowser())
     return { chapters: [], pageMap: {}, bookTitle: "" };
   try {
     const parser = new DOMParser();
@@ -322,7 +323,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   const getIndexedDbWorker = () => {
     if (indexedDbWorkerRef.current) return indexedDbWorkerRef.current;
-    if (typeof window === "undefined") return null;
+    if (!isBrowser()) return null;
     const worker = new Worker(
       new URL("../workers/indexedDbWorker.ts", import.meta.url),
       { type: "module" }
@@ -814,13 +815,13 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (bookTitle) {
       return `title_${bookTitle.replace(/\s+/g, "_")}`;
     }
-    if (typeof window === "undefined") return "local_default";
+    if (!isBrowser()) return "local_default";
     const rawPath = window.location.pathname || "";
     const normalized = rawPath.replace(/[^a-zA-Z0-9_-]+/g, "_");
     return normalized ? `path_${normalized}` : "local_default";
   };
   const loadLocalDataFromIndexedDb = async (storageKey: string) => {
-    if (typeof window === "undefined") return;
+    if (!isBrowser()) return;
     const worker = getIndexedDbWorker();
     if (!worker) return;
 
@@ -971,7 +972,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isBrowser()) return;
     const { isPreview } = getPreviewConfig();
     if (isPreview) return;
     const storageKey = buildIndexedDbKey();

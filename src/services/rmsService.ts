@@ -1,3 +1,5 @@
+import { isBrowser, toFiniteNumber } from "../utils/common";
+
 type RmsStatus = {
   RMS_BM: boolean;
   RMS_DR: boolean;
@@ -113,22 +115,13 @@ const normalizeApiBase = (value: string) => {
   return withoutTrailing.replace(/\/v2$/i, "");
 };
 
-const toNumber = (value: unknown) => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-};
-
 const normalizeMs = (value: unknown) => {
-  const numeric = toNumber(value);
+  const numeric = toFiniteNumber(value);
   return numeric && numeric > 0 ? numeric : null;
 };
 
 const normalizePage = (value: unknown) => {
-  const numeric = toNumber(value);
+  const numeric = toFiniteNumber(value);
   return numeric !== null ? Math.max(1, Math.round(numeric)) : null;
 };
 
@@ -177,7 +170,7 @@ const generate_uuid = () => {
 
 export const get_device_id = () => {
   if (cached_device_id) return cached_device_id;
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     cached_device_id = generate_uuid();
     return cached_device_id;
   }
@@ -282,7 +275,7 @@ const normalize_progress = (
 };
 
 const readRuntimeRmsConfig = () => {
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   const raw = (window as any).__RMS_CONFIG__;
   if (!raw || typeof raw !== "object") return null;
   return raw as {
@@ -321,7 +314,7 @@ const parsePageOffsetValue = (value: unknown) => {
 };
 
 const parseBookCdFromPath = () => {
-  if (typeof window === "undefined") return "";
+  if (!isBrowser()) return "";
   const match = window.location.pathname.match(
     /(?:^|\/)((?:BO|CT)(?:-[A-Za-z0-9]+)+)(?:\/|$)/
   );
@@ -329,7 +322,7 @@ const parseBookCdFromPath = () => {
 };
 
 const getRmsAuthToken = () => {
-  if (typeof window === "undefined") return "";
+  if (!isBrowser()) return "";
   const params = new URLSearchParams(window.location.search);
   const runtime = readRuntimeRmsConfig();
   const runtimeToken =
@@ -348,7 +341,7 @@ const getRmsAuthToken = () => {
 };
 
 export const getAccessStoreHeader = () => {
-  if (typeof window === "undefined") return "www.campusbook.co.kr";
+  if (!isBrowser()) return "www.campusbook.co.kr";
   const host = window.location.host;
   const isDevqa = host === "localhost:5173" || host.indexOf("devqa") >= 0;
   return isDevqa ? "www-devqa.campusbook.co.kr" : "www.campusbook.co.kr";
@@ -410,14 +403,14 @@ const readProgressFromRmsItem = async (item: any) => {
 };
 
 const readProgressFromLocalStorage = (localStoragePath: string) => {
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   const raw = localStorage.getItem(getProgressKey(localStoragePath));
   const parsed = parseProgressEntries(raw);
   return parsed && parsed.length > 0 ? parsed : null;
 };
 
 const detectLocalStorageContext = () => {
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   const prefixes = [
     "progress_",
     "rmsStatus_",
@@ -556,7 +549,7 @@ const addProgressEntry = ({
 };
 
 export const getRmsConfig = (): RmsConfig | null => {
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   const params = new URLSearchParams(window.location.search);
   const runtime = readRuntimeRmsConfig();
   const localStorageContext = detectLocalStorageContext();
@@ -632,7 +625,7 @@ export const migrate_snapshot = (snapshot: IndexedDbSnapshot | null) => {
     changed = true;
   }
 
-  const parsedSchema = toNumber(snapshot.schema_version);
+  const parsedSchema = toFiniteNumber(snapshot.schema_version);
   let schema_version = snapshot.schema_version;
   if (parsedSchema === null || parsedSchema <= 0) {
     schema_version = SYNC_SCHEMA_VERSION;
@@ -665,7 +658,7 @@ export const build_sync_payload = (
   const book_id =
     config?.bookCd || source.meta?.bookTitle || source.key || "unknown";
   const device_id = get_device_id();
-  const schema_version = toNumber(source.schema_version) ?? SYNC_SCHEMA_VERSION;
+  const schema_version = toFiniteNumber(source.schema_version) ?? SYNC_SCHEMA_VERSION;
   const app_version = String(
     import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION
   );
@@ -712,7 +705,7 @@ export const sync_snapshot = async ({
   snapshot: IndexedDbSnapshot;
   timeoutMs?: number;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("Sync is only available in the browser.");
   }
   if (!apiBase) {
@@ -760,7 +753,7 @@ export const fetchRmsProgressPage = async ({
   orderIgnore,
   pageOffset,
 }: RmsConfig) => {
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   if (!apiBase || !bookCd) {
     throw new Error("Missing RMS configuration (apiBase/bookCd).");
   }
@@ -837,7 +830,7 @@ export const loadLastProgressPageFromLocalStorage = ({
   memberCd,
   pageOffset,
 }: Pick<RmsConfig, "bookCd" | "memberCd" | "pageOffset">) => {
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   if (!bookCd || !memberCd) return null;
 
   const localStoragePath = getLocalStoragePath(bookCd, memberCd);
@@ -873,7 +866,7 @@ export const saveRmsProgress = async ({
   lastPages?: number;
   bookTotalPages?: number;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -970,7 +963,7 @@ export const saveHighlightsToServer = async ({
   bookCd: string;
   highlights: unknown[];
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1026,7 +1019,7 @@ export const loadHighlightsFromServer = async ({
   apiBase: string;
   bookCd: string;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1078,7 +1071,7 @@ export const saveProgressToServer = async ({
   bookCd: string;
   progressData: any;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1134,7 +1127,7 @@ export const loadProgressFromServer = async ({
   apiBase: string;
   bookCd: string;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1186,7 +1179,7 @@ export const saveBookmarksToServer = async ({
   bookCd: string;
   bookmarks: unknown[];
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1242,7 +1235,7 @@ export const loadBookmarksFromServer = async ({
   apiBase: string;
   bookCd: string;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1294,7 +1287,7 @@ export const saveDrawingsToServer = async ({
   bookCd: string;
   drawings: unknown[];
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1351,7 +1344,7 @@ export const loadDrawingsFromServer = async ({
   apiBase: string;
   bookCd: string;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1403,7 +1396,7 @@ export const saveNotesToServer = async ({
   bookCd: string;
   notes: any[];
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1461,7 +1454,7 @@ export const loadNotesFromServer = async ({
   apiBase: string;
   bookCd: string;
 }) => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("RMS is only available in the browser.");
   }
   if (!apiBase || !bookCd) {
@@ -1511,7 +1504,7 @@ export const fetchPdfUrl = async ({
   apiBase: string;
   bookCd: string;
 }): Promise<string> => {
-  if (typeof window === "undefined") {
+  if (!isBrowser()) {
     throw new Error("fetchPdfUrl is only available in the browser.");
   }
   if (!apiBase || !bookCd) {

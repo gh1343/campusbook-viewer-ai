@@ -14,6 +14,7 @@ import { usePdfViewer } from "../contexts/PdfViewerContext";
 import { getRmsConfig, fetchPdfUrl } from "../services/rmsService";
 import { getPreviewConfig } from "../utils/previewConfig";
 import { BREAKPOINTS, PANEL } from "../constants/config";
+import { isBrowser } from "../utils/common";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
@@ -33,7 +34,7 @@ export const ReaderPage: React.FC = () => {
   const { viewMode } = usePdfViewer();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isPdfMobileLike = useMemo(() => {
-    if (typeof window === "undefined") return false;
+    if (!isBrowser()) return false;
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
     return touchUA || window.innerWidth <= BREAKPOINTS.TABLET;
   }, [ua]);
