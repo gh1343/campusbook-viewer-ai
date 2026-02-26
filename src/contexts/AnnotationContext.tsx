@@ -1029,6 +1029,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   useEffect(() => {
+    const { isPreview } = getPreviewConfig();
+    if (isPreview) return;
     const storageKey = buildIndexedDbKey();
     if (!storageKey) return;
     if (indexedDbLoadKeyRef.current === storageKey) return;

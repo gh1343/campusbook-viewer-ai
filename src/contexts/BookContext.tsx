@@ -972,6 +972,8 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const { isPreview } = getPreviewConfig();
+    if (isPreview) return;
     const storageKey = buildIndexedDbKey();
     if (!storageKey) return;
     if (indexedDbLoadKeyRef.current === storageKey) return;
