@@ -812,17 +812,15 @@
   font-size: 11px;
   font-weight: 900;
 }
-
-@media (max-width: 480px) {
-  .guide_btn_text {
-    display: none;
-  }
-  .guide_btn {
-    padding: 8px;
-    border-radius: 9999px;
+/* ≤ 1300px: center_hub를 flex 흐름으로 */
+@media (max-width: 1300px) {
+  .center_hub {
+    position: static;
+    transform: none;
   }
 }
 
+/* ≤ 1024px: 로고·네비 숨김 */
 @media (max-width: 1024px) {
   .header_nav {
     display: none;
@@ -830,21 +828,96 @@
   .logo_wrap {
     display: none;
   }
-  /* .center_hub {
-    display: none;
-  } */
 }
-@media (max-width: 768px) {
-  .center_hub {
-    position: static;
-    transform: none;
+
+/* ≤ 750px: ① guide_btn 텍스트 숨김(아이콘만)
+            ② save_status 텍스트 숨김(아이콘만)
+            ③ save_status_wrap min-width 제거 */
+@media (max-width: 750px) {
+  .guide_btn_text {
+    display: none;
+  }
+  .guide_btn {
+    padding: 8px;
+    border-radius: 9999px;
+  }
+  .save_btn span,
+  .save_btn_group .save_btn span {
+    display: none;
+  }
+  .save_btn {
+    padding: 6px 8px;
+  }
+  .save_btn_group {
+    padding: 0 4px;
+  }
+  .saved_time,
+  .retry_hint {
+    display: none;
+  }
+  .save_status_wrap {
+    min-width: 0;
   }
 }
+
+/* ≤ 600px: ④ hub_btn 패딩 축소
+            ⑤ hub_group 패딩 축소
+            ⑥ separate_bar 숨김
+            ⑦ header_inner 패딩 축소 */
+@media (max-width: 600px) {
+  .header_inner {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .hub_btn {
+    padding: 6px;
+  }
+  .hub_group {
+    padding: 0 2px;
+  }
+  .zoom_group {
+    padding-left: 2px;
+  }
+  .view_group {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .pen_group {
+    padding-left: 4px;
+    padding-right: 4px;
+    margin-left: 0;
+  }
+  .bookmark_group {
+    padding: 0 2px;
+  }
+  .separate_bar {
+    display: none;
+  }
+}
+
+/* ≤ 540px: ⑧ hub_btn 최소 패딩
+            ⑨ zoom_percent 크기 축소
+            ⑩ save_status_wrap 숨김
+            ⑪ header_inner 패딩 최소화 */
 @media (max-width: 540px) {
   .header_inner {
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 6px;
+    padding-right: 6px;
   }
+  .hub_btn {
+    padding: 5px;
+  }
+  .zoom_percent {
+    min-width: 36px;
+    font-size: 10px;
+  }
+  .save_status_wrap {
+    display: none;
+  }
+}
+
+/* ≤ 480px: center_hub 숨김 (기존 540px에서 이동) */
+@media (max-width: 480px) {
   .center_hub {
     display: none;
   }
