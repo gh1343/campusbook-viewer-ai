@@ -246,6 +246,7 @@ export const ReaderPage: React.FC = () => {
   };
   // PDF URL을 API 호출로 가져오기
   const [pdfUrl, setPdfUrlState] = useState<string>("");
+  const [pdfFailed, setPdfFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,6 +263,7 @@ export const ReaderPage: React.FC = () => {
 
       const config = getRmsConfig();
       if (!config) {
+        if (!cancelled) setPdfFailed(true);
         return;
       }
 
@@ -275,6 +277,7 @@ export const ReaderPage: React.FC = () => {
         }
       } catch (err) {
         console.error("[ReaderPage] Failed to fetch PDF URL:", err);
+        if (!cancelled) setPdfFailed(true);
       }
     };
 
@@ -284,10 +287,14 @@ export const ReaderPage: React.FC = () => {
     };
   }, []);
 
+  const handlePdfLoadError = useCallback(() => {
+    setPdfFailed(true);
+  }, []);
+
   return (
     <div className="layout_container">
       <Header toggleSidebar={toggleToc} isSidebarOpen={isTocOpen} />
-      {isPreviewMode && <LegacyViewerButton />}
+      {(isPreviewMode || pdfFailed) && <LegacyViewerButton />}
 
       {/* Main Split Layout Container */}
       <div ref={containerRef} className="split_container">
@@ -317,6 +324,7 @@ export const ReaderPage: React.FC = () => {
                 onPagesCount={handlePdfPagesCount}
                 registerGoToPage={handleRegisterGoToPage}
                 forceSinglePage={forceSinglePage}
+                onLoadError={handlePdfLoadError}
               />
             ) : (
               <div className="pdf_loading">PDF 로딩 중...</div>

@@ -55,6 +55,7 @@ interface PdfViewerProps {
   onPagesCount?: (count: number) => void;
   registerGoToPage?: (fn: (page: number) => void) => void;
   forceSinglePage?: boolean;
+  onLoadError?: () => void;
 }
 
 export const PdfViewer: React.FC<PdfViewerProps> = ({
@@ -63,6 +64,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   onPagesCount,
   registerGoToPage,
   forceSinglePage = false,
+  onLoadError,
 }) => {
   const { previewMaxPage } = getPreviewConfig();
   const viewerContainerRef = useRef<HTMLDivElement>(null);
@@ -150,6 +152,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const [loading, setLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  useEffect(() => {
+    if (errorMsg) onLoadError?.();
+  }, [errorMsg, onLoadError]);
   const [showPreviewEndOverlay, setShowPreviewEndOverlay] = useState(false);
   const previewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayTouchStartYRef = useRef<number | null>(null);
