@@ -20,6 +20,7 @@
   background-color: rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(1px);
   z-index: 40;
+  touch-action: none; /* overlay 위 드래그로 뷰포트 rubber-band 방지 */
 }
 .panel_overlay.open {
   opacity: 1;
@@ -37,17 +38,24 @@
 .panel_aside {
   position: fixed;
   z-index: 50;
-  height: 100%;
+  top: 4rem;                              /* 헤더 아래에서 시작 */
+  bottom: env(safe-area-inset-bottom, 0px); /* 홈 인디케이터 위에서 끝 */
+  /* height 제거: top+bottom이 높이를 결정. iOS 브라우저 툴바는
+     fixed 요소가 visual viewport 기준이므로 자동으로 제외됨 */
   background-color: white;
   border-color: rgb(226 232 240);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
   width: 20rem;
+  overscroll-behavior: contain; /* Android/Chrome용 */
 }
 @media (min-width: 480px) {
   .panel_aside {
     position: relative;
+    top: auto;
+    bottom: auto;
+    height: 100%; /* 480px+: 부모 컨테이너 기준으로 복귀 */
     box-shadow: none;
     width: 100%;
   }
@@ -588,6 +596,7 @@
 .mynote_tab_wrap {
   position: absolute;
   inset: 0;
+  z-index: 100;
   display: flex;
   flex-direction: column;
   background-color: rgb(248 250 252);
@@ -847,15 +856,7 @@
   font-size: 0.875rem;
   font-weight: 700;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.15s, transform 0.1s;
 }
-.mynote_new_btn:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-.mynote_new_btn:active {
-  transform: scale(0.97);
-}
-
 .mynote_list_filter {
   display: flex;
   flex-direction: column;
@@ -864,6 +865,7 @@
   background-color: rgb(248 250 252);
   border-bottom: 1px solid rgb(241 245 249);
   flex-shrink: 0;
+  user-select: none;
 }
 
 .mynote_filter_row {

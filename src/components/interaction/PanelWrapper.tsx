@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { X } from "lucide-react";
 
 export interface PanelProps {
@@ -42,13 +42,60 @@ export const PanelWrapper: React.FC<PanelProps> = ({
   title,
   children,
 }) => {
+  const panelRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+
+    let startY = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const dy = e.touches[0].clientY - startY;
+
+      // 터치 타겟에서 스크롤 가능한 부모 탐색
+      let node: HTMLElement | null = e.target as HTMLElement;
+      while (node && node !== el) {
+        const oy = window.getComputedStyle(node).overflowY;
+        if (oy === "scroll" || oy === "auto") {
+          const atTop = node.scrollTop <= 0;
+          const atBottom =
+            node.scrollTop >= node.scrollHeight - node.clientHeight - 1;
+          // 스크롤 경계에서만 뷰포트 전파 차단
+          if ((dy > 0 && atTop) || (dy < 0 && atBottom)) {
+            e.preventDefault();
+          }
+          return;
+        }
+        node = node.parentElement;
+      }
+      // 스크롤 불가 영역: 뷰포트 rubber-band 차단
+      e.preventDefault();
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
+  }, []);
+
   return (
     <>
       <div
         className={`panel_overlay ${isOpen ? "open" : "closed"}`}
         onClick={onClose}
       />
-      <aside className={`panel_aside ${side} ${isOpen ? "open" : "closed"}`}>
+      <aside
+        ref={panelRef}
+        className={`panel_aside ${side} ${isOpen ? "open" : "closed"}`}
+      >
         <div className="panel_wrapper">
           <div className="panel_header">
             <h2 className="panel_title">{title}</h2>
