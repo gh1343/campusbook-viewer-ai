@@ -112,7 +112,7 @@
 
 /* 툴바 맵 */
 .help_toolbar_map_wrap {
-  padding: 0 28px 16px;
+  padding: 20px 28px 16px;
   flex-shrink: 0;
 }
 
@@ -473,9 +473,35 @@
 }
 
 /* 반응형 */
+@media (max-width: 480px) {
+  .help_toolbar_map {
+    padding: 0 10px;
+    height: 40px;
+  }
+  .help_toolbar_group {
+    gap: 4px;
+  }
+  .help_toolbar_box {
+    width: 16px;
+    height: 16px;
+  }
+  .help_toolbar_bar {
+    width: 38px;
+    height: 12px;
+  }
+  .help_toolbar_pill_blue {
+    width: 60px;
+    height: 18px;
+  }
+  .help_toolbar_pill_slate {
+    width: 30px;
+    height: 18px;
+  }
+}
+
 @media (max-width: 540px) {
   .help_modal_container {
-    max-height: 92vh;
+    max-height: 66vh;
     border-radius: 20px;
   }
 
@@ -484,7 +510,7 @@
   }
 
   .help_toolbar_map_wrap {
-    padding: 0 20px 12px;
+    padding: 20px 20px 12px;
   }
 
   .help_modal_body {

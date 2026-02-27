@@ -323,8 +323,14 @@
   animation: toc_card_in 0.2s ease both;
 }
 @keyframes toc_card_in {
-  from { opacity: 0; transform: scale(0.94); }
-  to   { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 .toc_preview_icon {
   width: 3rem;
@@ -760,7 +766,6 @@
 .mynote_capture_remove:hover {
   transform: scale(1.15);
 }
-
 /* 하단 footer: 캡처 첨부 + 저장 버튼 */
 .mynote_editor_footer {
   display: flex;
@@ -770,7 +775,6 @@
   border-top: 1px solid rgb(241 245 249);
   flex-shrink: 0;
 }
-
 .mynote_capture_btn {
   display: flex;
   align-items: center;
@@ -1031,4 +1035,10 @@
 }
 .mynote_card:hover .mynote_card_arrow {
   opacity: 1;
+}
+@media (max-width: 480px) {
+  .mynote_editor_footer {
+    min-height: 14vh;
+    align-items: baseline;
+  }
 }
