@@ -15,10 +15,13 @@ import { getRmsConfig, fetchPdfUrl } from "../services/rmsService";
 import { getPreviewConfig } from "../utils/previewConfig";
 import { BREAKPOINTS, PANEL } from "../constants/config";
 import { isBrowser } from "../utils/common";
+import { useStayTracker } from "../hooks/useStayTracker";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
   const { isPreviewMode } = getPreviewConfig();
+
+  useStayTracker();
 
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
