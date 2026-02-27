@@ -881,21 +881,18 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                     .filter((item: PdfBookmark) => !item.deleted)
                 : [];
 
-            serverNotes = (() => {
-              if (
-                noteRes &&
-                noteRes.ok &&
-                noteRes.result &&
-                Array.isArray(noteRes.result.dataList) &&
-                noteRes.result.dataList.length > 0
-              ) {
-                const parsed = JSON.parse(noteRes.result.dataList[0]);
-                return Array.isArray(parsed)
-                  ? (parsed as GeneralNote[]).filter((item) => !item.deleted)
-                  : [];
-              }
-              return [];
-            })();
+            serverNotes =
+              noteRes &&
+              noteRes.ok &&
+              noteRes.result &&
+              Array.isArray(noteRes.result.dataList)
+                ? noteRes.result.dataList
+                    .map((json: string) => {
+                      const parsed = JSON.parse(json);
+                      return parsed as GeneralNote;
+                    })
+                    .filter((item: GeneralNote) => !item.deleted)
+                : [];
 
             serverStrokes =
               drawingRes &&
