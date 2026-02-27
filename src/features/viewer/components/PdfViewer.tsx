@@ -13,6 +13,7 @@ import "../../../css/pdf_viewer.css";
 
 import { getPreviewConfig } from "../../../utils/previewConfig";
 import { isBrowser } from "../../../utils/common";
+import { useWatermark } from "../../../hooks/useWatermark";
 import {
   applySearchHighlightWithRetry,
   askAiAction,
@@ -68,6 +69,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   onLoadError,
 }) => {
   const { previewMaxPage } = getPreviewConfig();
+  const watermarkUrl = useWatermark();
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const scaleWrapperRef = useRef<HTMLDivElement>(null);
@@ -1790,6 +1792,25 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         onMemo={handleMemo}
         onCancel={cancelSelection}
       />
+
+      {/* 워터마크 오버레이 (labguardW 생성 blob 이미지) */}
+      {watermarkUrl && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundImage: `url('${watermarkUrl}')`,
+            backgroundRepeat: "repeat",
+            backgroundSize: "128px",
+            opacity: 0.006,
+            pointerEvents: "none",
+            zIndex: 9999,
+          }}
+        />
+      )}
     </div>
   );
 };
