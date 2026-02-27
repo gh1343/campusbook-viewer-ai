@@ -45,7 +45,7 @@ function sendStayLog(
   };
 
   // 실제 전송되는 payload
-  console.log("[StayTracker] → send", payload);
+  // console.log("[StayTracker] → send", payload);
 
   fetch(`${config.apiBase}/v3/log/viewer-stay`, {
     method: "POST",
