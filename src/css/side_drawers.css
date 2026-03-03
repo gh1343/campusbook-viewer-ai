@@ -439,6 +439,14 @@
   font-size: 0.75rem;
   background-color: transparent;
 }
+.right_panel_menu_label {
+  font-size: 10px;
+  font-weight: 900;
+  color: rgb(148 163 184);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1;
+}
 .right_panel_menu button.on {
   background-color: rgb(255 255 255);
 }
@@ -631,6 +639,16 @@
   display: flex;
   gap: 8px;
   flex: 0 0 auto;
+}
+.tool_section_header {
+  margin-bottom: 8px;
+}
+.tool_section_label {
+  font-size: 10px;
+  font-weight: 900;
+  color: rgb(148 163 184);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 /* ===== 마이노트 탭 ===== */
@@ -918,11 +936,7 @@
 }
 
 .mynote_count_label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgb(100 116 139);
+  color: rgb(148 163 184);
 }
 
 .mynote_import_btn {

@@ -502,7 +502,7 @@ ${contextString}
             title="Highlights"
           >
             <Highlighter size={14} />
-            하이라이트
+            <span className="right_panel_menu_label">하이라이트</span>
           </button>
           <button
             onClick={() => handleTabChange("mynote")}
@@ -510,7 +510,7 @@ ${contextString}
             title="mynote"
           >
             <Book size={14} />
-            마이노트
+            <span className="right_panel_menu_label">마이노트</span>
           </button>
           {/* <button
           onClick={() => handleTabChange("reference")}
@@ -527,7 +527,7 @@ ${contextString}
             title="Search"
           >
             <Search size={14} />
-            검색
+            <span className="right_panel_menu_label">검색</span>
           </button>
         </div>
         <div className="text_area">
@@ -592,6 +592,11 @@ ${contextString}
           {activeToolTab === "highlight" && (
             <div className="absolute inset-0 flex flex-col">
               <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                <div className="tool_section_header">
+                  <span className="tool_section_label">
+                    하이라이트 ({filteredHighlights.length})
+                  </span>
+                </div>
                 <div className="relative">
                   <input
                     type="text"
@@ -885,9 +890,8 @@ ${contextString}
                   </div>
                   <div className="mynote_list_filter">
                     <div className="mynote_filter_row">
-                      <span className="mynote_count_label">
-                        My Notes (
-                        {generalNotes.filter((n) => !n.deleted).length})
+                      <span className="mynote_count_label tool_section_label">
+                        마이노트 ({filteredNotes.length})
                       </span>
                       {/* <label
                         className="mynote_import_btn"
@@ -1012,6 +1016,11 @@ ${contextString}
           {activeToolTab === "search" && (
             <div className="absolute inset-0 flex flex-col bg-slate-50 dark:bg-slate-950">
               <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                <div className="tool_section_header">
+                  <span className="tool_section_label">
+                    검색 결과 ({searchQuery.trim().length > 1 ? searchResults.length : 0})
+                  </span>
+                </div>
                 <div className="relative">
                   <input
                     type="text"
