@@ -141,6 +141,9 @@ export const ReaderPage: React.FC = () => {
       const touchY = e.touches[0].clientY;
       const deltaY = touchY - touchStartY;
 
+      // 미세한 움직임(탭/펜 터치)에는 반응하지 않음 - click 이벤트 보호
+      if (Math.abs(deltaY) < 5) return;
+
       // Find the nearest scrollable ancestor
       let scrollable: HTMLElement | null = target;
       while (scrollable && scrollable !== document.body) {

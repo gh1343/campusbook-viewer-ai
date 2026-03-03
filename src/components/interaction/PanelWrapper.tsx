@@ -57,6 +57,9 @@ export const PanelWrapper: React.FC<PanelProps> = ({
     const onTouchMove = (e: TouchEvent) => {
       const dy = e.touches[0].clientY - startY;
 
+      // 미세한 움직임(탭/펜 터치)에는 반응하지 않음 - click 이벤트 보호
+      if (Math.abs(dy) < 5) return;
+
       // 터치 타겟에서 스크롤 가능한 부모 탐색
       let node: HTMLElement | null = e.target as HTMLElement;
       while (node && node !== el) {
