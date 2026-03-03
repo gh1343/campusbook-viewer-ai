@@ -865,7 +865,6 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                       const parsed = JSON.parse(json);
                       return { ...parsed, syncStatus: "synced" as const };
                     })
-                    .filter((item: Highlight) => !item.deleted)
                 : [];
 
             serverBookmarks =
@@ -878,7 +877,6 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                       const parsed = JSON.parse(json);
                       return { ...parsed, syncStatus: "synced" as const };
                     })
-                    .filter((item: PdfBookmark) => !item.deleted)
                 : [];
 
             serverNotes =
@@ -891,7 +889,6 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                       const parsed = JSON.parse(json);
                       return parsed as GeneralNote;
                     })
-                    .filter((item: GeneralNote) => !item.deleted)
                 : [];
 
             serverStrokes =
@@ -1010,7 +1007,11 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           }
         }
 
-        // 4. State 업데이트
+        // 4. State 업데이트 (deleted 항목 최종 제거 - 병합 후 기기간 삭제 동기화 반영)
+        finalHighlights = finalHighlights.filter((item) => !item.deleted);
+        finalBookmarks = finalBookmarks.filter((item) => !item.deleted);
+        finalNotes = finalNotes.filter((item) => !item.deleted);
+        finalStrokes = finalStrokes.filter((item) => !item.deleted);
         setHighlights(finalHighlights);
         setBookmarks(finalBookmarks);
         setGeneralNotes(finalNotes);
