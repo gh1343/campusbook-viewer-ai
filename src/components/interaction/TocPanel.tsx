@@ -20,6 +20,7 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   const chapterItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const { isPreviewMode } = getPreviewConfig();
+  const visibleBookmarks = bookmarks.filter((bm) => !bm.deleted);
 
   // 활성 챕터가 보이도록 사이드바 스크롤 자동 조정
   useEffect(() => {
@@ -57,125 +58,131 @@ export const TocPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
           </button>
         </div>
         <div className="toc_content_area">
-        <div
-          className={`chapter_list${isPreviewMode && activeTab === "contents" ? " toc_blur" : ""}`}
-          ref={chapterListRef}
-        >
-          {activeTab === "contents" &&
-            chapters.map((chapter, idx) => {
-              const depth = chapter.depth ?? 1;
-              const depthPaddingMap: Record<number, string> = {
-                1: "pl-0",
-                2: "pl-4",
-                3: "pl-7",
-                4: "pl-10",
-              };
-              const depthPadding = depthPaddingMap[depth] ?? "pl-0";
-              const isDepth1 = depth === 1;
-              return (
-                <button
-                  key={chapter.id}
-                  ref={(el) => {
-                    chapterItemRefs.current[idx] = el;
-                  }}
-                  onClick={() => {
-                    goToChapter(idx);
-                    if (window.innerWidth < 480) onClose();
-                  }}
-                  className={`${depthPadding} ${idx === currentChapterIndex ? "on" : "off"}`}
-                >
-                  <div className="chapter_list_inner">
-                    <div className="">
-                      {isDepth1 && (
-                        <span
-                          className={`text_xs ${
-                            idx === currentChapterIndex ? "on" : "off"
-                          }`}
-                        >
-                          {String(idx + 1).padStart(2, "0")}
-                        </span>
-                      )}
-                      <span
-                        className={`line_clamp_1 ${
-                          isDepth1
-                            ? "font-semibold"
-                            : "text-slate-500 dark:text-slate-400 text-[0.8em]"
-                        }`}
-                      >
-                        {chapter.title}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          {activeTab === "bookmarks" &&
-            bookmarks
-              .filter((bm) => !bm.deleted)
-              .map((bm) => (
-                <div
-                  key={bm.id}
-                  className={`bookmark_item_row ${
-                    bm.page === currentPdfPage ? "active" : ""
-                  }`}
-                >
+          <div
+            className={`chapter_list${isPreviewMode && activeTab === "contents" ? " toc_blur" : ""}`}
+            ref={chapterListRef}
+          >
+            {activeTab === "contents" &&
+              chapters.map((chapter, idx) => {
+                const depth = chapter.depth ?? 1;
+                const depthPaddingMap: Record<number, string> = {
+                  1: "pl-0",
+                  2: "pl-4",
+                  3: "pl-7",
+                  4: "pl-10",
+                };
+                const depthPadding = depthPaddingMap[depth] ?? "pl-0";
+                const isDepth1 = depth === 1;
+                return (
                   <button
+                    key={chapter.id}
+                    ref={(el) => {
+                      chapterItemRefs.current[idx] = el;
+                    }}
                     onClick={() => {
-                      goToPdfPage(bm.page);
+                      goToChapter(idx);
                       if (window.innerWidth < 480) onClose();
                     }}
-                    className="bookmark_item_button"
+                    className={`${depthPadding} ${
+                      idx === currentChapterIndex ? "on" : "off"
+                    }`}
                   >
-                    <div className="bookmark_page_badge">
-                      {/* <Bookmark size={14} />
-                    <span>Page {bm.page}</span> */}
-                      <span className="bookmark_label line_clamp_1">
-                        {`P. ${bm.page}`}
-                      </span>
-                    </div>
-                    <div className="bookmark_item_text">
-                      {/* <span className="bookmark_label line_clamp_1">
-                      {bm.label || `Page ${bm.page}`}
-                    </span> */}
-                      <span className="bookmark_meta">
-                        Saved {new Date(bm.created_at).toLocaleDateString()}
-                      </span>
+                    <div className="chapter_list_inner">
+                      <div className="">
+                        {isDepth1 && (
+                          <span
+                            className={`text_xs ${
+                              idx === currentChapterIndex ? "on" : "off"
+                            }`}
+                          >
+                            {String(idx + 1).padStart(2, "0")}
+                          </span>
+                        )}
+                        <span
+                          className={`line_clamp_1 ${
+                            isDepth1
+                              ? "font-semibold"
+                              : "text-slate-500 dark:text-slate-400 text-[0.8em]"
+                          }`}
+                        >
+                          {chapter.title}
+                        </span>
+                      </div>
                     </div>
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removePdfBookmark(bm.id);
-                    }}
-                    className="bookmark_remove_btn"
-                    title="Delete bookmark"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                );
+              })}
+            {activeTab === "bookmarks" && (
+              <div className="bookmark_tab_wrap">
+                <div className="bookmark_section_header">
+                  <span className="bookmark_section_title">
+                    {`북마크 (${visibleBookmarks.length})`}
+                  </span>
                 </div>
-              ))}
-          {activeTab === "bookmarks" &&
-            bookmarks.filter((bm) => !bm.deleted).length === 0 && (
-              <div className="non_book_mark">
-                <Bookmark size={24} className="mx-auto mb-2 text-slate-400" />
-                <p className="text_sm">북마크한 페이지가 없습니다.</p>
+                <div className="bookmark_list_wrap">
+                  {visibleBookmarks.map((bm) => (
+                    <div
+                      key={bm.id}
+                      className={`bookmark_item_row ${
+                        bm.page === currentPdfPage ? "active" : ""
+                      }`}
+                    >
+                      <button
+                        onClick={() => {
+                          goToPdfPage(bm.page);
+                          if (window.innerWidth < 480) onClose();
+                        }}
+                        className="bookmark_item_button"
+                      >
+                        <div className="bookmark_page_badge">
+                          <Bookmark size={12} fill="currentColor" />
+                          <span>{`P. ${bm.page}`}</span>
+                        </div>
+                        <div className="bookmark_item_text">
+                          <span className="bookmark_label line_clamp_1">
+                            {bm.label || `페이지 ${bm.page}`}
+                          </span>
+                          <span className="bookmark_meta">
+                            Saved {new Date(bm.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePdfBookmark(bm.id);
+                        }}
+                        className="bookmark_remove_btn"
+                        title="Delete bookmark"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {visibleBookmarks.length === 0 && (
+                    <div className="non_book_mark">
+                      <Bookmark size={24} className="mx-auto mb-2 text-slate-400" />
+                      <p className="text_sm">북마크한 페이지가 없습니다.</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-        </div>
-
-        {/* 미리보기 모드: 목차 탭일 때 잠금 오버레이 */}
-        {isPreviewMode && activeTab === "contents" && (
-          <div className="toc_preview_overlay">
-            <div className="toc_preview_card">
-              <div className="toc_preview_icon">
-                <Lock size={20} />
-              </div>
-              <p className="toc_preview_text">
-                미리보기 모드에서는<br />목차를 사용하실 수 없습니다.
-              </p>
-            </div>
           </div>
-        )}
+
+          {/* 미리보기 모드: 목차 탭일 때 잠금 오버레이 */}
+          {isPreviewMode && activeTab === "contents" && (
+            <div className="toc_preview_overlay">
+              <div className="toc_preview_card">
+                <div className="toc_preview_icon">
+                  <Lock size={20} />
+                </div>
+                <p className="toc_preview_text">
+                  미리보기 모드에서는<br />목차를 사용하실 수 없습니다.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </PanelWrapper>
