@@ -1017,9 +1017,11 @@ ${contextString}
             <div className="absolute inset-0 flex flex-col bg-slate-50 dark:bg-slate-950">
               <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
                 <div className="tool_section_header">
-                  <span className="tool_section_label">
-                    검색 결과 ({searchQuery.trim().length > 1 ? searchResults.length : 0})
-                  </span>
+                  {searchQuery.trim().length > 1 && (
+                    <span className="tool_section_label">
+                      검색 결과 ({searchResults.length})
+                    </span>
+                  )}
                 </div>
                 <div className="relative">
                   <input
