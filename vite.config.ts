@@ -103,6 +103,10 @@ function serveLocalPdfs(): Plugin {
   };
 }
 
+const now = new Date();
+const pad = (n: number) => String(n).padStart(2, "0");
+const buildStamp = `${String(now.getFullYear()).slice(2)}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
@@ -126,6 +130,13 @@ export default defineConfig(({ mode }) => {
     resolve: { alias: { "@": path.resolve(__dirname, ".") } },
     build: {
       sourcemap: false,
+      rollupOptions: {
+        output: {
+          entryFileNames: `assets/[name]-${buildStamp}.js`,
+          chunkFileNames: `assets/[name]-${buildStamp}.js`,
+          assetFileNames: `assets/[name]-${buildStamp}.[ext]`,
+        },
+      },
     },
     css: {
       devSourcemap: false,
