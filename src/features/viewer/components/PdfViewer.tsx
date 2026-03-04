@@ -6,10 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { GlobalWorkerOptions, version as pdfjsVersion } from "pdfjs-dist";
+import { GlobalWorkerOptions } from "pdfjs-dist";
 import { PDFViewer, SpreadMode } from "pdfjs-dist/web/pdf_viewer.mjs";
 import "pdfjs-dist/web/pdf_viewer.css";
 import "../../../css/pdf_viewer.css";
+import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 
 import { getPreviewConfig } from "../../../utils/previewConfig";
 import { isBrowser } from "../../../utils/common";
@@ -37,8 +38,8 @@ import {
   PdfHighlight,
 } from "../utils/pdfUtils";
 import { drawStrokePath, VISUAL_SCALE } from "../utils/pdf_viewer_utils";
-// ✅ worker 설정 (v4 ESM)
-GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.mjs`;
+// ✅ worker 설정 (v4 ESM) - 로컬 파일 사용으로 배포 후 첫 로드 메모리 스파이크 방지
+GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
 const getJsonBytes = (value: unknown) => {
   const text = JSON.stringify(value);
