@@ -1,4 +1,4 @@
-import { getDocument } from "pdfjs-dist";
+import { getDocument, version as pdfjsVersion } from "pdfjs-dist";
 import { Dispatch, SetStateAction } from "react";
 import {
   EventBus,
@@ -13,8 +13,9 @@ import { adjustTextLayerSpacingAsync } from "../utils/textLayerAdjust";
 type MutableRef<T> = { current: T };
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
-const CMAP_URL = `${import.meta.env.BASE_URL}cmaps/`;
-const STANDARD_FONT_DATA_URL = `${import.meta.env.BASE_URL}standard_fonts/`;
+const PDFJS_ASSET_BASE = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}`;
+const CMAP_URL = `${PDFJS_ASSET_BASE}/cmaps/`;
+const STANDARD_FONT_DATA_URL = `${PDFJS_ASSET_BASE}/standard_fonts/`;
 
 interface PdfJsRuntimeOptions {
   file: string;
@@ -94,7 +95,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   const pdfViewer = new PDFViewer(pdfViewerOptions);
   pdfViewerRef.current = pdfViewer;
 
-
   const INTERNAL_SCALE = 1; // 화면 표시 배율과 동일하게 맞춰 선명도 확보
   let firstPageRendered = false;
   const loadStartTime = Date.now();
@@ -124,7 +124,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
       // Update progress based on rendered pages
       if (totalPages > 0) {
-        const renderProgress = Math.round((renderedPages.size / totalPages) * 100);
+        const renderProgress = Math.round(
+          (renderedPages.size / totalPages) * 100
+        );
         setPdfLoadProgress?.(renderProgress);
         setLoadProgress(renderProgress);
       }
@@ -150,7 +152,11 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       );
       if (pageEl) {
         adjustTextLayerSpacingAsync(pageEl).catch((err) => {
-          console.warn("[textLayerAdjust] failed for page", evt.pageNumber, err);
+          console.warn(
+            "[textLayerAdjust] failed for page",
+            evt.pageNumber,
+            err
+          );
         });
       }
     }
@@ -210,7 +216,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       return false;
     }
     const maxPage = pdfViewerRef.current.pdfDocument.numPages;
-    const effectiveMax = previewMaxPage ? Math.min(previewMaxPage, maxPage) : maxPage;
+    const effectiveMax = previewMaxPage
+      ? Math.min(previewMaxPage, maxPage)
+      : maxPage;
     const target = Math.min(Math.max(page, 1), effectiveMax);
     pdfViewerRef.current.currentPageNumber = target;
 
@@ -233,13 +241,15 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
           const pageRect = pageEl.getBoundingClientRect();
 
           // 페이지 상단을 컨테이너 상단에 맞추도록 스크롤 (애니메이션 없이 즉시 이동)
-          const scrollTop = pageRect.top - containerRect.top + viewerContainer.scrollTop;
-          const scrollLeft = pageRect.left - containerRect.left + viewerContainer.scrollLeft;
+          const scrollTop =
+            pageRect.top - containerRect.top + viewerContainer.scrollTop;
+          const scrollLeft =
+            pageRect.left - containerRect.left + viewerContainer.scrollLeft;
 
           viewerContainer.scrollTo({
             top: Math.max(0, scrollTop),
             left: Math.max(0, scrollLeft),
-            behavior: 'auto'
+            behavior: "auto",
           });
         } else {
           // 최대 재시도 후에도 페이지를 찾지 못하면 기본 방식 사용
@@ -276,7 +286,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       if (!lastPageEl) return;
       const maxScrollTop = Math.max(
         0,
-        lastPageEl.offsetTop + lastPageEl.offsetHeight - viewerContainer.clientHeight
+        lastPageEl.offsetTop +
+          lastPageEl.offsetHeight -
+          viewerContainer.clientHeight
       );
       if (viewerContainer.scrollTop > maxScrollTop) {
         viewerContainer.scrollTop = maxScrollTop;
@@ -284,7 +296,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         if (!previewScrollLimitTriggered) {
           previewScrollLimitTriggered = true;
           onPreviewLimitReached?.();
-          setTimeout(() => { previewScrollLimitTriggered = false; }, 1500);
+          setTimeout(() => {
+            previewScrollLimitTriggered = false;
+          }, 1500);
         }
       }
     };
@@ -306,21 +320,27 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     withCredentials: false,
 
     // Range Request optimization
-    rangeChunkSize: 65536,  // 64KB (default), increase for slower networks
+    rangeChunkSize: 65536, // 64KB (default), increase for slower networks
     disableAutoFetch: false, // Keep auto-fetching enabled
-    disableStream: false,    // Keep streaming enabled for faster initial rendering
+    disableStream: false, // Keep streaming enabled for faster initial rendering
   });
   loadingTask.onProgress = ({ loaded = 0, total = 0 }) => {
     if (cancelled) return;
     if (!total) {
-      const newProgress = Math.min(85, Math.max(1, (loaded / 1024 / 1024) * 10)); // estimate based on MB, max 85%
+      const newProgress = Math.min(
+        85,
+        Math.max(1, (loaded / 1024 / 1024) * 10)
+      ); // estimate based on MB, max 85%
       setLoadProgress((prev) => Math.min(85, Math.max(1, prev + 1)));
       setPdfLoadProgress?.(Math.round(newProgress));
       return;
     }
     // Map download progress to 0-90%
     const downloadPercent = Math.round((loaded / total) * 100);
-    const mappedPercent = Math.min(90, Math.max(1, Math.round(downloadPercent * 0.9)));
+    const mappedPercent = Math.min(
+      90,
+      Math.max(1, Math.round(downloadPercent * 0.9))
+    );
     setLoadProgress(mappedPercent);
     setPdfLoadProgress?.(mappedPercent);
   };
