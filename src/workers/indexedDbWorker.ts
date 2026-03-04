@@ -200,16 +200,20 @@ const mergeAndSave = async (payload: MergeAndSavePayload) => {
     : localStrokes;
 
   // 3. Prepare merged snapshot
+  // deleted:true 항목 제거 (단, 아직 서버에 전송 안 된 pending 삭제는 유지)
+  const filterDeleted = <T extends { deleted?: boolean; syncStatus?: string }>(items: T[]): T[] =>
+    items.filter((item) => !item.deleted || item.syncStatus === 'pending');
+
   const savedAt = Date.now();
   const mergedSnapshot: StoredBundle = {
     key: payload.storageKey,
     savedAt,
     schema_version: localSnapshot?.schema_version || 1,
     data: {
-      highlights: mergedHighlights,
-      bookmarks: mergedBookmarks,
-      notes: mergedNotes,
-      strokes: mergedStrokes,
+      highlights: filterDeleted(mergedHighlights as Array<{ deleted?: boolean; syncStatus?: string }>) as typeof mergedHighlights,
+      bookmarks: filterDeleted(mergedBookmarks as Array<{ deleted?: boolean; syncStatus?: string }>) as typeof mergedBookmarks,
+      notes: filterDeleted(mergedNotes as Array<{ deleted?: boolean; syncStatus?: string }>) as typeof mergedNotes,
+      strokes: filterDeleted(mergedStrokes as Array<{ deleted?: boolean; syncStatus?: string }>) as typeof mergedStrokes,
       progress:
         typeof payload.currentPdfPage === 'number' &&
         typeof payload.pdfTotalPages === 'number'

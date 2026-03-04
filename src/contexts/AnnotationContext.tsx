@@ -1017,7 +1017,25 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         setGeneralNotes(finalNotes);
         setStrokes(finalStrokes);
         setSyncStatus(finalSyncStatus);
-        indexedDbSnapshotRef.current = mergedSnapshot;
+
+        // deleted 항목이 제거된 clean snapshot을 IndexedDB에 재저장
+        const cleanSnapshot: IndexedDbSnapshot = {
+          ...mergedSnapshot,
+          savedAt: Date.now(),
+          data: {
+            ...mergedSnapshot.data,
+            highlights: finalHighlights,
+            bookmarks: finalBookmarks,
+            notes: finalNotes,
+            strokes: finalStrokes,
+          },
+        };
+        try {
+          await saveSnapshot(cleanSnapshot);
+        } catch {
+          // clean snapshot 저장 실패해도 state는 이미 정상 반영됨
+        }
+        indexedDbSnapshotRef.current = cleanSnapshot;
       } catch (err) {
         console.error("annotation indexeddb load failed", err);
       }
