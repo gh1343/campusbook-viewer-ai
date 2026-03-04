@@ -1,4 +1,4 @@
-import { getDocument, version as pdfjsVersion } from "pdfjs-dist";
+import { getDocument } from "pdfjs-dist";
 import { Dispatch, SetStateAction } from "react";
 import {
   EventBus,
@@ -13,9 +13,8 @@ import { adjustTextLayerSpacingAsync } from "../utils/textLayerAdjust";
 type MutableRef<T> = { current: T };
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
-const PDFJS_ASSET_BASE = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}`;
-const CMAP_URL = `${PDFJS_ASSET_BASE}/cmaps/`;
-const STANDARD_FONT_DATA_URL = `${PDFJS_ASSET_BASE}/standard_fonts/`;
+const CMAP_URL = `${import.meta.env.BASE_URL}cmaps/`;
+const STANDARD_FONT_DATA_URL = `${import.meta.env.BASE_URL}standard_fonts/`;
 
 interface PdfJsRuntimeOptions {
   file: string;
