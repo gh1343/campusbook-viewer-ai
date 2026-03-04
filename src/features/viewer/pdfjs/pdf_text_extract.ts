@@ -27,6 +27,10 @@ export const extractPdfText = async (
 
       // Report progress
       onProgress?.(i, pdfDoc.numPages);
+
+      // 브라우저 페인트 사이클에 yield하여 UI(프로그레스바)가 갱신되도록 함
+      // Promise 마이크로태스크만으로는 브라우저가 페인트하지 않으므로 매크로태스크로 전환
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
     if (!isCancelled()) {
       setPdfTextPages(pages);
