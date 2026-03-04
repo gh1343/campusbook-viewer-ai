@@ -69,14 +69,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: "/campusbook-viewer-ai/", // 본인 리포 이름으로 교체, 또는 './' 사용
-    plugins: [
-      react(),
-      tailwindcss(),
-      removeSourcemaps(),
-      serveLocalPdfs(),
-      servePdfjsAssets(),
-      copyPdfjsAssets(),
-    ],
+    plugins: [react(), tailwindcss(), removeSourcemaps(), serveLocalPdfs()],
     define: {
       "process.env.API_KEY": JSON.stringify(env.GEMINI_API_KEY),
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
