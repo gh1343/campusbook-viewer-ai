@@ -134,7 +134,15 @@ export default defineConfig(({ mode }) => {
         output: {
           entryFileNames: `assets/[name]-${buildStamp}.js`,
           chunkFileNames: `assets/[name]-${buildStamp}.js`,
-          assetFileNames: `assets/[name]-${buildStamp}.[ext]`,
+          assetFileNames: (assetInfo) => {
+            const name = assetInfo.name ?? "asset";
+            const dotIdx = name.lastIndexOf(".");
+            const baseName = dotIdx !== -1 ? name.slice(0, dotIdx) : name;
+            const origExt = dotIdx !== -1 ? name.slice(dotIdx + 1) : "";
+            // .mjs → .js 강제 변환 (Tomcat이 .mjs MIME 타입을 모름)
+            const ext = origExt === "mjs" ? "js" : origExt || "asset";
+            return `assets/${baseName}-${buildStamp}.${ext}`;
+          },
         },
       },
     },
