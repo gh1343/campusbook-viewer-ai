@@ -205,10 +205,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   const lastPinchAtRef = useRef(0);
   const pinchTargetPageRef = useRef<number | null>(null);
   const pinchTransformRafRef = useRef<number | null>(null);
+  const pinchAnchorFrameCountRef = useRef(0);
+  const pinchContainerRectRef = useRef<DOMRect | null>(null);
+  const pinchFrozenTranslateRef = useRef<{ x: number; y: number } | null>(null);
   const pendingTransformRef = useRef<{
     scale: number;
-    translateX: number;
-    translateY: number;
+    originX: number;
+    originY: number;
   } | null>(null);
   const pinchAnchorRef = useRef<{
     pageNumber: number;
@@ -359,21 +362,26 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const schedulePinchTransform = (
     scale: number,
-    translateX: number,
-    translateY: number
+    originX: number,
+    originY: number
   ) => {
-    pendingTransformRef.current = { scale, translateX, translateY };
+    pendingTransformRef.current = { scale, originX, originY };
     if (pinchTransformRafRef.current !== null) return;
 
-    // 즉시 transform 적용 (깜박임 방지)
     const layer = transformLayerRef.current;
     if (layer) {
-      layer.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
+      layer.style.transformOrigin = `${originX}px ${originY}px`;
+      layer.style.transform = `scale(${scale})`;
     }
   };
 
   const resetPinchTransform = () => {
-    schedulePinchTransform(1, 0, 0);
+    const layer = transformLayerRef.current;
+    if (layer) {
+      layer.style.transformOrigin = "0 0";
+      layer.style.transform = "none";
+    }
+    pendingTransformRef.current = null;
   };
 
   const setPinchInteractionState = (active: boolean) => {
@@ -432,7 +440,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     const centerClientX = (pts[0].x + pts[1].x) / 2;
     const centerClientY = (pts[0].y + pts[1].y) / 2;
-    const containerRect = container.getBoundingClientRect();
+    // 제스처 시작 시 캐시한 containerRect 재사용 (getBoundingClientRect 호출 제거)
+    const containerRect =
+      pinchContainerRectRef.current ?? container.getBoundingClientRect();
     const viewportX = centerClientX - containerRect.left;
     const viewportY = centerClientY - containerRect.top;
 
@@ -1136,6 +1146,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = false;
       pinchAnchorRef.current = null;
+      pinchAnchorFrameCountRef.current = 0;
+      pinchContainerRectRef.current = null;
+      pinchFrozenTranslateRef.current = null;
       return;
     }
 
@@ -1152,6 +1165,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = false;
       pinchAnchorRef.current = null;
+      pinchAnchorFrameCountRef.current = 0;
+      pinchContainerRectRef.current = null;
+      pinchFrozenTranslateRef.current = null;
       return;
     }
 
@@ -1174,30 +1190,33 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = false;
       pinchAnchorRef.current = null;
+      pinchAnchorFrameCountRef.current = 0;
+      pinchContainerRectRef.current = null;
+      pinchFrozenTranslateRef.current = null;
       return;
     }
 
-    const containerRect = container.getBoundingClientRect();
-    const pageRectBefore = pageElBefore.getBoundingClientRect();
+    // transform-origin 방식: translate가 없으므로 pageRectBefore 불필요
+    // origin 기반 스크롤 보정: 핀치 중심(origin)이 scale 후에도 동일 viewport 위치에 오도록
+    const pending = pendingTransformRef.current;
 
-    // 스케일 적용 전 앵커의 절대 위치 계산
-    const anchorAbsX =
-      pageRectBefore.left -
-      containerRect.left +
-      anchor.relX * pageRectBefore.width;
-    const anchorAbsY =
-      pageRectBefore.top -
-      containerRect.top +
-      anchor.relY * pageRectBefore.height;
+    // CSS transform 제거 → 레이아웃이 baseScale 상태로 복원
+    resetPinchTransform();
 
-    // 스케일 적용 (핀치 줌이므로 수동 변경으로 표시)
+    // PDF.js 스케일 적용
     pdfZoomManualRef.current = true;
     setPdfScale(nextScale);
 
-    // 메모리 정리: 불필요한 transform 제거
-    resetPinchTransform();
+    // origin 기반 동기 스크롤 보정 (translate 방식의 pendingTx/Ty 대체)
+    // newScrollLeft = originX * previewScale - viewportX
+    if (pending) {
+      const newScrollLeft = pending.originX * previewScale - anchor.viewportX;
+      const newScrollTop = pending.originY * previewScale - anchor.viewportY;
+      container.scrollLeft = Math.max(0, newScrollLeft);
+      container.scrollTop = Math.max(0, newScrollTop);
+    }
 
-    // 스크롤 보정을 단일 프레임에서 즉시 처리 (레이아웃 튀는 현상 방지)
+    // 미세 보정: PDF.js centering 등 레이아웃 오차를 RAF에서 정밀 교정
     requestAnimationFrame(() => {
       const pageElAfter = viewerRoot.querySelector<HTMLElement>(
         `.page[data-page-number="${anchor.pageNumber}"]`
@@ -1208,12 +1227,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       const containerRectAfter = container.getBoundingClientRect();
       const pageRectAfter = pageElAfter.getBoundingClientRect();
 
-      // 페이지가 아직 렌더링되지 않았으면 스킵
       if (pageRectAfter.width <= 0 || pageRectAfter.height <= 0) {
         return;
       }
 
-      // 스케일 적용 후 앵커의 새로운 절대 위치
+      // 앵커가 실제로 위치한 viewport 좌표
       const anchorNewAbsX =
         pageRectAfter.left -
         containerRectAfter.left +
@@ -1223,12 +1241,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         containerRectAfter.top +
         anchor.relY * pageRectAfter.height;
 
-      // 앵커를 원래 뷰포트 위치에 유지하도록 스크롤 조정
-      const scrollDeltaX = anchorNewAbsX - anchorAbsX;
-      const scrollDeltaY = anchorNewAbsY - anchorAbsY;
-
-      container.scrollLeft += scrollDeltaX;
-      container.scrollTop += scrollDeltaY;
+      // 목표 위치(anchor.viewportX)와의 오차만 보정
+      container.scrollLeft += anchorNewAbsX - anchor.viewportX;
+      container.scrollTop += anchorNewAbsY - anchor.viewportY;
     });
 
     setPinchInteractionState(false);
@@ -1241,6 +1256,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     pinchStartScaleRef.current = null;
     pinchPreviewScaleRef.current = 1;
     pinchAnchorRef.current = null;
+    pinchAnchorFrameCountRef.current = 0;
+    pinchContainerRectRef.current = null;
+    pinchFrozenTranslateRef.current = null;
 
     // 핀치 플래그를 즉시 해제하여 페이지 이동이 가능하도록 함
     isPinchingRef.current = false;
@@ -1320,6 +1338,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       isPinchingRef.current = true;
       // 현재 페이지 번호 저장 (핀치 줌 중 페이지 변경 이벤트 무시용)
       pinchTargetPageRef.current = currentPdfPage;
+      // containerRect 캐시 (제스처 중 getBoundingClientRect 재호출 방지)
+      pinchContainerRectRef.current =
+        viewerContainerRef.current?.getBoundingClientRect() ?? null;
+      pinchAnchorFrameCountRef.current = 0;
+      pinchFrozenTranslateRef.current = null;
       updatePinchAnchor();
       setPinchInteractionState(true);
       resetPinchTransform();
@@ -1372,6 +1395,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchStartScaleRef.current = viewer?.currentScale || 1;
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = true;
+      pinchAnchorFrameCountRef.current = 0;
+      pinchFrozenTranslateRef.current = null;
       setPinchInteractionState(true);
       resetPinchTransform();
       return;
@@ -1388,12 +1413,36 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const previewScale = baseScale ? clampedScale / baseScale : 1;
     pinchPreviewScaleRef.current = previewScale;
     isPinchingRef.current = true;
-    updatePinchAnchor();
+
+    // updatePinchAnchor는 5프레임마다 1회만 실행 (layout flush 80% 감소)
+    pinchAnchorFrameCountRef.current += 1;
+    if (pinchAnchorFrameCountRef.current % 5 === 0) {
+      updatePinchAnchor();
+    }
+
+    const isClamped = nextScale < minScale || nextScale > maxScale;
     const center = getPinchCenter();
     if (center) {
-      const translateX = center.contentX * (1 - previewScale);
-      const translateY = center.contentY * (1 - previewScale);
-      schedulePinchTransform(previewScale, translateX, translateY);
+      let originX: number;
+      let originY: number;
+      if (isClamped) {
+        // scale 한계 도달 시 origin을 고정 — 손가락 이동 중 content 위치 변동 방지
+        if (!pinchFrozenTranslateRef.current) {
+          pinchFrozenTranslateRef.current = {
+            x: center.contentX,
+            y: center.contentY,
+          };
+        }
+        originX = pinchFrozenTranslateRef.current.x;
+        originY = pinchFrozenTranslateRef.current.y;
+      } else {
+        // 정상 범위: 핀치 중심을 transform-origin으로 사용, frozen 초기화
+        pinchFrozenTranslateRef.current = null;
+        originX = center.contentX;
+        originY = center.contentY;
+      }
+      // transform-origin = 핀치 중심, scale만 적용 → translate 없이 밀림 없음
+      schedulePinchTransform(previewScale, originX, originY);
     }
     e.preventDefault();
   };
