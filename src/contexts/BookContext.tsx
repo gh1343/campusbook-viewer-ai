@@ -31,6 +31,7 @@ import {
 import type { IndexedDbSnapshot } from "../services/rmsService";
 import { StorageQuotaExceededError } from "../utils/errors";
 import { isBrowser } from "../utils/common";
+import { getSharedIndexedDbWorker } from "../workers/indexedDbWorkerSingleton";
 // [로컬 확인용] 서버 없이 단독 실행 시 아래 주석 해제
 const NAV_TOC_PATH =
   "/resources/contents/devqa/cms/book/20260130/CT-20260130090170748/source/R1/20260130100542/ebook/OEBPS/nav.xhtml";
@@ -314,22 +315,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
-  const indexedDbWorkerRef = useRef<Worker | null>(null);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState((prev) => ({ ...prev, ...config }));
-  };
-
-  const getIndexedDbWorker = () => {
-    if (indexedDbWorkerRef.current) return indexedDbWorkerRef.current;
-    if (!isBrowser()) return null;
-    const worker = new Worker(
-      new URL("../workers/indexedDbWorker.ts", import.meta.url),
-      { type: "module" }
-    );
-    indexedDbWorkerRef.current = worker;
-    return worker;
   };
 
   const splitIntoSentences = (text: string): string[] => {
@@ -497,15 +486,6 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     if (window.innerWidth < 1024) {
       setToolsOpen(false);
     }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (indexedDbWorkerRef.current) {
-        indexedDbWorkerRef.current.terminate();
-        indexedDbWorkerRef.current = null;
-      }
-    };
   }, []);
 
   useEffect(() => {
@@ -822,7 +802,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   };
   const loadLocalDataFromIndexedDb = async (storageKey: string) => {
     if (!isBrowser()) return;
-    const worker = getIndexedDbWorker();
+    const worker = getSharedIndexedDbWorker();
     if (!worker) return;
 
     const loadSnapshot = async () =>
@@ -987,7 +967,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
     // 1. IndexedDB에 저장 (항상 수행)
     try {
-      const worker = getIndexedDbWorker();
+      const worker = getSharedIndexedDbWorker();
       if (worker) {
         const storageKey = buildIndexedDbKey();
 

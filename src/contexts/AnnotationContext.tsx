@@ -34,6 +34,7 @@ import {
 } from "../services/rmsService";
 import type { IndexedDbSnapshot } from "../services/rmsService";
 import { StorageQuotaExceededError } from "../utils/errors";
+import { getSharedIndexedDbWorker } from "../workers/indexedDbWorkerSingleton";
 
 interface AnnotationContextType {
   bookmarks: PdfBookmark[];
@@ -181,23 +182,11 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [lastSaveSource, setLastSaveSource] = useState<"manual" | "auto" | null>(null);
 
-  const indexedDbWorkerRef = useRef<Worker | null>(null);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
   const indexedDbSnapshotRef = useRef<IndexedDbSnapshot | null>(null);
 
   // 자동저장을 위한 이전 데이터 스냅샷 ref
   const lastSavedDataRef = useRef<string | null>(null);
-
-  const getIndexedDbWorker = useCallback(() => {
-    if (indexedDbWorkerRef.current) return indexedDbWorkerRef.current;
-    if (!isBrowser()) return null;
-    const worker = new Worker(
-      new URL("../workers/indexedDbWorker.ts", import.meta.url),
-      { type: "module" }
-    );
-    indexedDbWorkerRef.current = worker;
-    return worker;
-  }, []);
 
   const buildIndexedDbKey = useCallback(() => {
     const config = getRmsConfig();
@@ -215,7 +204,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
   const loadSnapshot = useCallback(
     async (storageKey: string) => {
-      const worker = getIndexedDbWorker();
+      const worker = getSharedIndexedDbWorker();
       if (!worker) return null;
       return await new Promise<IndexedDbSnapshot | null>((resolve, reject) => {
         const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -251,12 +240,12 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         });
       });
     },
-    [getIndexedDbWorker]
+    []
   );
 
   const saveSnapshot = useCallback(
     async (snapshot: IndexedDbSnapshot) => {
-      const worker = getIndexedDbWorker();
+      const worker = getSharedIndexedDbWorker();
       if (!worker) return;
       await new Promise<void>((resolve, reject) => {
         const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -300,7 +289,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         });
       });
     },
-    [getIndexedDbWorker]
+    []
   );
 
   const mergeAndSaveInWorker = useCallback(
@@ -313,7 +302,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         strokes: Stroke[];
       }
     ) => {
-      const worker = getIndexedDbWorker();
+      const worker = getSharedIndexedDbWorker();
       if (!worker) return null;
 
       return await new Promise<IndexedDbSnapshot | null>((resolve, reject) => {
@@ -357,7 +346,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         });
       });
     },
-    [getIndexedDbWorker, currentPdfPage, viewMode, pdfTotalPages, bookTitle]
+    [currentPdfPage, viewMode, pdfTotalPages, bookTitle]
   );
 
   const markAsUnsaved = useCallback(() => {
@@ -1081,15 +1070,6 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       window.removeEventListener("online", handleOnline);
     };
   }, [syncStatus, saveAnnotations]);
-
-  useEffect(() => {
-    return () => {
-      if (indexedDbWorkerRef.current) {
-        indexedDbWorkerRef.current.terminate();
-        indexedDbWorkerRef.current = null;
-      }
-    };
-  }, []);
 
   const value = useMemo(
     () => ({
