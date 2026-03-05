@@ -15,6 +15,7 @@ type Setter<T> = Dispatch<SetStateAction<T>>;
 const PDFJS_ASSET_BASE = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}`;
 const CMAP_URL = `${PDFJS_ASSET_BASE}/cmaps/`;
 const STANDARD_FONT_DATA_URL = `${PDFJS_ASSET_BASE}/standard_fonts/`;
+const WASM_URL = `${PDFJS_ASSET_BASE}/wasm/`;
 
 interface PdfJsRuntimeOptions {
   file: string;
@@ -302,6 +303,9 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     // Network optimization options
     httpHeaders: {},
     withCredentials: false,
+
+    // JPEG2000 (JPX) 디코더 WASM 경로 - 없으면 이미지가 빈 칸으로 렌더링됨
+    wasmUrl: WASM_URL,
 
     // Range Request optimization
     rangeChunkSize: 65536, // 64KB (default), increase for slower networks
