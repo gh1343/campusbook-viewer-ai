@@ -1115,8 +1115,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   };
 
   const scheduleSelectionCheck = () => {
-    const delays = [0, 40, 120];
-    delays.forEach((d) => setTimeout(checkPdfSelection, d));
+    setTimeout(checkPdfSelection, 80);
   };
 
   const finishPinchZoom = () => {

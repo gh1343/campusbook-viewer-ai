@@ -8,7 +8,6 @@ import {
 } from "pdfjs-dist/web/pdf_viewer.mjs";
 import { PageCanvasEntry } from "../utils/pdfUtils";
 import { extractPdfText } from "./pdf_text_extract";
-import { adjustTextLayerSpacingAsync } from "../utils/textLayerAdjust";
 
 type MutableRef<T> = { current: T };
 type Setter<T> = Dispatch<SetStateAction<T>>;
@@ -145,21 +144,6 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       }
     }
 
-    // 텍스트 레이어 줄 간격 자동 조정 (태블릿 드래그 선택 개선)
-    if (evt?.pageNumber) {
-      const pageEl = viewer.querySelector<HTMLElement>(
-        `.page[data-page-number="${evt.pageNumber}"]`
-      );
-      if (pageEl) {
-        adjustTextLayerSpacingAsync(pageEl).catch((err) => {
-          console.warn(
-            "[textLayerAdjust] failed for page",
-            evt.pageNumber,
-            err
-          );
-        });
-      }
-    }
   };
 
   eventBus.on("pagesinit", () => {

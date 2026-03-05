@@ -1054,14 +1054,13 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   }, [buildIndexedDbKey, loadAnnotationFromIndexedDb]);
 
   // 현재 데이터의 fingerprint 생성 (변경 감지용)
+  // text/content 같은 큰 필드는 제외하고 updated_at + length만 비교 (메모리 최적화)
   const buildDataFingerprint = useCallback(() => {
-    const data = {
-      bookmarks: bookmarks.map(b => ({ id: b.id, page: b.page, deleted: b.deleted, updated_at: b.updated_at })),
-      highlights: highlights.map(h => ({ id: h.id, text: h.text, note: h.note, color: h.color, deleted: h.deleted, updated_at: h.updated_at })),
-      notes: generalNotes.map(n => ({ id: n.id, title: n.title, content: n.content, deleted: n.deleted, updated_at: n.updated_at })),
-      strokes: strokes.map(s => ({ id: s.id, deleted: s.deleted, updated_at: s.updated_at })),
-    };
-    return JSON.stringify(data);
+    const bm = bookmarks.map(b => b.updated_at).join(",");
+    const hl = highlights.map(h => h.updated_at).join(",");
+    const nt = generalNotes.map(n => n.updated_at).join(",");
+    const st = strokes.map(s => s.updated_at).join(",");
+    return `${bookmarks.length}:${bm}|${highlights.length}:${hl}|${generalNotes.length}:${nt}|${strokes.length}:${st}`;
   }, [bookmarks, highlights, generalNotes, strokes]);
 
   // 수동/자동 저장 시에도 fingerprint 갱신
