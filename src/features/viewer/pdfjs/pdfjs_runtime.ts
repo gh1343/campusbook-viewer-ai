@@ -107,8 +107,8 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     setPdfLoadTime?.(elapsed);
   };
 
-  // Start updating time every 100ms
-  updateTimeInterval = window.setInterval(updateLoadingTime, 100);
+  // Start updating time every 500ms (메모리 최적화: 100ms → 500ms, setState 빈도 감소)
+  updateTimeInterval = window.setInterval(updateLoadingTime, 500);
 
   const handlePageRendered = (evt?: { pageNumber?: number }) => {
     scheduleRenderRefresh();

@@ -1646,6 +1646,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
   };
 
+  // 하이라이트 렌더 시 페이지 엘리먼트를 한 번만 수집 (메모리 최적화)
+  // layoutTick이 바뀔 때만 재계산 → 하이라이트 수만큼 querySelector 반복 제거
+  const pageElMap = useMemo(() => {
+    const map = new Map<number, HTMLElement>();
+    if (!viewerRef.current) return map;
+    viewerRef.current
+      .querySelectorAll<HTMLElement>(".page[data-page-number]")
+      .forEach((el) => {
+        const num = Number(el.dataset.pageNumber);
+        if (num) map.set(num, el);
+      });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutTick]);
+
   return (
     <div className="pdf_viewer">
       <PdfViewerOverlay
@@ -1742,9 +1757,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
               {pdfHighlights.flatMap((h) =>
                 h.rects.map((rect, idx) => {
                   const containerEl = viewerContainerRef.current;
-                  const pageEl = viewerRef.current?.querySelector<HTMLElement>(
-                    `.page[data-page-number="${rect.pageNumber}"]`
-                  );
+                  const pageEl = pageElMap.get(rect.pageNumber);
                   if (!containerEl || !pageEl) return null;
 
                   const { pageOffsetLeft, pageOffsetTop, scaleX, scaleY } =
