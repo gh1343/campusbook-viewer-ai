@@ -67,6 +67,9 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   let activePointerId: number | null = null;
 
+  // 페이지별 렌더링된 스트로크 ID 추적 (incremental rendering용)
+  const renderedStrokeIds = new Map<number, Set<string>>();
+
   const isPinching = () => isPinchingRef?.current ?? false;
 
   const getPageSize = (pageEl: HTMLElement) => {
@@ -129,9 +132,9 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     pageEl: HTMLElement,
     staticCanvas: HTMLCanvasElement,
     liveCanvas: HTMLCanvasElement
-  ) => {
+  ): boolean => {
     const { width, height, dpr } = getCanvasMetrics(pageEl);
-    if (!width || !height) return;
+    if (!width || !height) return false;
 
     // 메모리 최적화: 최대 캔버스 크기 제한 (iPad Safari 메모리 한계 고려)
     const MAX_CANVAS_DIMENSION = PEN_LAYER.MAX_CANVAS_DIMENSION;
@@ -149,11 +152,15 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       targetHeight = Math.floor(targetHeight * scale);
     }
 
+    let staticResized = false;
     [staticCanvas, liveCanvas].forEach((canvas) => {
       // 크기가 이미 맞으면 스킵 (메모리 재할당 방지)
       if (canvas.width === targetWidth && canvas.height === targetHeight) {
         return;
       }
+
+      // static canvas가 리사이즈되면 renderedStrokeIds 무효화 필요
+      if (canvas === staticCanvas) staticResized = true;
 
       canvas.width = targetWidth;
       canvas.height = targetHeight;
@@ -167,6 +174,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
         ctx.scale(effectiveScale, effectiveScale);
       }
     });
+
+    return staticResized;
   };
 
   // 터치 포인터 추적 (핀치 감지용)
@@ -560,6 +569,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     unbindPenHandlers(entry.liveCanvas);
     entry.layer?.remove();
     pageCanvasMapRef.current.delete(pageNumber);
+    renderedStrokeIds.delete(pageNumber);
   };
 
   const pageWithinBuffer = (
@@ -594,7 +604,9 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       if (!entry) return;
 
       pageCanvasMapRef.current.set(pageNumber, entry);
-      sizePageCanvas(pageEl, entry.staticCanvas, entry.liveCanvas);
+      const resized = sizePageCanvas(pageEl, entry.staticCanvas, entry.liveCanvas);
+      // 캔버스 크기 변경 시 렌더링 캐시 무효화
+      if (resized) renderedStrokeIds.delete(pageNumber);
     });
 
     for (const [pageNumber, entry] of pageCanvasMapRef.current.entries()) {
@@ -636,39 +648,86 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       (s) => strokeMatchesPage(s, pageNumber) && !s.deleted
     );
 
-  const renderStaticCanvases = () => {
+  // 스트로크 하나를 ctx에 그리는 헬퍼
+  const drawStrokeToContext = (
+    ctx: CanvasRenderingContext2D,
+    s: any,
+    pageWidth: number,
+    pageHeight: number
+  ) => {
+    let points: { x: number; y: number }[];
+    let width: number;
+    if (s.normalized) {
+      // 정규화된 스트로크: 0~1 비율 → 현재 페이지 크기로 복원
+      points = s.points.map((p: any) => ({
+        x: p.x * pageWidth,
+        y: p.y * pageHeight,
+      }));
+      width = (s.width || 3 / pageWidth) * pageWidth;
+    } else {
+      // 기존 비정규화 스트로크: 호환성 유지
+      const { scaleX, scaleY } = getStrokeScale(s, pageWidth, pageHeight);
+      points = scaleStrokePoints(s.points, scaleX, scaleY);
+      width = (s.width || 3) * scaleX;
+    }
+    drawStrokePath(ctx, points, s.color, width, s.opacity ?? 1);
+  };
+
+  // forceFullRedraw=true: 캔버스 초기화 후 전체 재그리기 (줌/리사이즈 시)
+  // forceFullRedraw=false: 새로 추가된 스트로크만 위에 덧그리기 (일반 필기 시)
+  const renderStaticCanvases = (forceFullRedraw = false) => {
     pageCanvasMapRef.current.forEach(({ staticCanvas }, pageNumber) => {
       const ctx = staticCanvas.getContext("2d");
       if (!ctx) return;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
-      ctx.restore();
-      if (!showAnnotationsRef.current) return;
+
+      const strokes = getPageStrokes(pageNumber);
+      const prevIds = renderedStrokeIds.get(pageNumber) ?? new Set<string>();
+
+      // incremental 가능 여부 판단:
+      // 1. forceFullRedraw가 아닐 것
+      // 2. showAnnotations가 켜져 있을 것
+      // 3. 이전에 렌더링된 스트로크 중 삭제된 것이 없을 것 (지우개 사용 감지)
+      let isIncremental = !forceFullRedraw && showAnnotationsRef.current;
+      if (isIncremental && prevIds.size > 0) {
+        const currentIdSet = new Set(strokes.map((s: any) => s.id));
+        for (const id of prevIds) {
+          if (!currentIdSet.has(id)) {
+            isIncremental = false;
+            break;
+          }
+        }
+      }
 
       const pageRect = staticCanvas.getBoundingClientRect();
       const pageWidth = pageRect.width;
       const pageHeight = pageRect.height;
 
-      const strokes = getPageStrokes(pageNumber);
-      strokes.forEach((s: any) => {
-        let points: { x: number; y: number }[];
-        let width: number;
-        if (s.normalized) {
-          // 정규화된 스트로크: 0~1 비율 → 현재 페이지 크기로 복원
-          points = s.points.map((p: any) => ({
-            x: p.x * pageWidth,
-            y: p.y * pageHeight,
-          }));
-          width = (s.width || 3 / pageWidth) * pageWidth;
-        } else {
-          // 기존 비정규화 스트로크: 호환성 유지
-          const { scaleX, scaleY } = getStrokeScale(s, pageWidth, pageHeight);
-          points = scaleStrokePoints(s.points, scaleX, scaleY);
-          width = (s.width || 3) * scaleX;
+      if (!isIncremental) {
+        // 전체 재그리기: 캔버스 초기화 후 모든 스트로크 렌더링
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, staticCanvas.width, staticCanvas.height);
+        ctx.restore();
+
+        if (!showAnnotationsRef.current) {
+          renderedStrokeIds.set(pageNumber, new Set());
+          return;
         }
-        drawStrokePath(ctx, points, s.color, width, s.opacity ?? 1);
-      });
+
+        strokes.forEach((s: any) => drawStrokeToContext(ctx, s, pageWidth, pageHeight));
+        renderedStrokeIds.set(pageNumber, new Set(strokes.map((s: any) => s.id)));
+      } else {
+        // 증분 렌더링: 새로 추가된 스트로크만 덧그리기
+        let addedAny = false;
+        strokes.forEach((s: any) => {
+          if (prevIds.has(s.id)) return; // 이미 렌더링됨 → 스킵
+          drawStrokeToContext(ctx, s, pageWidth, pageHeight);
+          addedAny = true;
+        });
+        if (addedAny) {
+          renderedStrokeIds.set(pageNumber, new Set(strokes.map((s: any) => s.id)));
+        }
+      }
     });
   };
 
@@ -741,7 +800,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   const refreshCanvases = () => {
     syncPageCanvases();
     syncCanvasPointers();
-    renderStaticCanvases();
+    // 줌/리사이즈/뷰 전환 시에는 반드시 전체 재그리기
+    renderStaticCanvases(true);
     renderLiveCanvas();
   };
 
