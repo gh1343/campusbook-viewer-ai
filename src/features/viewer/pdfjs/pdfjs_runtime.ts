@@ -12,11 +12,11 @@ import { extractPdfText } from "./pdf_text_extract";
 type MutableRef<T> = { current: T };
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
-const PDFJS_LOCAL = `${import.meta.env.BASE_URL}pdfjs/`;
-const CMAP_URL = `${PDFJS_LOCAL}cmaps/`;
-const STANDARD_FONT_DATA_URL = `${PDFJS_LOCAL}standard_fonts/`;
-// WASM은 서버 MIME 타입(application/wasm) 미설정 문제로 CDN 사용
-const WASM_URL = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/wasm/`;
+// CMap/폰트/WASM 모두 CDN 사용 (서버 정적 파일 미제공 환경 대응)
+const CDN_BASE = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/`;
+const CMAP_URL = `${CDN_BASE}cmaps/`;
+const STANDARD_FONT_DATA_URL = `${CDN_BASE}standard_fonts/`;
+const WASM_URL = `${CDN_BASE}wasm/`;
 
 interface PdfJsRuntimeOptions {
   file: string;
