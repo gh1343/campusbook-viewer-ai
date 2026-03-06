@@ -911,14 +911,22 @@
     min-width: 36px;
     font-size: 10px;
   }
-  .save_status_wrap {
+  /* .save_status_wrap {
     display: none;
-  }
+  } */
 }
 
 /* ≤ 480px: center_hub 숨김 (기존 540px에서 이동) */
 @media (max-width: 480px) {
   .center_hub {
     display: none;
+  }
+  .save_btn span,
+  .save_btn_group .save_btn span {
+    display: block;
+  }
+  .saved_time,
+  .retry_hint {
+    display: block;
   }
 }
