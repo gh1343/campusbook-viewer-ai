@@ -13,17 +13,14 @@ export const PdfViewerOverlay: React.FC<PdfViewerOverlayProps> = ({
 }) => {
   if (!loading && !errorMsg) return null;
 
-  const displayProgress = Math.min(
-    100,
-    Math.max(1, Math.round(progress || 0))
-  );
+  const displayProgress = Math.min(100, Math.max(1, Math.round(progress || 0)));
 
   return (
     <>
       {loading && (
         <div className="pdf_viewer_overlay pdf_viewer_overlay_loading">
           <div className="pdf_viewer_progress">
-            <div className="pdf_viewer_progress_title">PDF 로딩 중...</div>
+            <div className="pdf_viewer_progress_title">로딩 중...</div>
             <div className="pdf_viewer_progress_bar">
               <div
                 className="pdf_viewer_progress_bar_fill"

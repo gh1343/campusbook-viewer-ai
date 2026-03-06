@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import html2canvas from "html2canvas";
 import { Header } from "../components/layout/Header";
 import { ContentRenderer, ControlBar, PdfViewer } from "../features/viewer";
 import { TocPanel, ToolsPanel } from "../components/interaction/SideDrawers";
@@ -20,6 +21,7 @@ import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
   const { isPreviewMode } = getPreviewConfig();
+  const capture_min_size = 8;
 
   useStayTracker();
 
@@ -29,10 +31,26 @@ export const ReaderPage: React.FC = () => {
   const [isNarrow, setIsNarrow] = useState(false);
   const { registerPdfNavigator, setCurrentPdfPage, setPdfTotalPages } =
     usePdfViewer();
-  const { isToolsOpen, setToolsOpen } = useBook();
+  const {
+    isToolsOpen,
+    setToolsOpen,
+    isCaptureMode,
+    setCaptureMode,
+    setCapturedImage,
+  } = useBook();
   const [pdfPageCount, setPdfPageCount] = useState(0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
+  const [captureStart, setCaptureStart] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [captureCurrent, setCaptureCurrent] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const pdfGoToPageRef = useRef<(page: number) => void>();
+  const pdfAreaRef = useRef<HTMLDivElement>(null);
+  const [pdfBounds, setPdfBounds] = useState<DOMRect | null>(null);
   const hasOpenSidebar = isTocOpen || isToolsOpen;
   const { viewMode } = usePdfViewer();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
@@ -190,6 +208,180 @@ export const ReaderPage: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !isCaptureMode) return;
+      setCaptureMode(false);
+      setCaptureStart(null);
+      setCaptureCurrent(null);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isCaptureMode, setCaptureMode]);
+
+  useEffect(() => {
+    if (isCaptureMode && pdfAreaRef.current) {
+      setPdfBounds(pdfAreaRef.current.getBoundingClientRect());
+    } else {
+      setPdfBounds(null);
+    }
+  }, [isCaptureMode]);
+
+  const applyCaptureWatermark = (canvas: HTMLCanvasElement) => {
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    // html2canvas가 ctx.scale(dpr, dpr) + ctx.translate(-x,-y)를 남겨두므로
+    // 물리 픽셀 좌표로 직접 그리려면 transform을 초기화해야 함
+    context.setTransform(1, 0, 0, 1, 0, 0);
+
+    const text = "campusbook";
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const fontSize = Math.max(16, Math.min(h * 0.06, 36));
+
+    context.save();
+    context.font = `700 ${fontSize}px Arial`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+
+    const metrics = context.measureText(text);
+    const textWidth = metrics.width;
+    const paddingX = fontSize * 0.8;
+    const paddingY = fontSize * 0.45;
+    const radius = fontSize * 0.55;
+    const bottomGap = fontSize * 0.8;
+    const boxWidth = textWidth + paddingX * 2;
+    const boxHeight = fontSize + paddingY * 2;
+    const boxX = (w - boxWidth) / 2;
+    const boxY = Math.max(0, h - boxHeight - bottomGap);
+
+    context.fillStyle = "rgba(15, 23, 42, 0.42)";
+    context.beginPath();
+    context.moveTo(boxX + radius, boxY);
+    context.lineTo(boxX + boxWidth - radius, boxY);
+    context.quadraticCurveTo(
+      boxX + boxWidth,
+      boxY,
+      boxX + boxWidth,
+      boxY + radius
+    );
+    context.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+    context.quadraticCurveTo(
+      boxX + boxWidth,
+      boxY + boxHeight,
+      boxX + boxWidth - radius,
+      boxY + boxHeight
+    );
+    context.lineTo(boxX + radius, boxY + boxHeight);
+    context.quadraticCurveTo(
+      boxX,
+      boxY + boxHeight,
+      boxX,
+      boxY + boxHeight - radius
+    );
+    context.lineTo(boxX, boxY + radius);
+    context.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+    context.closePath();
+    context.fill();
+
+    context.fillStyle = "rgba(255, 255, 255, 0.92)";
+    context.fillText(text, w / 2, boxY + boxHeight / 2);
+    context.restore();
+  };
+
+  const handleCaptureStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isCaptureMode) return;
+    const bounds = pdfAreaRef.current?.getBoundingClientRect();
+    if (bounds) {
+      if (
+        e.clientX < bounds.left ||
+        e.clientX > bounds.right ||
+        e.clientY < bounds.top ||
+        e.clientY > bounds.bottom
+      ) {
+        return;
+      }
+    }
+    const point = { x: e.clientX, y: e.clientY };
+    setCaptureStart(point);
+    setCaptureCurrent(point);
+  };
+
+  const handleCaptureMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isCaptureMode || !captureStart) return;
+    const bounds = pdfAreaRef.current?.getBoundingClientRect();
+    let x = e.clientX;
+    let y = e.clientY;
+    if (bounds) {
+      x = Math.max(bounds.left, Math.min(bounds.right, x));
+      y = Math.max(bounds.top, Math.min(bounds.bottom, y));
+    }
+    setCaptureCurrent({ x, y });
+  };
+
+  const handleCaptureEnd = async (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isCaptureMode || !captureStart || !captureCurrent) {
+      setCaptureStart(null);
+      setCaptureCurrent(null);
+      return;
+    }
+
+    const bounds = pdfAreaRef.current?.getBoundingClientRect();
+    let endX = e.clientX;
+    let endY = e.clientY;
+    if (bounds) {
+      endX = Math.max(bounds.left, Math.min(bounds.right, endX));
+      endY = Math.max(bounds.top, Math.min(bounds.bottom, endY));
+    }
+
+    const rect = {
+      x: Math.min(captureStart.x, endX),
+      y: Math.min(captureStart.y, endY),
+      width: Math.abs(endX - captureStart.x),
+      height: Math.abs(endY - captureStart.y),
+    };
+
+    setCaptureStart(null);
+    setCaptureCurrent(null);
+
+    if (rect.width < capture_min_size || rect.height < capture_min_size) {
+      setCaptureMode(false);
+      return;
+    }
+
+    try {
+      const canvas = await html2canvas(document.body, {
+        x: rect.x + window.scrollX,
+        y: rect.y + window.scrollY,
+        width: rect.width,
+        height: rect.height,
+        useCORS: true,
+        scale: window.devicePixelRatio,
+        ignoreElements: (el) => el.classList.contains("capture-overlay-ui"),
+      });
+
+      applyCaptureWatermark(canvas);
+      setCapturedImage(canvas.toDataURL());
+    } catch (error) {
+      console.error("[ReaderPage] capture failed", error);
+    } finally {
+      setCaptureMode(false);
+    }
+  };
+
+  const capture_box_style: React.CSSProperties =
+    isCaptureMode && captureStart && captureCurrent
+      ? {
+          left: Math.min(captureStart.x, captureCurrent.x),
+          top: Math.min(captureStart.y, captureCurrent.y),
+          width: Math.abs(captureCurrent.x - captureStart.x),
+          height: Math.abs(captureCurrent.y - captureStart.y),
+        }
+      : {};
+
   // Drag Logic for Resizing
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -204,14 +396,20 @@ export const ReaderPage: React.FC = () => {
 
       if (isDraggingLeft) {
         const newWidth = e.clientX - containerRect.left;
-        if (newWidth > PANEL.LEFT_MIN_WIDTH && newWidth < PANEL.LEFT_MAX_WIDTH) {
+        if (
+          newWidth > PANEL.LEFT_MIN_WIDTH &&
+          newWidth < PANEL.LEFT_MAX_WIDTH
+        ) {
           setLeftWidth(newWidth);
         }
       }
 
       if (isDraggingRight) {
         const newWidth = containerRect.right - e.clientX;
-        if (newWidth > PANEL.RIGHT_MIN_WIDTH && newWidth < PANEL.RIGHT_MAX_WIDTH) {
+        if (
+          newWidth > PANEL.RIGHT_MIN_WIDTH &&
+          newWidth < PANEL.RIGHT_MAX_WIDTH
+        ) {
           setRightWidth(newWidth);
         }
       }
@@ -299,6 +497,58 @@ export const ReaderPage: React.FC = () => {
 
   return (
     <div className="layout_container">
+      {isCaptureMode && pdfBounds && (
+        <div
+          className="capture-dim capture-overlay-ui"
+          style={{
+            left: pdfBounds.left,
+            top: pdfBounds.top,
+            width: pdfBounds.width,
+            height: pdfBounds.height,
+          }}
+        />
+      )}
+      {isCaptureMode && (
+        <div
+          className="capture-interaction capture-overlay-ui"
+          onPointerDown={handleCaptureStart}
+          onPointerMove={handleCaptureMove}
+          onPointerUp={handleCaptureEnd}
+        >
+          {captureStart && captureCurrent && (
+            <div
+              className="capture-overlay capture-selection-box capture-overlay-ui"
+              style={capture_box_style}
+            />
+          )}
+        </div>
+      )}
+      {isCaptureMode && !captureStart && (
+        <div className="capture-toast capture-overlay-ui">
+          <span>캡처 영역을 드래그해서 선택해주세요</span>
+          <button
+            className="capture-toast-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCaptureMode(false);
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
       <Header toggleSidebar={toggleToc} isSidebarOpen={isTocOpen} />
       {(isPreviewMode || pdfFailed) && <LegacyViewerButton />}
 
@@ -322,7 +572,7 @@ export const ReaderPage: React.FC = () => {
 
         {/* Center Panel: Reader & Controls */}
         <main className="content_container">
-          <div className="cc_top">
+          <div className="cc_top" ref={pdfAreaRef}>
             {pdfUrl ? (
               <PdfViewer
                 file={pdfUrl}
@@ -333,7 +583,7 @@ export const ReaderPage: React.FC = () => {
                 onLoadError={handlePdfLoadError}
               />
             ) : (
-              <div className="pdf_loading">PDF 로딩 중...</div>
+              <div className="pdf_loading">로딩 중...</div>
             )}
           </div>
 

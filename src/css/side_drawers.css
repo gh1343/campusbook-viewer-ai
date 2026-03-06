@@ -38,7 +38,7 @@
 .panel_aside {
   position: fixed;
   z-index: 50;
-  top: 4rem;                              /* 헤더 아래에서 시작 */
+  top: 4rem; /* 헤더 아래에서 시작 */
   bottom: env(safe-area-inset-bottom, 0px); /* 홈 인디케이터 위에서 끝 */
   /* height 제거: top+bottom이 높이를 결정. iOS 브라우저 툴바는
      fixed 요소가 visual viewport 기준이므로 자동으로 제외됨 */
@@ -804,11 +804,26 @@
   color: rgb(30 41 59);
 }
 
+.capture_img_container {
+  margin: 12px 0;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 16px;
+  overflow: hidden;
+  background-color: rgb(248 250 252);
+}
+
+.capture_img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 /* 캡처 이미지 미리보기 */
 .mynote_capture_preview {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
+  width: fit-content;
 }
 .mynote_capture_img {
   height: 8rem;
@@ -840,7 +855,8 @@
 .mynote_editor_footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.75rem 1rem 1rem;
   border-top: 1px solid rgb(241 245 249);
   flex-shrink: 0;
@@ -851,11 +867,14 @@
   gap: 0.375rem;
   padding: 0.5rem 1rem;
   border-radius: 0.75rem;
+  border: 1px solid rgb(226 232 240);
   font-size: 0.7rem;
   font-weight: 700;
+  white-space: nowrap;
   background-color: rgb(248 250 252);
   color: rgb(148 163 184);
-  transition: background-color 0.15s, color 0.15s;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
 }
 .mynote_capture_btn:hover {
   background-color: rgb(241 245 249);
@@ -864,12 +883,14 @@
 .mynote_capture_btn.active {
   background-color: rgb(239 246 255);
   color: rgb(37 99 235);
+  border-color: rgb(191 219 254);
 }
 
 .mynote_save_btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-left: auto;
   padding: 0.75rem 2rem;
   background-color: rgb(37 99 235);
   color: #fff;
@@ -1084,6 +1105,16 @@
   word-break: break-word;
 }
 
+.mynote_card_body .capture_img_container {
+  margin: 8px 0 0;
+  border-radius: 12px;
+}
+
+.mynote_card_body .capture_img {
+  max-height: 120px;
+  object-fit: cover;
+}
+
 .mynote_card_arrow {
   position: absolute;
   bottom: 1rem;
@@ -1099,5 +1130,8 @@
   .mynote_editor_footer {
     min-height: 14vh;
     align-items: baseline;
+  }
+  .mynote_save_btn {
+    padding: 0.75rem 1.5rem;
   }
 }

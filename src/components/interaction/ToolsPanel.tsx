@@ -95,7 +95,9 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   const [localFilter, setLocalFilter] = useState("");
 
   const contentEditableRef = useRef<HTMLDivElement>(null);
+  const editorWrapRef = useRef<HTMLDivElement>(null);
   const savedSelectionRef = useRef<Range | null>(null);
+  const autoInsertNextCaptureRef = useRef(false);
   const highlightItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const aiTalkEndRef = useRef<HTMLDivElement>(null);
@@ -103,6 +105,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   // Lazy loading state for highlights
   const [visibleHighlightCount, setVisibleHighlightCount] = useState(20);
   const highlightScrollRef = useRef<HTMLDivElement>(null);
+  const capture_image_selector = ".capture_img_container, .capture-img-container";
 
   useEffect(() => {
     if (
@@ -113,6 +116,33 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       contentEditableRef.current.innerHTML = editingNote.content || "";
     }
   }, [editingNote?.id]);
+
+  // 갤럭시 탭 등 Android 기기에서 가상 키보드가 올라올 때
+  // editorWrap 하단에 키보드 높이만큼 paddingBottom을 줘서 footer가 가려지지 않도록 처리
+  useEffect(() => {
+    if (!editingNote) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const adjust = () => {
+      const keyboardHeight =
+        window.innerHeight - vv.height - vv.offsetTop;
+      if (editorWrapRef.current) {
+        editorWrapRef.current.style.paddingBottom =
+          keyboardHeight > 0 ? `${keyboardHeight}px` : "";
+      }
+    };
+
+    vv.addEventListener("resize", adjust);
+    vv.addEventListener("scroll", adjust);
+    return () => {
+      vv.removeEventListener("resize", adjust);
+      vv.removeEventListener("scroll", adjust);
+      if (editorWrapRef.current) {
+        editorWrapRef.current.style.paddingBottom = "";
+      }
+    };
+  }, [editingNote]);
 
   useEffect(() => {
     if (activeToolTab !== "ai") return;
@@ -126,6 +156,63 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
   const getCurrentContent = () =>
     contentEditableRef.current ? contentEditableRef.current.innerHTML : "";
+
+  const buildCaptureImageHtml = (imageSrc: string) =>
+    `<div class="capture_img_container"><img src="${imageSrc.replace(/"/g, "&quot;")}" class="capture_img" alt="캡처 이미지" /></div><p><br/></p>`;
+
+  const splitCapturedImageContent = (content: string) => {
+    if (!content || typeof document === "undefined") {
+      return { noteContent: content, noteImage: null as string | null };
+    }
+
+    const temp = document.createElement("div");
+    temp.innerHTML = content;
+
+    const captureNodes = Array.from(
+      temp.querySelectorAll(capture_image_selector)
+    );
+
+    if (captureNodes.length === 0) {
+      return { noteContent: content, noteImage: null as string | null };
+    }
+
+    let noteImage: string | null = null;
+
+    captureNodes.forEach((captureNode) => {
+      const imageNode = captureNode.querySelector("img");
+      const imageSrc = imageNode?.getAttribute("src");
+      if (imageSrc) {
+        noteImage = imageSrc;
+      }
+
+      const nextNode = captureNode.nextElementSibling;
+      captureNode.remove();
+
+      if (
+        nextNode &&
+        nextNode.tagName === "P" &&
+        !nextNode.textContent?.trim()
+      ) {
+        nextNode.remove();
+      }
+    });
+
+    return { noteContent: temp.innerHTML, noteImage };
+  };
+
+  const openNoteEditor = (note: Partial<GeneralNote>) => {
+    const { noteContent, noteImage } = splitCapturedImageContent(
+      note.content || ""
+    );
+
+    setCapturedImage(noteImage);
+    setEditingNote({ ...note, content: noteContent });
+  };
+
+  const closeNoteEditor = () => {
+    setEditingNote(null);
+    setCapturedImage(null);
+  };
 
   const handleTabChange = (
     tab: "ai" | "highlight" | "mynote" | "reference" | "search"
@@ -244,21 +331,43 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
   useEffect(() => {
     if (!capturedImage) return;
-    // 캡처 완료 → 패널 복귀 (editingNote 유무와 무관하게 항상)
     setToolsOpen(true);
     setActiveToolTab("mynote");
-    // editingNote가 있으면 에디터 본문에 이미지 삽입
-    if (editingNote) {
-      const imgHtml = `<div class="capture-img-container"><img src="${capturedImage}" style="max-width:100%; border:1px solid #ccc; border-radius:4px; margin: 10px 0; display: block;" /></div><p><br/></p>`;
-      const newContent = (editingNote.content || "") + imgHtml;
-      setEditingNote((prev) =>
-        prev ? { ...prev, content: newContent } : null
+
+    if (!autoInsertNextCaptureRef.current) return;
+    autoInsertNextCaptureRef.current = false;
+
+    const timer = setTimeout(() => {
+      const editor = contentEditableRef.current;
+      if (!editor) return;
+      editor.focus();
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      if (savedSelectionRef.current) {
+        try {
+          sel?.addRange(savedSelectionRef.current);
+        } catch {
+          const r = document.createRange();
+          r.selectNodeContents(editor);
+          r.collapse(false);
+          sel?.addRange(r);
+        }
+      } else {
+        const r = document.createRange();
+        r.selectNodeContents(editor);
+        r.collapse(false);
+        sel?.addRange(r);
+      }
+      document.execCommand(
+        "insertHTML",
+        false,
+        `<img src="${capturedImage.replace(/"/g, "&quot;")}" style="max-width:100%;height:auto;" />`
       );
-      if (contentEditableRef.current)
-        contentEditableRef.current.innerHTML = newContent;
       setCapturedImage(null);
-    }
-  }, [capturedImage]);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [capturedImage, setActiveToolTab, setToolsOpen, setCapturedImage]);
 
   const parseCitedPages = (text: string) => {
     const pages: number[] = [];
@@ -382,14 +491,18 @@ ${contextString}
     }
   };
   const handleSaveNote = () => {
-    if (editingNote) {
-      const finalContent = getCurrentContent();
-      if (editingNote.title) {
-        if (editingNote.id)
-          updateGeneralNote(editingNote.id, editingNote.title, finalContent);
-        else addGeneralNote(editingNote.title, finalContent);
-        setEditingNote(null);
-      }
+    if (!editingNote) return;
+
+    const { noteContent } = splitCapturedImageContent(getCurrentContent());
+    const finalContent = capturedImage
+      ? `${noteContent}${buildCaptureImageHtml(capturedImage)}`
+      : noteContent;
+
+    if (editingNote.title) {
+      if (editingNote.id)
+        updateGeneralNote(editingNote.id, editingNote.title, finalContent);
+      else addGeneralNote(editingNote.title, finalContent);
+      closeNoteEditor();
     }
   };
   const execCmd = (command: string, value: string | undefined = undefined) => {
@@ -410,9 +523,12 @@ ${contextString}
     setEditingNote((prev) =>
       prev ? { ...prev, content: currentContent } : null
     );
-    // 패널을 닫아야 뷰어 캔버스에서 캡처 드래그가 가능함
-    setToolsOpen(false);
-    setTimeout(() => setCaptureMode(true), 50);
+    autoInsertNextCaptureRef.current = true;
+    // 모바일(≤480px)에서는 패널을 닫아 캡처 영역 확보 → 캡처 완료 시 자동 재오픈
+    if (window.innerWidth <= 480) {
+      setToolsOpen(false);
+    }
+    setCaptureMode(true);
   };
   const insertTable = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -457,6 +573,13 @@ ${contextString}
     setEditingNote((prev) =>
       prev ? { ...prev, content: currentContent } : null
     );
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      if (contentEditableRef.current?.contains(range.commonAncestorContainer)) {
+        savedSelectionRef.current = range.cloneRange();
+      }
+    }
   };
   const printNote = () => {
     if (!editingNote) return;
@@ -730,11 +853,11 @@ ${contextString}
           {activeToolTab === "mynote" && (
             <div className="mynote_tab_wrap">
               {editingNote ? (
-                <div className="mynote_editor_wrap">
+                <div className="mynote_editor_wrap" ref={editorWrapRef}>
                   {/* 헤더: 목록으로 + 수정/작성 상태 표시 */}
                   <div className="mynote_editor_header">
                     <button
-                      onClick={() => setEditingNote(null)}
+                      onClick={closeNoteEditor}
                       className="mynote_back_btn"
                     >
                       <ChevronRight
@@ -807,13 +930,13 @@ ${contextString}
                       >
                         <Highlighter size={14} />
                       </button>
-                      {/* <button
-                        onMouseDown={handleCaptureClick}
+                      <button
+                        onClick={handleCaptureClick}
                         className="mynote_toolbar_btn mynote_toolbar_btn_blue"
                         title="캡처 이미지 첨부"
                       >
                         <Camera size={14} />
-                      </button> */}
+                      </button>
                       {/* <button
                         onClick={printNote}
                         className="mynote_toolbar_btn"
@@ -831,15 +954,52 @@ ${contextString}
                       contentEditable
                       suppressContentEditableWarning={true}
                       onBlur={handleEditorBlur}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = "copy";
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const imgSrc = e.dataTransfer.getData("text/plain");
+                        if (!imgSrc || !imgSrc.startsWith("data:image")) return;
+                        let range: Range | null = null;
+                        if (document.caretRangeFromPoint) {
+                          range = document.caretRangeFromPoint(e.clientX, e.clientY);
+                        } else {
+                          const pos = (document as any).caretPositionFromPoint?.(e.clientX, e.clientY);
+                          if (pos) {
+                            range = document.createRange();
+                            range.setStart(pos.offsetNode, pos.offset);
+                          }
+                        }
+                        if (range && contentEditableRef.current) {
+                          contentEditableRef.current.focus();
+                          const sel = window.getSelection();
+                          sel?.removeAllRanges();
+                          sel?.addRange(range);
+                          document.execCommand("insertHTML", false, `<img src="${imgSrc}" style="max-width:100%;height:auto;" />`);
+                        }
+                      }}
                     />
 
                     {/* 캡처 이미지 미리보기 */}
                     {capturedImage && (
-                      <div className="mynote_capture_preview">
+                      <div
+                        className="mynote_capture_preview"
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          e.dataTransfer.effectAllowed = "copy";
+                          e.dataTransfer.setData("text/plain", capturedImage);
+                        }}
+                      >
                         <img
                           src={capturedImage}
                           className="mynote_capture_img"
                           alt="캡처 이미지"
+                          draggable={false}
                         />
                         <button
                           onClick={() => setCapturedImage(null)}
@@ -853,7 +1013,7 @@ ${contextString}
 
                   {/* 하단 footer: 캡처 첨부 + 저장 버튼 */}
                   <div className="mynote_editor_footer">
-                    {/* <button
+                    <button
                       onClick={handleCaptureClick}
                       className={`mynote_capture_btn${
                         capturedImage ? " active" : ""
@@ -861,7 +1021,7 @@ ${contextString}
                     >
                       <Camera size={16} />
                       {capturedImage ? "이미지 교체" : "캡처 이미지 첨부"}
-                    </button> */}
+                    </button>
                     <button
                       onClick={handleSaveNote}
                       className="mynote_save_btn"
@@ -876,7 +1036,7 @@ ${contextString}
                   <div className="mynote_list_header">
                     <button
                       onClick={() =>
-                        setEditingNote({
+                        openNoteEditor({
                           title: "",
                           content: "",
                           chapterId: currentChapter.id,
@@ -931,7 +1091,7 @@ ${contextString}
                     {filteredNotes.map((note) => (
                       <div
                         key={note.id}
-                        onClick={() => setEditingNote(note)}
+                        onClick={() => openNoteEditor(note)}
                         className="mynote_card"
                       >
                         <div className="mynote_card_header">
@@ -1053,7 +1213,7 @@ ${contextString}
                               (n) => `note-${n.id}` === result.id
                             );
                             if (note) {
-                              setEditingNote(note);
+                              openNoteEditor(note);
                               setActiveToolTab("mynote");
                             }
                           } else if (result.type === "book") {

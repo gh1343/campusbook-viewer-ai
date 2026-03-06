@@ -131,6 +131,72 @@ body.app.dark,
   pointer-events: none;
 }
 
+/* ── 캡처 모드 오버레이 ── */
+.capture-dim {
+  position: fixed;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  border: 2px dashed rgba(96, 165, 250, 0.8);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.capture-interaction {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.capture-selection-box {
+  position: fixed;
+}
+
+.capture-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #1e293b;
+  color: #fff;
+  padding: 8px 12px 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: auto;
+  z-index: 10001;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.capture-toast span {
+  width: 220px;
+  pointer-events: none;
+}
+
+.capture-toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background-color: #ef4444;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background-color 0.15s;
+}
+
+.capture-toast-close:hover {
+  background-color: #dc2626;
+}
+
 /* Tailwind-lite utilities used in generated HTML */
 .text-xs {
   font-size: 0.75rem;
