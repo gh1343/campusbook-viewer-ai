@@ -240,7 +240,7 @@ export const ReaderPage: React.FC = () => {
     const w = canvas.width;
     const h = canvas.height;
 
-    const fontSize = Math.max(16, Math.min(h * 0.06, 36));
+    const fontSize = Math.max(12, Math.min(h * 0.025, 20));
 
     context.save();
     context.font = `700 ${fontSize}px Arial`;
