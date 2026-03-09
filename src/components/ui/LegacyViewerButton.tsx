@@ -12,6 +12,10 @@ const handleLegacyClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     return;
   }
 
+  // iOS Safari는 async 이후 window.open을 팝업으로 차단하므로
+  // 사용자 이벤트 컨텍스트가 유지되는 지금 미리 창을 열어둠
+  const newWindow = window.open('', '_blank');
+
   const { apiBase, bookCd } = config;
   const url = `${apiBase}/v2/book/info/${bookCd}`;
 
@@ -36,13 +40,19 @@ const handleLegacyClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     const previewUrl = parsed?.result?.bookInfo?.previewUrl;
     if (!previewUrl) {
       console.error('[LegacyViewerButton] previewUrl을 찾을 수 없습니다.', parsed);
+      newWindow?.close();
       return;
     }
 
     console.log('[LegacyViewerButton] window.open:', previewUrl);
-    window.open(previewUrl, '_blank', '');
+    if (newWindow) {
+      newWindow.location.href = previewUrl;
+    } else {
+      window.open(previewUrl, '_blank', '');
+    }
   } catch (err) {
     console.error('[LegacyViewerButton] 요청 실패:', err);
+    newWindow?.close();
   }
 };
 

@@ -3,6 +3,7 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useCallback,
   ReactNode,
   useRef,
 } from "react";
@@ -316,6 +317,10 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
   const ttsObjectUrlRef = useRef<string | null>(null);
   const ttsGeneratingRef = useRef(false);
   const indexedDbLoadKeyRef = useRef<string | null>(null);
+  // 오프라인 저장 후 서버 동기화 대기 여부
+  const progressPendingSyncRef = useRef(false);
+  // handleOnline에서 stale closure 방지용 ref
+  const saveProgressRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const setTtsConfig = (config: Partial<TTSConfig>) => {
     setTtsConfigState((prev) => ({ ...prev, ...config }));
@@ -896,6 +901,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       let serverProgressPage: number | null = null;
+      let serverUpdatedAt: number | null = null;
       const config = getRmsConfig();
       if (config) {
         try {
@@ -913,6 +919,9 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
             const parsed = JSON.parse(progressData.result.dataList[0]);
             if (typeof parsed.currentPdfPage === "number") {
               serverProgressPage = parsed.currentPdfPage;
+            }
+            if (typeof parsed.updatedAt === "number") {
+              serverUpdatedAt = parsed.updatedAt;
             }
           }
         } catch (err) {
@@ -938,8 +947,15 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         if (totalPages !== null && Number.isFinite(totalPages)) {
           setPdfTotalPages(Math.max(0, Math.round(totalPages)));
         }
-        const targetPage =
-          serverProgressPage !== null ? serverProgressPage : savedPage;
+        // 타임스탬프 비교: 둘 다 있으면 더 최신 값 사용
+        // 서버에 updatedAt이 없으면 기존 동작대로 서버 우선
+        const localUpdatedAt =
+          typeof progress.updatedAt === "number" ? progress.updatedAt : 0;
+        const targetPage = (() => {
+          if (serverProgressPage === null) return savedPage;
+          if (serverUpdatedAt === null) return serverProgressPage;
+          return localUpdatedAt > serverUpdatedAt ? savedPage : serverProgressPage;
+        })();
         if (typeof targetPage === "number" && Number.isFinite(targetPage)) {
           setInitialPageToLoad(targetPage);
         }
@@ -962,7 +978,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     loadLocalDataFromIndexedDb(storageKey);
   }, [bookTitle]);
 
-  const saveProgress = async () => {
+  const saveProgress = useCallback(async () => {
     const config = getRmsConfig();
 
     // 1. IndexedDB에 저장 (항상 수행)
@@ -1081,6 +1097,8 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
 
     // 2. 서버에 저장 (RMS config 있고 온라인일 때만)
     if (!config || !navigator.onLine) {
+      // 오프라인: 나중에 서버 동기화 필요하다고 표시
+      progressPendingSyncRef.current = true;
       return;
     }
 
@@ -1096,11 +1114,30 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
           updatedAt: Date.now(),
         },
       });
+      // 서버 저장 성공 시 pending 초기화
+      progressPendingSyncRef.current = false;
     } catch (err) {
       console.error("Failed to save progress to server", err);
       // 서버 저장 실패는 에러를 throw하지 않음 (IndexedDB에 이미 저장됨)
     }
-  };
+  }, [currentPdfPage, viewMode, pdfTotalPages, bookTitle]);
+
+  // saveProgressRef를 항상 최신 saveProgress로 유지 (handleOnline stale closure 방지)
+  useEffect(() => {
+    saveProgressRef.current = saveProgress;
+  }, [saveProgress]);
+
+  // 오프라인 → 온라인 복귀 시 pending 진행도 자동 동기화
+  useEffect(() => {
+    if (!isBrowser()) return;
+    const handleOnline = () => {
+      if (progressPendingSyncRef.current) {
+        saveProgressRef.current();
+      }
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, []);
 
   return (
     <BookContext.Provider

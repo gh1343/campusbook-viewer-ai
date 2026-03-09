@@ -641,10 +641,10 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       savedAt,
       schema_version: base?.schema_version || 1,
       data: {
-        bookmarks: bookmarks.filter((item) => !item.deleted),
-        highlights: highlights.filter((item) => !item.deleted),
-        notes: generalNotes.filter((item) => !item.deleted),
-        strokes: strokes.filter((item) => !item.deleted),
+        bookmarks: bookmarks.filter((item) => !item.deleted || item.syncStatus === "pending"),
+        highlights: highlights.filter((item) => !item.deleted || item.syncStatus === "pending"),
+        notes: generalNotes.filter((item) => !item.deleted || item.syncStatus === "pending"),
+        strokes: strokes.filter((item) => !item.deleted || item.syncStatus === "pending"),
         // Progress는 BookContext에서 관리
         progress: base?.data?.progress,
       },
@@ -690,11 +690,6 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       if (!navigator.onLine) {
-        // 오프라인일 때도 메모리에서 deleted 항목 제거
-        setHighlights((prev) => prev.filter((item) => !item.deleted));
-        setBookmarks((prev) => prev.filter((item) => !item.deleted));
-        setGeneralNotes((prev) => prev.filter((item) => !item.deleted));
-        setStrokes((prev) => prev.filter((item) => !item.deleted));
         if (indexedDbQuotaExceeded) {
           // 오프라인 + 용량 초과: 어디에도 저장 안 된 상태
           alert(
@@ -930,7 +925,11 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           finalBookmarks.some((item) => item.syncStatus === "pending") ||
           hasPendingStrokes;
 
-        let finalSyncStatus: SyncStatus = hasPending ? "UNSAVED" : "SAVED";
+        let finalSyncStatus: SyncStatus = !hasPending
+          ? "SAVED"
+          : !navigator.onLine
+          ? "LOCAL_ONLY"  // 오프라인 + pending → 온라인 복귀 시 handleOnline이 트리거 가능
+          : "UNSAVED";    // 온라인 + pending → 직후 아래 블록에서 즉시 동기화 시도
 
         if (hasPending && navigator.onLine && config) {
           try {
