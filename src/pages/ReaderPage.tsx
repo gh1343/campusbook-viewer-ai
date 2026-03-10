@@ -17,6 +17,7 @@ import { getPreviewConfig } from "../utils/previewConfig";
 import { BREAKPOINTS, PANEL } from "../constants/config";
 import { isBrowser } from "../utils/common";
 import { useStayTracker } from "../hooks/useStayTracker";
+import { useRapidPageDetector } from "../hooks/useRapidPageDetector";
 import "../css/split_container.css";
 
 export const ReaderPage: React.FC = () => {
@@ -24,6 +25,7 @@ export const ReaderPage: React.FC = () => {
   const capture_min_size = 8;
 
   useStayTracker();
+  useRapidPageDetector();
 
   // Desktop default: Open (Split view)
   // Mobile default: Closed (Overlay)
