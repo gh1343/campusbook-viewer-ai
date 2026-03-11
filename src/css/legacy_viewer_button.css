@@ -1,160 +1,303 @@
-@keyframes legacy-bounce {
+/* ===== 카드 진입 애니메이션 ===== */
+@keyframes legacy-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes legacy-trigger-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes legacy-dot-pulse {
   0%,
   100% {
-    transform: translateY(0);
-    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    opacity: 1;
   }
   50% {
-    transform: translateY(-8px);
-    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    opacity: 0.4;
   }
 }
 
-@keyframes legacy-arrow-move {
-  to {
-    transform: translateX(4px);
-  }
-}
-
-.legacy-viewer-btn-wrap {
+/* ===== 래퍼 ===== */
+.legacy-viewer-wrap {
   position: fixed;
-  bottom: 2rem;
-  right: 1.5rem;
-  z-index: 100;
+  bottom: 5rem;
+  right: 1rem;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.75rem;
-  pointer-events: none;
 }
 
-.legacy-viewer-tooltip {
-  background: #ffffff;
-  padding: 0.5rem 1rem;
-  border-radius: 1rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12),
-    0 4px 10px -6px rgba(0, 0, 0, 0.08);
-  border: 1px solid #f1f5f9;
-  pointer-events: auto;
-  animation: legacy-bounce 1s infinite;
+/* ===== 카드 ===== */
+.legacy-viewer-card {
+  width: 300px;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 24px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  animation: legacy-card-in 0.3s cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
-.legacy-viewer-tooltip-text {
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748b;
-  line-height: 1.25;
-  margin: 0;
-}
-
-.legacy-viewer-link {
-  pointer-events: auto;
-  position: relative;
+/* 카드 헤더 */
+.legacy-viewer-card-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  background: #ffffff;
-  color: #0f172a;
-  padding: 1rem 1.25rem;
-  border-radius: 1rem;
-  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.2);
-  border: 1px solid #e2e8f0;
-  text-decoration: none;
-  transition: transform 0.3s, box-shadow 0.3s;
-  cursor: pointer;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  background: #f9fafb;
+  border-bottom: 1px solid #f3f4f6;
 }
 
-.legacy-viewer-close-btn {
-  position: absolute;
-  top: -0.5rem;
-  right: -0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 50%;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
-  padding: 0;
-}
-
-.legacy-viewer-close-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #cbd5e1;
-}
-
-.legacy-viewer-link:hover {
-  transform: scale(1.05);
-  box-shadow: 0 25px 55px -12px rgba(0, 0, 0, 0.25);
-}
-
-.legacy-viewer-link:active {
-  transform: scale(0.95);
-}
-
-.legacy-viewer-icon-wrap {
-  width: 2.5rem;
-  height: 2.5rem;
-  background: #f1f5f9;
-  border-radius: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #475569;
-  transition: background 0.3s, color 0.3s;
-  flex-shrink: 0;
-}
-
-.legacy-viewer-link:hover .legacy-viewer-icon-wrap {
-  background: #2563eb;
-  color: #ffffff;
-}
-
-.legacy-viewer-text-wrap {
-  display: flex;
-  flex-direction: column;
-}
-
-.legacy-viewer-label {
-  font-size: 10px;
-  font-weight: 900;
-  color: #2563eb;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  line-height: 1;
-  margin-bottom: 0.25rem;
-}
-
-.legacy-viewer-title-row {
+.legacy-viewer-header-left {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.legacy-viewer-title {
-  font-size: 0.875rem;
-  font-weight: 900;
-  letter-spacing: -0.025em;
-  line-height: 1;
-  white-space: nowrap;
+.legacy-viewer-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: legacy-dot-pulse 2s ease-in-out infinite;
 }
 
-.legacy-viewer-arrow {
-  transition: transform 0.3s;
+.legacy-viewer-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.legacy-viewer-header-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  padding: 0;
+}
+
+.legacy-viewer-header-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* 카드 바디 */
+.legacy-viewer-card-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 서비스 안내 섹션 */
+.legacy-viewer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legacy-viewer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.legacy-viewer-section-icon {
+  color: #2563eb;
   flex-shrink: 0;
 }
 
-.legacy-viewer-link:hover .legacy-viewer-arrow {
-  transform: translateX(4px);
+.legacy-viewer-section-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
 }
+
+.legacy-viewer-em {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* 권장 사양 박스 */
+.legacy-viewer-specs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 12px;
+  padding: 0.625rem 0.75rem;
+}
+
+.legacy-viewer-specs-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.legacy-viewer-specs-items {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.legacy-viewer-specs-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.legacy-viewer-specs-os {
+  font-size: 9px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+
+.legacy-viewer-specs-ver {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.legacy-viewer-specs-divider {
+  width: 1px;
+  height: 10px;
+  background: #e5e7eb;
+}
+
+/* 구분선 */
+.legacy-viewer-hr {
+  height: 1px;
+  background: #f3f4f6;
+}
+
+/* 안내 + 버튼 섹션 */
+.legacy-viewer-action-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.legacy-viewer-note {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0 0.25rem;
+}
+
+.legacy-viewer-action-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: #f3f4f6;
+  color: #4b5563;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.legacy-viewer-action-btn:hover {
+  background: #e5e7eb;
+}
+
+.legacy-viewer-action-btn:active {
+  transform: scale(0.98);
+}
+
+/* ===== 트리거 버튼 (접힌 상태) ===== */
+.legacy-viewer-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1.25rem;
+  background: #111827;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+  animation: legacy-trigger-in 0.25s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.legacy-viewer-trigger-btn:hover {
+  background: #000000;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+}
+
+.legacy-viewer-trigger-btn:active {
+  transform: scale(0.95);
+}
+
+.legacy-viewer-trigger-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.legacy-viewer-trigger-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #f59e0b;
+  border-radius: 50%;
+  border: 2px solid #111827;
+}
+
+/* ===== 반응형 ===== */
 @media (max-width: 1300px) {
-  .legacy-viewer-btn-wrap {
+  .legacy-viewer-wrap {
     bottom: 7rem;
     right: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .legacy-viewer-card {
+    width: calc(100vw - 3rem);
   }
 }

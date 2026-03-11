@@ -11,6 +11,7 @@ import { ViewMode } from "../../types";
 
 interface PdfViewerContextType {
   currentPdfPage: number;
+  navTimeQueue: React.RefObject<Map<number, number>>;
   pdfTotalPages: number;
   pdfLoadProgress: number;
   pdfLoadTime: number;
@@ -71,10 +72,12 @@ export const PdfViewerProvider: React.FC<{ children: ReactNode }> = ({
 
   const pendingPdfPageRef = useRef<number | null>(null);
   const pdfTotalPagesRef = useRef<number>(0);
+  const navTimeQueue     = useRef<Map<number, number>>(new Map());
 
   const goToPdfPage = useCallback(
     (page: number) => {
       const safePage = Number.isFinite(page) ? Math.max(1, Math.round(page)) : 1;
+      navTimeQueue.current.set(safePage, Date.now());
       setCurrentPdfPage(safePage);
       if (pdfNavigator) {
         pdfNavigator(safePage);
@@ -163,6 +166,7 @@ export const PdfViewerProvider: React.FC<{ children: ReactNode }> = ({
     <PdfViewerContext.Provider
       value={{
         currentPdfPage,
+        navTimeQueue,
         pdfTotalPages,
         pdfLoadProgress,
         pdfLoadTime,

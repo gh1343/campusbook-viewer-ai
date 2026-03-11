@@ -13,6 +13,29 @@ function toModeNum(mode: ViewMode): 31 | 32 {
  *  - segmentMs <= 1000ms면 전송 안 함 (너무 짧은 체류는 노이즈)
  *  - stayTimeMs: 이 페이지 × 이 뷰모드에서의 누적 시간
  */
+/**
+ * 빠른 페이지 전환 감지 시 경고 로그 전송
+ *  - viewMode: 51 (single) / 52 (double)
+ */
+export function sendRapidDetectionLog(pageNo: number, viewMode: "single" | "double"): void {
+  const config = getRmsConfig();
+  if (!config?.apiBase) return;
+
+  const payload = {
+    viewMode: viewMode === "single" ? 51 : 52,
+    memberCode: config.memberCd ?? null,
+    bookCode: config.bookCd ?? null,
+    pageNo,
+    stayTimeMs: 0,
+  };
+
+  fetch(`${config.apiBase}/v3/log/viewer-stay`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify(payload),
+  }).catch((e) => console.error("[RapidDetection] send error", e));
+}
+
 function sendStayLog(
   pageNo: number,
   modeNum: 31 | 32,

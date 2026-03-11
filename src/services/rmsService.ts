@@ -658,7 +658,8 @@ export const build_sync_payload = (
   const book_id =
     config?.bookCd || source.meta?.bookTitle || source.key || "unknown";
   const device_id = get_device_id();
-  const schema_version = toFiniteNumber(source.schema_version) ?? SYNC_SCHEMA_VERSION;
+  const schema_version =
+    toFiniteNumber(source.schema_version) ?? SYNC_SCHEMA_VERSION;
   const app_version = String(
     import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION
   );
@@ -1511,7 +1512,9 @@ export const fetchPdfUrl = async ({
     throw new Error("Missing configuration (apiBase/bookCd).");
   }
 
-  const url = `${apiBase}/v3/viewerdata/pdf?bookCode=${encodeURIComponent(bookCd)}`;
+  const url = `${apiBase}/v3/viewerdata/pdf?bookCode=${encodeURIComponent(
+    bookCd
+  )}`;
 
   const response = await fetch(url, {
     method: "GET",
@@ -1543,7 +1546,10 @@ export const fetchPdfUrl = async ({
 
 export class MultiAccessError extends Error {
   constructor(message?: string) {
-    super(message || "다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요. 다시 로그인해 주세요.");
+    super(
+      message ||
+        "다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요. 다시 로그인해 주세요."
+    );
     this.name = "MultiAccessError";
   }
 }
@@ -1565,7 +1571,7 @@ export const checkViewerAlive = async ({
     headers: buildRmsHeaders(),
   });
 
-  console.log(`[viewer-alive] status=${response.status}`);
+  // console.log(`[viewer-alive] status=${response.status}`);
 
   if (response.status === 400) {
     let result: any = null;
@@ -1574,7 +1580,7 @@ export const checkViewerAlive = async ({
     } catch {
       result = null;
     }
-    console.log("[viewer-alive] 400 response:", result);
+    // console.log("[viewer-alive] 400 response:", result);
     throw new MultiAccessError(result?.message);
   }
 };

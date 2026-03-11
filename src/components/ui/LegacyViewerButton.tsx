@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { HelpCircle, ArrowRight, X } from 'lucide-react';
+import { HelpCircle, X, Smartphone, ExternalLink } from 'lucide-react';
 import { getRmsConfig, getAccessStoreHeader } from '../../services/rmsService';
 import '../../css/legacy_viewer_button.css';
 
-const handleLegacyClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+const handleLegacyClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
   e.preventDefault();
 
   const config = getRmsConfig();
@@ -57,42 +57,87 @@ const handleLegacyClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
 };
 
 export const LegacyViewerButton: React.FC = () => {
-  const [dismissed, setDismissed] = useState(false);
-
-  if (dismissed) return null;
+  const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <div className="legacy-viewer-btn-wrap">
-      <div className="legacy-viewer-tooltip">
-        <p className="legacy-viewer-tooltip-text">
-          화면이 멈추거나 로딩이 안 되나요?
-        </p>
-      </div>
+    <div className="legacy-viewer-wrap">
+      {isOpen ? (
+        <div className="legacy-viewer-card">
+          {/* 헤더 */}
+          <div className="legacy-viewer-card-header">
+            <div className="legacy-viewer-header-left">
+              <span className="legacy-viewer-live-dot" />
+              <span className="legacy-viewer-badge">실시간 웹뷰어</span>
+            </div>
+            <button
+              className="legacy-viewer-header-close"
+              onClick={() => setIsOpen(false)}
+              aria-label="닫기"
+            >
+              <X size={14} />
+            </button>
+          </div>
 
-      <a
-        href="#"
-        className="legacy-viewer-link"
-        onClick={handleLegacyClick}
-      >
-        <div className="legacy-viewer-icon-wrap">
-          <HelpCircle size={20} />
-        </div>
-        <div className="legacy-viewer-text-wrap">
-          <span className="legacy-viewer-label">기기 호환성 모드</span>
-          <div className="legacy-viewer-title-row">
-            <span className="legacy-viewer-title">기존 뷰어로 접속하기</span>
-            <ArrowRight size={14} className="legacy-viewer-arrow" />
+          {/* 바디 */}
+          <div className="legacy-viewer-card-body">
+            {/* 서비스 안내 */}
+            <div className="legacy-viewer-section">
+              <div className="legacy-viewer-section-title">
+                <Smartphone size={14} className="legacy-viewer-section-icon" />
+                <span>앱 설치 없는 뷰어</span>
+              </div>
+              <p className="legacy-viewer-section-desc">
+                CampusBook은 별도의 앱 설치 없이<br />
+                <span className="legacy-viewer-em">웹 브라우저에서 즉시 이용</span>하는 서비스입니다.
+              </p>
+            </div>
+
+            {/* 권장 사양 */}
+            <div className="legacy-viewer-specs">
+              <span className="legacy-viewer-specs-label">권장 사양</span>
+              <div className="legacy-viewer-specs-items">
+                <div className="legacy-viewer-specs-item">
+                  <span className="legacy-viewer-specs-os">iOS</span>
+                  <span className="legacy-viewer-specs-ver">17+</span>
+                </div>
+                <div className="legacy-viewer-specs-divider" />
+                <div className="legacy-viewer-specs-item">
+                  <span className="legacy-viewer-specs-os">AOS</span>
+                  <span className="legacy-viewer-specs-ver">13+</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="legacy-viewer-hr" />
+
+            {/* 안내 문구 + 접속 버튼 */}
+            <div className="legacy-viewer-action-section">
+              <p className="legacy-viewer-note">
+                화면 로딩이 원활하지 않을 경우에만<br />
+                기존 뷰어(호환 모드)를 이용해 주세요.
+              </p>
+              <button
+                className="legacy-viewer-action-btn"
+                onClick={handleLegacyClick}
+              >
+                <ExternalLink size={14} />
+                <span>기존 뷰어로 접속하기</span>
+              </button>
+            </div>
           </div>
         </div>
-
+      ) : (
         <button
-          className="legacy-viewer-close-btn"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDismissed(true); }}
-          aria-label="닫기"
+          className="legacy-viewer-trigger-btn"
+          onClick={() => setIsOpen(true)}
         >
-          <X size={14} />
+          <span className="legacy-viewer-trigger-icon-wrap">
+            <HelpCircle size={18} />
+            <span className="legacy-viewer-trigger-dot" />
+          </span>
+          <span>접속 안내</span>
         </button>
-      </a>
+      )}
     </div>
   );
 };
