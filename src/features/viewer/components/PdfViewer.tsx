@@ -222,6 +222,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   } | null>(null);
   const containerTouchActionRef = useRef<string | null>(null);
   const containerUserSelectRef = useRef<string | null>(null);
+  // 펜/형광펜 모드에서 1손가락 터치 수동 스크롤용
+  const touchPanRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     drawingModeRef.current = drawingMode;
@@ -1316,6 +1318,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     });
 
     if (activePointersRef.current.size === 2) {
+      // 두 손가락 시작 시 수동 스크롤 취소
+      touchPanRef.current = null;
+
       // 핀치줌 시작 시 펜 드로잉 중단
       if (isDrawingRef.current) {
         isDrawingRef.current = false;
@@ -1347,6 +1352,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       setPinchInteractionState(true);
       resetPinchTransform();
       e.preventDefault();
+    } else if (
+      activePointersRef.current.size === 1 &&
+      (drawingMode === "pen" || drawingMode === "highlighter")
+    ) {
+      // 펜/형광펜 모드에서 1손가락 → 수동 스크롤 시작 좌표 기록
+      touchPanRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
     }
   };
 
@@ -1380,6 +1391,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       x: e.clientX,
       y: e.clientY,
     });
+
+    // 펜/형광펜 모드에서 1손가락 → 수동 스크롤
+    if (
+      activePointersRef.current.size === 1 &&
+      (drawingMode === "pen" || drawingMode === "highlighter") &&
+      touchPanRef.current?.pointerId === e.pointerId
+    ) {
+      const container = viewerContainerRef.current;
+      if (container) {
+        container.scrollLeft += touchPanRef.current.x - e.clientX;
+        container.scrollTop += touchPanRef.current.y - e.clientY;
+      }
+      touchPanRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+      return;
+    }
 
     // 정확히 2개의 포인터가 있을 때만 핀치 진행
     if (activePointersRef.current.size !== 2) return;
@@ -1489,6 +1515,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     if (e.pointerType === "touch") {
+      if (touchPanRef.current?.pointerId === e.pointerId) {
+        touchPanRef.current = null;
+      }
       clearPinchPointer(e.pointerId);
     }
     if (drawingMode !== "idle") return;
@@ -1509,6 +1538,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     }
 
     if (e.pointerType !== "touch") return;
+    if (touchPanRef.current?.pointerId === e.pointerId) {
+      touchPanRef.current = null;
+    }
     clearPinchPointer(e.pointerId);
   };
 

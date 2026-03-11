@@ -231,11 +231,6 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       e.preventDefault();
       e.stopPropagation();
 
-      // 컨테이너의 touch-action을 일시적으로 none으로 설정 (펜 그리기 중 스크롤 방지)
-      if (viewerContainerRef.current) {
-        viewerContainerRef.current.style.touchAction = "none";
-      }
-
       activePointerId = e.pointerId;
       const info = getPageElementFromEvent(e);
       if (!info) return;
@@ -430,13 +425,6 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const handlePenEnd = (e: React.PointerEvent) => {
-    // 펜 입력 종료 처리
-    if (e.pointerType === "pen" && activePointerId === e.pointerId) {
-      // 컨테이너의 touch-action 복원 (손가락 스크롤 다시 허용)
-      if (viewerContainerRef.current) {
-        viewerContainerRef.current.style.touchAction = "pan-x pan-y";
-      }
-    }
 
     // 터치 포인터 추적에서 제거 (항상 실행)
     if (e.pointerType === "touch") {
