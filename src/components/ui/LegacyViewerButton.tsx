@@ -1,20 +1,22 @@
-import React, { useState } from 'react';
-import { HelpCircle, X, Smartphone, ExternalLink } from 'lucide-react';
-import { getRmsConfig, getAccessStoreHeader } from '../../services/rmsService';
-import '../../css/legacy_viewer_button.css';
+import React, { useState } from "react";
+import { HelpCircle, X, Smartphone, ExternalLink } from "lucide-react";
+import { getRmsConfig, getAccessStoreHeader } from "../../services/rmsService";
+import "../../css/legacy_viewer_button.css";
 
 const handleLegacyClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
   e.preventDefault();
 
   const config = getRmsConfig();
   if (!config) {
-    console.warn('[LegacyViewerButton] config 없음 — apiBase 또는 bookCd를 찾을 수 없습니다.');
+    console.warn(
+      "[LegacyViewerButton] config 없음 — apiBase 또는 bookCd를 찾을 수 없습니다."
+    );
     return;
   }
 
   // iOS Safari는 async 이후 window.open을 팝업으로 차단하므로
   // 사용자 이벤트 컨텍스트가 유지되는 지금 미리 창을 열어둠
-  const newWindow = window.open('', '_blank');
+  const newWindow = window.open("", "_blank");
 
   const { apiBase, bookCd } = config;
   const url = `${apiBase}/v2/book/info/${bookCd}`;
@@ -23,8 +25,8 @@ const handleLegacyClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
     "Content-Type": "application/json; charset=utf-8",
     "Access-ealice-store": getAccessStoreHeader(),
   };
-  console.log('[LegacyViewerButton] 요청 URL:', url);
-  console.log('[LegacyViewerButton] 요청 헤더:', headers);
+  console.log("[LegacyViewerButton] 요청 URL:", url);
+  console.log("[LegacyViewerButton] 요청 헤더:", headers);
 
   try {
     const res = await fetch(url, { headers });
@@ -35,23 +37,26 @@ const handleLegacyClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
       parsed = null;
     }
 
-    console.log('[LegacyViewerButton] 응답 status:', res.status, parsed);
+    console.log("[LegacyViewerButton] 응답 status:", res.status, parsed);
 
     const previewUrl = parsed?.result?.bookInfo?.previewUrl;
     if (!previewUrl) {
-      console.error('[LegacyViewerButton] previewUrl을 찾을 수 없습니다.', parsed);
+      console.error(
+        "[LegacyViewerButton] previewUrl을 찾을 수 없습니다.",
+        parsed
+      );
       newWindow?.close();
       return;
     }
 
-    console.log('[LegacyViewerButton] window.open:', previewUrl);
+    console.log("[LegacyViewerButton] window.open:", previewUrl);
     if (newWindow) {
       newWindow.location.href = previewUrl;
     } else {
-      window.open(previewUrl, '_blank', '');
+      window.open(previewUrl, "_blank", "");
     }
   } catch (err) {
-    console.error('[LegacyViewerButton] 요청 실패:', err);
+    console.error("[LegacyViewerButton] 요청 실패:", err);
     newWindow?.close();
   }
 };
@@ -84,11 +89,15 @@ export const LegacyViewerButton: React.FC = () => {
             <div className="legacy-viewer-section">
               <div className="legacy-viewer-section-title">
                 <Smartphone size={14} className="legacy-viewer-section-icon" />
-                <span>앱 설치 없는 뷰어</span>
+                <span>앱 설치 없는 웹뷰어</span>
               </div>
               <p className="legacy-viewer-section-desc">
-                CampusBook은 별도의 앱 설치 없이<br />
-                <span className="legacy-viewer-em">웹 브라우저에서 즉시 이용</span>하는 서비스입니다.
+                캠퍼스북 뷰어는 별도의 앱 설치 없이
+                <br />
+                <span className="legacy-viewer-em">
+                  웹 브라우저에서 즉시 이용
+                </span>
+                하는 웹뷰어 입니다.
               </p>
             </div>
 
@@ -113,7 +122,8 @@ export const LegacyViewerButton: React.FC = () => {
             {/* 안내 문구 + 접속 버튼 */}
             <div className="legacy-viewer-action-section">
               <p className="legacy-viewer-note">
-                화면 로딩이 원활하지 않을 경우에만<br />
+                화면 로딩이 원활하지 않을 경우에만
+                <br />
                 기존 뷰어(호환 모드)를 이용해 주세요.
               </p>
               <button

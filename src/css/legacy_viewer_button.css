@@ -36,7 +36,7 @@
   position: fixed;
   bottom: 5rem;
   right: 1rem;
-  z-index: 9999;
+  z-index: 51;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -290,14 +290,22 @@
 
 /* ===== 반응형 ===== */
 @media (max-width: 1300px) {
-  .legacy-viewer-wrap {
+  /* .legacy-viewer-wrap {
     bottom: 7rem;
     right: 0.5rem;
-  }
+  } */
 }
 
 @media (max-width: 480px) {
-  .legacy-viewer-card {
-    width: calc(100vw - 3rem);
+  .legacy-viewer-wrap {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .legacy-viewer-wrap:has(.legacy-viewer-trigger-btn) {
+    left: auto;
+    transform: none;
+    right: 1rem;
   }
 }
