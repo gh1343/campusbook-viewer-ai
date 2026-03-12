@@ -44,6 +44,7 @@ interface PdfJsRuntimeOptions {
   setPdfLoadProgress?: (progress: number) => void;
   previewMaxPage?: number;
   onPreviewLimitReached?: () => void;
+  cancelNavigationRef?: MutableRef<(() => void) | null>;
 }
 
 export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
@@ -73,6 +74,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     setPdfLoadProgress,
     previewMaxPage,
     onPreviewLimitReached,
+    cancelNavigationRef,
   } = opts;
 
   const eventBus = new EventBus();
@@ -208,9 +210,16 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
     const target = Math.min(Math.max(page, 1), effectiveMax);
     pdfViewerRef.current.currentPageNumber = target;
 
+    // 줌 등 외부에서 취소할 수 있도록 cancel 플래그 생성 후 ref에 등록
+    let navCancelled = false;
+    if (cancelNavigationRef) {
+      cancelNavigationRef.current = () => { navCancelled = true; };
+    }
+
     // 페이지가 렌더링될 때까지 재시도하는 함수
     // iPad Safari는 캐시 없는 초기 로드 시 레이아웃 확정이 느려 재시도 횟수를 넉넉히 확보
     const scrollToPageWithRetry = (retryCount = 0, maxRetries = 30) => {
+      if (navCancelled) return;
       const pageEl = viewer.querySelector<HTMLElement>(
         `.page[data-page-number="${target}"]`
       );
@@ -222,6 +231,7 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
       }
 
       const doScroll = () => {
+        if (navCancelled) return; // 줌 시작 등으로 취소된 경우 스크롤하지 않음
         if (pageEl && viewerContainer) {
           const containerRect = viewerContainer.getBoundingClientRect();
           const pageRect = pageEl.getBoundingClientRect();

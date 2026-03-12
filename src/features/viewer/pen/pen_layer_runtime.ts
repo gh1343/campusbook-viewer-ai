@@ -67,6 +67,39 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   let activePointerId: number | null = null;
 
+  // 스트로크 단위 캐시: getBoundingClientRect + getComputedStyle을 pointermove마다 호출하는 대신
+  // handlePenStart에서 한 번만 계산하여 stroke 종료까지 재사용
+  // → 120Hz 태블릿에서 강제 레이아웃(Forced Synchronous Layout) 비용 제거
+  let strokeCachePageEl: HTMLElement | null = null;
+  let strokeCachePageRect: DOMRect | null = null;
+  let strokeCacheVisualScale: number | null = null;
+
+  const getCachedPagePoint = (
+    e: React.PointerEvent,
+    pageEl: HTMLElement
+  ): { x: number; y: number } | null => {
+    const rect = (strokeCachePageEl === pageEl && strokeCachePageRect)
+      ? strokeCachePageRect
+      : pageEl.getBoundingClientRect();
+    const visualScale = strokeCacheVisualScale ?? getVisualScale();
+    return {
+      x: (e.clientX - rect.left) / visualScale,
+      y: (e.clientY - rect.top) / visualScale,
+    };
+  };
+
+  const setStrokeCache = (pageEl: HTMLElement) => {
+    strokeCachePageEl = pageEl;
+    strokeCachePageRect = pageEl.getBoundingClientRect();
+    strokeCacheVisualScale = getVisualScale();
+  };
+
+  const clearStrokeCache = () => {
+    strokeCachePageEl = null;
+    strokeCachePageRect = null;
+    strokeCacheVisualScale = null;
+  };
+
   // 페이지별 렌더링된 스트로크 ID 추적 (incremental rendering용)
   const renderedStrokeIds = new Map<number, Set<string>>();
 
@@ -186,6 +219,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     livePointsRef.current = [];
     currentPageRef.current = null;
     activePointerId = null;
+    clearStrokeCache();
     renderLiveCanvas();
   };
 
@@ -246,7 +280,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
         }
       }
 
-      const pt = getPagePoint(e, pageEl, getVisualScale);
+      setStrokeCache(pageEl);
+      const pt = getCachedPagePoint(e, pageEl);
       if (!pt) {
         return;
       }
@@ -293,7 +328,8 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     }
 
-    const pt = getPagePoint(e, pageEl, getVisualScale);
+    setStrokeCache(pageEl);
+    const pt = getCachedPagePoint(e, pageEl);
     if (!pt) return;
     currentPageRef.current = pageNumber;
     isDrawingRef.current = true;
@@ -318,7 +354,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       const pageEl = getPageElementByNumber(pageNumber);
       if (!pageEl) return;
 
-      const pt = getPagePoint(e, pageEl, getVisualScale);
+      const pt = getCachedPagePoint(e, pageEl);
       if (!pt) return;
 
       if (drawingModeRef.current === "pen" || drawingModeRef.current === "highlighter") {
@@ -327,7 +363,14 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
         if (livePointsRef.current.length === 0) {
           livePointsRef.current = [pt];
         } else {
-          livePointsRef.current.push(pt);
+          // Point thinning: 너무 가까운 포인트 스킵 (2px² 이내)
+          // livePointsRef 무제한 증가 방지 → drawStrokePath O(n) 비용 억제
+          const last = livePointsRef.current[livePointsRef.current.length - 1];
+          const dx = pt.x - last.x;
+          const dy = pt.y - last.y;
+          if (dx * dx + dy * dy >= 4) {
+            livePointsRef.current.push(pt);
+          }
         }
         renderLiveCanvas();
       } else if (drawingModeRef.current === "eraser") {
@@ -394,7 +437,13 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       if (livePointsRef.current.length === 0) {
         livePointsRef.current = [pt];
       } else {
-        livePointsRef.current.push(pt);
+        // Point thinning: 너무 가까운 포인트 스킵 (2px² 이내)
+        const last = livePointsRef.current[livePointsRef.current.length - 1];
+        const dx = pt.x - last.x;
+        const dy = pt.y - last.y;
+        if (dx * dx + dy * dy >= 4) {
+          livePointsRef.current.push(pt);
+        }
       }
       renderLiveCanvas();
     } else if (drawingModeRef.current === "eraser") {
@@ -494,6 +543,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     livePointsRef.current = [];
     currentPageRef.current = null;
     activePointerId = null;
+    clearStrokeCache(); // 스트로크 단위 rect/scale 캐시 해제
     renderLiveCanvas();
   };
 
@@ -664,6 +714,9 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   // forceFullRedraw=true: 캔버스 초기화 후 전체 재그리기 (줌/리사이즈 시)
   // forceFullRedraw=false: 새로 추가된 스트로크만 위에 덧그리기 (일반 필기 시)
   const renderStaticCanvases = (forceFullRedraw = false) => {
+    // 드로잉 중 scroll/resize 등으로 호출되는 증분 재그리기 스킵
+    // 스트로크가 많을 때 정적 캔버스 재그리기가 pointermove 처리를 블로킹하는 것 방지
+    if (isDrawingRef.current && !forceFullRedraw) return;
     pageCanvasMapRef.current.forEach(({ staticCanvas }, pageNumber) => {
       const ctx = staticCanvas.getContext("2d");
       if (!ctx) return;
@@ -720,14 +773,30 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
   };
 
   const renderLiveCanvas = () => {
-    pageCanvasMapRef.current.forEach(({ liveCanvas }) => {
-      const ctx = liveCanvas.getContext("2d");
-      if (!ctx) return;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
-      ctx.restore();
-    });
+    const activePageNumber = currentPageRef.current;
+    if (isDrawingRef.current && activePageNumber) {
+      // 드로잉 중: 현재 페이지 live canvas만 클리어 (전체 순회 불필요)
+      const activeEntry = pageCanvasMapRef.current.get(activePageNumber);
+      if (activeEntry) {
+        const ctx = activeEntry.liveCanvas.getContext("2d");
+        if (ctx) {
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(0, 0, activeEntry.liveCanvas.width, activeEntry.liveCanvas.height);
+          ctx.restore();
+        }
+      }
+    } else {
+      // 드로잉 종료 또는 idle: 모든 페이지 live canvas 클리어
+      pageCanvasMapRef.current.forEach(({ liveCanvas }) => {
+        const ctx = liveCanvas.getContext("2d");
+        if (!ctx) return;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
+        ctx.restore();
+      });
+    }
 
     if ((drawingModeRef.current !== "pen" && drawingModeRef.current !== "highlighter") || livePointsRef.current.length === 0)
       return;

@@ -30,6 +30,7 @@ interface UsePdfJsViewerParams {
   setPdfLoadProgress?: (progress: number) => void;
   previewMaxPage?: number;
   onPreviewLimitReached?: () => void;
+  cancelNavigationRef?: MutableRef<(() => void) | null>;
 }
 
 export const usePdfJsViewer = ({
@@ -58,6 +59,7 @@ export const usePdfJsViewer = ({
   setPdfLoadProgress,
   previewMaxPage,
   onPreviewLimitReached,
+  cancelNavigationRef,
 }: UsePdfJsViewerParams) => {
   useEffect(() => {
     if (!viewerContainerRef.current || !viewerRef.current) return;
@@ -95,6 +97,7 @@ export const usePdfJsViewer = ({
       setPdfLoadProgress,
       previewMaxPage,
       onPreviewLimitReached,
+      cancelNavigationRef,
     });
 
     return cleanup;

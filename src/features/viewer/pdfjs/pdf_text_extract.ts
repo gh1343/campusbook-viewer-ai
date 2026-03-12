@@ -47,7 +47,7 @@ export const extractPdfText = async (
       onComplete?.();
     }
   } catch (err) {
-    console.error("PDF text extraction failed", err);
+    console.error("[extractPdfText] FAILED", err);
     onComplete?.();
   }
 };

@@ -112,6 +112,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfIsLoading,
     currentPdfPage,
     viewMode,
+    pdfTextPages,
   } = usePdfViewer();
   const {
     drawingMode,
@@ -127,7 +128,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     /iP(hone|od|ad)/.test(ua) &&
     /Safari/i.test(ua) &&
     !/Chrome/i.test(ua) &&
-    !/CriOS/i.test(ua);
+    !/CriOS/i.test(ua) &&
+    !/Edgios/i.test(ua);
   const isTouchDevice = useMemo(
     () =>
       typeof window !== "undefined" &&
@@ -249,6 +251,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   } | null>(null);
   const containerTouchActionRef = useRef<string | null>(null);
   const containerUserSelectRef = useRef<string | null>(null);
+  // 핀치줌 디바운스: 연속 핀치 시 마지막 스케일만 렌더링 (중간 재렌더링 스킵)
+  const pinchDebounceTimerRef = useRef<number | null>(null);
+  const pendingPdfScaleRef = useRef<number | null>(null);
+  // 스케일 전환 중 잘못된 pagechanging 이벤트 억제 (44→75 플래시 방지)
+  const isScaleTransitioningRef = useRef(false);
+  // 줌 시작 시 pending 페이지 스크롤 취소 (검색결과 클릭 후 줌 시 race condition 방지)
+  const cancelNavigationRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     drawingModeRef.current = drawingMode;
@@ -299,6 +308,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pdfSearchHighlight,
       getVisualScale,
       onScrollToFirstHit: (pageEl) => {
+        // 핀치 줌 중, 스케일 전환 중, 또는 최근 줌 직후에는 스크롤하지 않음 (race condition 방지)
+        // lastManualZoomTimeRef: setPdfScale/applyPdfZoom 시 업데이트 → 줌 완료 후에도 차단
+        if (
+          isPinchingRef.current ||
+          isScaleTransitioningRef.current ||
+          Date.now() - lastManualZoomTimeRef.current < 600
+        ) return;
         const hit = pageEl.querySelector<HTMLElement>(".pdf_search_hit");
         if (!hit || !viewerContainerRef.current) return;
 
@@ -703,6 +719,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       const newContentY = contentY * scaleRatio;
 
       // 스케일 변경 (이 과정에서 setLayoutTick이 호출됨)
+      // 버튼 줌 시작: pending 중인 페이지 스크롤 취소 (race condition 방지)
+      cancelNavigationRef.current?.();
+      cancelNavigationRef.current = null;
+
       pdfZoomManualRef.current = true;
       lastManualZoomTimeRef.current = Date.now(); // 수동 줌 시점 기록
       userHasZoomedRef.current = true; // 사용자 줌 상태 기록
@@ -761,6 +781,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
   const onPageChangeFiltered = useCallback(
     (page: number) => {
+      // 스케일 전환 중(setPdfScale 후 pagerendered 전)에는 잘못된 pagechanging 무시
+      // PDF.js가 내부적으로 scrollTop을 임시 변경할 때 발생하는 오페이지 이벤트 차단
+      if (isScaleTransitioningRef.current) return;
       onPageChange?.(page);
     },
     [onPageChange]
@@ -792,6 +815,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setPdfLoadProgress,
     previewMaxPage,
     onPreviewLimitReached: handlePreviewLimitReached,
+    cancelNavigationRef,
   });
 
   usePdfPenLayer({
@@ -1225,84 +1249,119 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     // transform-origin 방식: translate가 없으므로 pageRectBefore 불필요
     // origin 기반 스크롤 보정: 핀치 중심(origin)이 scale 후에도 동일 viewport 위치에 오도록
-    const pending = pendingTransformRef.current;
 
-    // PDF.js 스케일 적용 (재렌더링 트리거)
-    pdfZoomManualRef.current = true;
-    setPdfScale(nextScale);
+    // 앵커 정보를 클로저로 캡처 (finishPinchZoom 종료 후 ref가 null로 정리되기 전에 저장)
+    const capturedAnchor = { ...anchor };
 
-    // Fix B: scale(1)로 이중 스케일 방지
-    // setPdfScale() 후 DOM이 nextScale로 즉시 변경되므로
-    // scale(previewScale)이 남아있으면 nextScale × previewScale로 이중 스케일 발생
-    // → scale(1)로 중화하면 DOM nextScale × 1 = 올바른 시각 유지
-    const layer = transformLayerRef.current;
-    if (layer) {
-      layer.style.transform = 'scale(1)';
+    // ── 디바운스: 200ms 내 재핀치 시 마지막 스케일만 렌더링 ──────────────────
+    // 연속 핀치 시 중간 setPdfScale() 호출을 스킵하여 불필요한 전체 재렌더링 방지
+    // 예) 핀치 A 종료 → 150ms 후 핀치 B 종료: A 렌더링 스킵, B만 렌더링
+    if (pinchDebounceTimerRef.current !== null) {
+      cancelAnimationFrame(pinchDebounceTimerRef.current);
+      pinchDebounceTimerRef.current = null;
     }
+    pendingPdfScaleRef.current = nextScale;
 
-    // 스크롤 1차 보정: getBoundingClientRect 기반 (수식 대신 실측값 사용)
-    // pending.originX/Y 수식은 모멘텀 스크롤 등으로 오차 발생 가능
-    // → getBoundingClientRect()가 강제 레이아웃 플러시를 트리거하므로 항상 정확
-    const pageElPre = viewerRoot.querySelector<HTMLElement>(
-      `.page[data-page-number="${anchor.pageNumber}"]`
-    );
-    if (pageElPre) {
-      const containerRectPre = container.getBoundingClientRect();
-      const pageRectPre = pageElPre.getBoundingClientRect();
-      if (pageRectPre.width > 0 && pageRectPre.height > 0) {
-        const anchorAbsXPre =
-          pageRectPre.left - containerRectPre.left + anchor.relX * pageRectPre.width;
-        const anchorAbsYPre =
-          pageRectPre.top - containerRectPre.top + anchor.relY * pageRectPre.height;
-        container.scrollLeft += anchorAbsXPre - anchor.viewportX;
-        container.scrollTop += anchorAbsYPre - anchor.viewportY;
-      }
-    }
+    pinchDebounceTimerRef.current = requestAnimationFrame(() => {
+      pinchDebounceTimerRef.current = null;
+      if (pendingPdfScaleRef.current === null) return; // 새 핀치 시작 시 즉시 커밋되어 취소됨
+      pendingPdfScaleRef.current = null;
 
-    // pagerendered 이벤트 후 scale(1) 제거 + 전환 중 드리프트 교정
-    const PINCH_RENDER_TIMEOUT_MS = 600;
-    let pinchRenderHandled = false;
+      const dViewer = pdfViewerRef.current;
+      const dContainer = viewerContainerRef.current;
+      const dViewerRoot = viewerRef.current;
+      if (!dViewer || !dContainer || !dViewerRoot) return;
 
-    const onPinchPageRendered = () => {
-      if (pinchRenderHandled) return;
-      pinchRenderHandled = true;
+      // 줌 시작: 검색결과 클릭 후 pending 중인 페이지 스크롤 취소 (race condition 방지)
+      cancelNavigationRef.current?.();
+      cancelNavigationRef.current = null;
 
-      // scale(1) → none: 시각적으로 동일 (덜컹거림 없음)
-      resetPinchTransform();
+      // PDF.js 스케일 적용 (재렌더링 트리거)
+      // 전환 중 잘못된 pagechanging 이벤트 억제 시작
+      isScaleTransitioningRef.current = true;
+      pdfZoomManualRef.current = true;
+      setPdfScale(nextScale);
 
-      // 스크롤 2차 보정: 전환 기간(scale(1) 유지 중) 발생한 드리프트 교정
-      // 동기 실행 → 단일 프레임에 렌더링 (중간 잘못된 프레임 없음)
-      const pageElAfter = viewerRoot.querySelector<HTMLElement>(
-        `.page[data-page-number="${anchor.pageNumber}"]`
+      // Fix B: scale(1)로 이중 스케일 방지
+      const dLayer = transformLayerRef.current;
+      if (dLayer) dLayer.style.transform = 'scale(1)';
+
+      // 스크롤 1차 보정: getBoundingClientRect 기반 (실측값 사용)
+      const dPageElPre = dViewerRoot.querySelector<HTMLElement>(
+        `.page[data-page-number="${capturedAnchor.pageNumber}"]`
       );
-      if (pageElAfter) {
-        const containerRectAfter = container.getBoundingClientRect();
-        const pageRectAfter = pageElAfter.getBoundingClientRect();
-        if (pageRectAfter.width > 0 && pageRectAfter.height > 0) {
-          const anchorNewAbsX =
-            pageRectAfter.left -
-            containerRectAfter.left +
-            anchor.relX * pageRectAfter.width;
-          const anchorNewAbsY =
-            pageRectAfter.top -
-            containerRectAfter.top +
-            anchor.relY * pageRectAfter.height;
-          container.scrollLeft += anchorNewAbsX - anchor.viewportX;
-          container.scrollTop += anchorNewAbsY - anchor.viewportY;
+      if (dPageElPre) {
+        const dCRectPre = dContainer.getBoundingClientRect();
+        const dPRectPre = dPageElPre.getBoundingClientRect();
+        if (dPRectPre.width > 0 && dPRectPre.height > 0) {
+          dContainer.scrollLeft +=
+            (dPRectPre.left - dCRectPre.left + capturedAnchor.relX * dPRectPre.width) -
+            capturedAnchor.viewportX;
+          dContainer.scrollTop +=
+            (dPRectPre.top - dCRectPre.top + capturedAnchor.relY * dPRectPre.height) -
+            capturedAnchor.viewportY;
+          // iOS/Android rubber-band 방지: scrollLeft를 유효 범위로 클램프
+          // (축소 시 페이지가 컨테이너보다 좁으면 maxScrollLeft=0, 초과값이 오버스크롤 bounce를 유발)
+          const maxSL1 = Math.max(0, dContainer.scrollWidth - dContainer.clientWidth);
+          dContainer.scrollLeft = Math.max(0, Math.min(dContainer.scrollLeft, maxSL1));
         }
       }
-    };
 
-    // pagerendered 이벤트 대기 (한 번만 실행)
-    viewer.eventBus?.on('pagerendered', onPinchPageRendered, { once: true });
+      // pagerendered 이벤트 후 scale(1) 제거 + 드리프트 교정
+      const DEBOUNCE_RENDER_TIMEOUT_MS = 600;
+      let debounceRenderHandled = false;
+      const onDebouncePageRendered = () => {
+        if (debounceRenderHandled) return;
+        debounceRenderHandled = true;
 
-    // 안전 타임아웃: 600ms 내 이벤트 없으면 강제 처리 (렌더 실패 대비)
-    setTimeout(() => {
-      if (!pinchRenderHandled) {
-        viewer.eventBus?.off('pagerendered', onPinchPageRendered);
-        onPinchPageRendered();
-      }
-    }, PINCH_RENDER_TIMEOUT_MS);
+        // scale(1) → none: 시각적으로 동일 (덜컹거림 없음)
+        if (dLayer) {
+          dLayer.style.transformOrigin = '0 0';
+          dLayer.style.transform = 'none';
+        }
+
+        // 스케일 전환 완료: 억제 플래그 해제 후 올바른 페이지 번호 전파
+        // capturedAnchor.pageNumber 사용: dViewer.currentPageNumber는 스크롤 이벤트가
+        // 처리되기 전 stale 값일 수 있어 검색결과 페이지가 아닌 엉뚱한 페이지를 보고할 수 있음
+        isScaleTransitioningRef.current = false;
+        if (capturedAnchor.pageNumber) onPageChange?.(capturedAnchor.pageNumber);
+
+        // 스크롤 2차 보정: 드리프트 교정 (동기 실행 → 단일 프레임)
+        const dPageElAfter = dViewerRoot.querySelector<HTMLElement>(
+          `.page[data-page-number="${capturedAnchor.pageNumber}"]`
+        );
+        if (dPageElAfter) {
+          const dCRectAfter = dContainer.getBoundingClientRect();
+          const dPRectAfter = dPageElAfter.getBoundingClientRect();
+          if (dPRectAfter.width > 0 && dPRectAfter.height > 0) {
+            dContainer.scrollLeft +=
+              (dPRectAfter.left - dCRectAfter.left + capturedAnchor.relX * dPRectAfter.width) -
+              capturedAnchor.viewportX;
+            dContainer.scrollTop +=
+              (dPRectAfter.top - dCRectAfter.top + capturedAnchor.relY * dPRectAfter.height) -
+              capturedAnchor.viewportY;
+            // iOS/Android rubber-band 방지: 2차 보정 후에도 유효 범위로 클램프
+            const maxSL2 = Math.max(0, dContainer.scrollWidth - dContainer.clientWidth);
+            dContainer.scrollLeft = Math.max(0, Math.min(dContainer.scrollLeft, maxSL2));
+          }
+        }
+
+        // 스케일 변경 후 캔버스 정리 및 렌더링 갱신
+        requestAnimationFrame(() => {
+          penRuntime.forceCleanupOffscreenCanvases();
+          scheduleRenderRefresh();
+        });
+      };
+
+      dViewer.eventBus?.on('pagerendered', onDebouncePageRendered, { once: true });
+      setTimeout(() => {
+        if (!debounceRenderHandled) {
+          dViewer.eventBus?.off('pagerendered', onDebouncePageRendered);
+          onDebouncePageRendered();
+        }
+      }, DEBOUNCE_RENDER_TIMEOUT_MS);
+    });
+    // ── 디바운스 끝 ───────────────────────────────────────────────────────────
 
     setPinchInteractionState(false);
 
@@ -1328,16 +1387,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchTargetPageRef.current &&
       actualPage !== pinchTargetPageRef.current
     ) {
-      // 페이지가 달라졌다면 올바른 페이지로 이벤트 발생
       onPageChange?.(pinchTargetPageRef.current);
     }
     pinchTargetPageRef.current = null;
 
-    // 핀치줌 완료 후 메모리 정리 및 렌더링
+    // 즉시 오프스크린 캔버스 정리 (scheduleRenderRefresh는 debounce 커밋 후 실행)
     requestAnimationFrame(() => {
-      // 화면 밖 캔버스 즉시 정리 (메모리 절약)
       penRuntime.forceCleanupOffscreenCanvases();
-      scheduleRenderRefresh();
     });
   };
 
@@ -1391,6 +1447,26 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         pts[1].y - pts[0].y
       );
       const viewer = pdfViewerRef.current;
+
+      // 디바운스 중 새 핀치: 대기 중인 스케일을 즉시 커밋하여 올바른 base scale 확보
+      // → viewer.currentScale을 즉시 업데이트해야 새 핀치가 올바른 배율에서 시작
+      // → 이전 렌더링은 PDF.js가 새 setPdfScale 호출 시 내부적으로 취소함
+      if (pendingPdfScaleRef.current !== null) {
+        if (pinchDebounceTimerRef.current !== null) {
+          cancelAnimationFrame(pinchDebounceTimerRef.current);
+          pinchDebounceTimerRef.current = null;
+        }
+        const scaleToCommit = pendingPdfScaleRef.current;
+        pendingPdfScaleRef.current = null;
+        pdfZoomManualRef.current = true;
+        setPdfScale(scaleToCommit); // viewer.currentScale 즉시 업데이트
+        // CSS transform은 아래 resetPinchTransform()에서 제거됨
+      }
+
+      // 핀치 시작 즉시 pending 페이지 스크롤 취소 (검색결과 후 빠른 핀치 시 race 방지)
+      cancelNavigationRef.current?.();
+      cancelNavigationRef.current = null;
+
       pinchStartScaleRef.current = viewer?.currentScale || 1;
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = true;
@@ -1530,7 +1606,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       pinchPreviewScaleRef.current = 1;
       isPinchingRef.current = false;
       pinchTargetPageRef.current = null;
-      resetPinchTransform();
+      // 디바운스 대기 중이면 CSS transform 유지 (debounce 콜백에서 제거됨)
+      if (pendingPdfScaleRef.current === null) {
+        resetPinchTransform();
+      }
       setPinchInteractionState(false);
       pinchAnchorRef.current = null;
     }
@@ -1795,6 +1874,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         errorMsg={errorMsg}
         progress={loadProgress}
       />
+
 
       {enable_debug_log && (
         <div
