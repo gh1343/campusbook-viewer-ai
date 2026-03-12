@@ -141,7 +141,34 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const touchUA = /Mobi|Android|iP(hone|od|ad)/i.test(ua);
     return touchUA || window.innerWidth <= 1300;
   }, [ua]);
-  const MAX_CANVAS_PIXELS = undefined;
+  const canvasLimitDebug = useMemo(() => {
+    const isTouchTablet =
+      isMobileLike ||
+      (typeof navigator !== "undefined" && navigator.maxTouchPoints >= 2);
+    const dpr =
+      typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    const mem =
+      typeof navigator !== "undefined"
+        ? ((navigator as any).deviceMemory as number | undefined)
+        : undefined;
+    const maxTouchPoints =
+      typeof navigator !== "undefined" ? navigator.maxTouchPoints : 0;
+    const innerWidth = typeof window !== "undefined" ? window.innerWidth : 0;
+
+    let limit: number | undefined;
+    if (!isTouchTablet) limit = undefined;
+    else if (mem !== undefined) {
+      if (mem <= 2) limit = 4_000_000;
+      else if (mem <= 4) limit = 8_000_000;
+      else limit = 12_000_000;
+    } else {
+      limit = dpr >= 2 ? 8_000_000 : 12_000_000;
+    }
+
+    return { isTouchTablet, dpr, mem, maxTouchPoints, innerWidth, limit };
+  }, [isMobileLike]);
+
+  const MAX_CANVAS_PIXELS = canvasLimitDebug.limit;
   const pdfViewerRef = useRef<PDFViewer | null>(null);
   const pdfZoomInitialScaleRef = useRef<number | null>(null);
   const pdfZoomManualRef = useRef(false);
@@ -910,7 +937,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   useEffect(() => {
     const viewer = pdfViewerRef.current;
     if (!viewer) return;
-    viewer.spreadMode = viewMode === "double" ? SpreadMode.ODD : SpreadMode.NONE;
+    viewer.spreadMode =
+      viewMode === "double" ? SpreadMode.ODD : SpreadMode.NONE;
     scheduleRenderRefresh();
     setLayoutTick((prev) => prev + 1);
   }, [viewMode, scheduleRenderRefresh]);
@@ -1199,51 +1227,82 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     // origin 기반 스크롤 보정: 핀치 중심(origin)이 scale 후에도 동일 viewport 위치에 오도록
     const pending = pendingTransformRef.current;
 
-    // CSS transform 제거 → 레이아웃이 baseScale 상태로 복원
-    resetPinchTransform();
-
-    // PDF.js 스케일 적용
+    // PDF.js 스케일 적용 (재렌더링 트리거)
     pdfZoomManualRef.current = true;
     setPdfScale(nextScale);
 
-    // origin 기반 동기 스크롤 보정 (translate 방식의 pendingTx/Ty 대체)
-    // newScrollLeft = originX * previewScale - viewportX
-    if (pending) {
-      const newScrollLeft = pending.originX * previewScale - anchor.viewportX;
-      const newScrollTop = pending.originY * previewScale - anchor.viewportY;
-      container.scrollLeft = Math.max(0, newScrollLeft);
-      container.scrollTop = Math.max(0, newScrollTop);
+    // Fix B: scale(1)로 이중 스케일 방지
+    // setPdfScale() 후 DOM이 nextScale로 즉시 변경되므로
+    // scale(previewScale)이 남아있으면 nextScale × previewScale로 이중 스케일 발생
+    // → scale(1)로 중화하면 DOM nextScale × 1 = 올바른 시각 유지
+    const layer = transformLayerRef.current;
+    if (layer) {
+      layer.style.transform = 'scale(1)';
     }
 
-    // 미세 보정: PDF.js centering 등 레이아웃 오차를 RAF에서 정밀 교정
-    requestAnimationFrame(() => {
+    // 스크롤 1차 보정: getBoundingClientRect 기반 (수식 대신 실측값 사용)
+    // pending.originX/Y 수식은 모멘텀 스크롤 등으로 오차 발생 가능
+    // → getBoundingClientRect()가 강제 레이아웃 플러시를 트리거하므로 항상 정확
+    const pageElPre = viewerRoot.querySelector<HTMLElement>(
+      `.page[data-page-number="${anchor.pageNumber}"]`
+    );
+    if (pageElPre) {
+      const containerRectPre = container.getBoundingClientRect();
+      const pageRectPre = pageElPre.getBoundingClientRect();
+      if (pageRectPre.width > 0 && pageRectPre.height > 0) {
+        const anchorAbsXPre =
+          pageRectPre.left - containerRectPre.left + anchor.relX * pageRectPre.width;
+        const anchorAbsYPre =
+          pageRectPre.top - containerRectPre.top + anchor.relY * pageRectPre.height;
+        container.scrollLeft += anchorAbsXPre - anchor.viewportX;
+        container.scrollTop += anchorAbsYPre - anchor.viewportY;
+      }
+    }
+
+    // pagerendered 이벤트 후 scale(1) 제거 + 전환 중 드리프트 교정
+    const PINCH_RENDER_TIMEOUT_MS = 600;
+    let pinchRenderHandled = false;
+
+    const onPinchPageRendered = () => {
+      if (pinchRenderHandled) return;
+      pinchRenderHandled = true;
+
+      // scale(1) → none: 시각적으로 동일 (덜컹거림 없음)
+      resetPinchTransform();
+
+      // 스크롤 2차 보정: 전환 기간(scale(1) 유지 중) 발생한 드리프트 교정
+      // 동기 실행 → 단일 프레임에 렌더링 (중간 잘못된 프레임 없음)
       const pageElAfter = viewerRoot.querySelector<HTMLElement>(
         `.page[data-page-number="${anchor.pageNumber}"]`
       );
-
-      if (!pageElAfter) return;
-
-      const containerRectAfter = container.getBoundingClientRect();
-      const pageRectAfter = pageElAfter.getBoundingClientRect();
-
-      if (pageRectAfter.width <= 0 || pageRectAfter.height <= 0) {
-        return;
+      if (pageElAfter) {
+        const containerRectAfter = container.getBoundingClientRect();
+        const pageRectAfter = pageElAfter.getBoundingClientRect();
+        if (pageRectAfter.width > 0 && pageRectAfter.height > 0) {
+          const anchorNewAbsX =
+            pageRectAfter.left -
+            containerRectAfter.left +
+            anchor.relX * pageRectAfter.width;
+          const anchorNewAbsY =
+            pageRectAfter.top -
+            containerRectAfter.top +
+            anchor.relY * pageRectAfter.height;
+          container.scrollLeft += anchorNewAbsX - anchor.viewportX;
+          container.scrollTop += anchorNewAbsY - anchor.viewportY;
+        }
       }
+    };
 
-      // 앵커가 실제로 위치한 viewport 좌표
-      const anchorNewAbsX =
-        pageRectAfter.left -
-        containerRectAfter.left +
-        anchor.relX * pageRectAfter.width;
-      const anchorNewAbsY =
-        pageRectAfter.top -
-        containerRectAfter.top +
-        anchor.relY * pageRectAfter.height;
+    // pagerendered 이벤트 대기 (한 번만 실행)
+    viewer.eventBus?.on('pagerendered', onPinchPageRendered, { once: true });
 
-      // 목표 위치(anchor.viewportX)와의 오차만 보정
-      container.scrollLeft += anchorNewAbsX - anchor.viewportX;
-      container.scrollTop += anchorNewAbsY - anchor.viewportY;
-    });
+    // 안전 타임아웃: 600ms 내 이벤트 없으면 강제 처리 (렌더 실패 대비)
+    setTimeout(() => {
+      if (!pinchRenderHandled) {
+        viewer.eventBus?.off('pagerendered', onPinchPageRendered);
+        onPinchPageRendered();
+      }
+    }, PINCH_RENDER_TIMEOUT_MS);
 
     setPinchInteractionState(false);
 
@@ -1726,7 +1785,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         if (num) map.set(num, el);
       });
     return map;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutTick]);
 
   return (
@@ -1736,6 +1795,76 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         errorMsg={errorMsg}
         progress={loadProgress}
       />
+
+      {enable_debug_log && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 16,
+            left: 16,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.82)",
+            color: "#fff",
+            borderRadius: 8,
+            padding: "10px 14px",
+            fontSize: 12,
+            lineHeight: 1.7,
+            fontFamily: "monospace",
+            pointerEvents: "none",
+            minWidth: 240,
+          }}
+        >
+          <div
+            style={{ fontWeight: "bold", marginBottom: 4, color: "#facc15" }}
+          >
+            📐 Canvas Limit Debug
+          </div>
+          <div>
+            isMobileLike: <b>{String(isMobileLike)}</b>
+          </div>
+          <div>
+            isTouchTablet:{" "}
+            <b
+              style={{
+                color: canvasLimitDebug.isTouchTablet ? "#4ade80" : "#f87171",
+              }}
+            >
+              {String(canvasLimitDebug.isTouchTablet)}
+            </b>
+          </div>
+          <div>
+            maxTouchPoints: <b>{canvasLimitDebug.maxTouchPoints}</b>
+          </div>
+          <div>
+            DPR: <b>{canvasLimitDebug.dpr}</b>
+          </div>
+          <div>
+            deviceMemory:{" "}
+            <b>
+              {canvasLimitDebug.mem !== undefined
+                ? `${canvasLimitDebug.mem}GB`
+                : "미지원(Safari)"}
+            </b>
+          </div>
+          <div>
+            innerWidth: <b>{canvasLimitDebug.innerWidth}px</b>
+          </div>
+          <div
+            style={{
+              marginTop: 4,
+              borderTop: "1px solid rgba(255,255,255,0.2)",
+              paddingTop: 4,
+            }}
+          >
+            MAX_CANVAS_PIXELS:{" "}
+            <b style={{ color: "#60a5fa" }}>
+              {canvasLimitDebug.limit !== undefined
+                ? `${(canvasLimitDebug.limit / 1_000_000).toFixed(0)}M`
+                : "없음 (PDF.js 기본 16M)"}
+            </b>
+          </div>
+        </div>
+      )}
 
       {/* ⭐⭐⭐ 화면용 스케일 래퍼 추가 (중요) ⭐⭐⭐ */}
       <div
@@ -1753,13 +1882,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             className="preview_end_overlay"
             onClick={() => {
               setShowPreviewEndOverlay(false);
-              if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+              if (previewEndTimerRef.current)
+                clearTimeout(previewEndTimerRef.current);
             }}
             onWheel={(e) => {
               if (e.deltaY < 0) {
                 // 위로 스크롤 → 오버레이 dismiss + 컨테이너 동시 스크롤
                 setShowPreviewEndOverlay(false);
-                if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+                if (previewEndTimerRef.current)
+                  clearTimeout(previewEndTimerRef.current);
                 const container = viewerContainerRef.current;
                 if (container) container.scrollTop += e.deltaY;
               }
@@ -1769,25 +1900,34 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
             }}
             onTouchMove={(e) => {
               if (overlayTouchStartYRef.current === null) return;
-              const deltaY = e.touches[0].clientY - overlayTouchStartYRef.current;
+              const deltaY =
+                e.touches[0].clientY - overlayTouchStartYRef.current;
               if (deltaY > 15) {
                 // 손가락이 아래로 이동 = 위로 스크롤 → dismiss
                 setShowPreviewEndOverlay(false);
-                if (previewEndTimerRef.current) clearTimeout(previewEndTimerRef.current);
+                if (previewEndTimerRef.current)
+                  clearTimeout(previewEndTimerRef.current);
                 overlayTouchStartYRef.current = null;
               }
             }}
           >
             <div className="preview_end_card">
               <div className="preview_end_icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
               </div>
-              <p className="preview_end_text">
-                미리보기 마지막 페이지입니다.
-              </p>
+              <p className="preview_end_text">미리보기 마지막 페이지입니다.</p>
             </div>
           </div>
         )}
@@ -1795,7 +1935,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         {/* ⭐ pdf.js에서 요구하는 container는 그대로 absolute 유지 ⭐ */}
         <div
           ref={viewerContainerRef}
-          className={`pdf_viewer_container${showPreviewEndOverlay ? " preview_end_blur" : ""}`}
+          className={`pdf_viewer_container${
+            showPreviewEndOverlay ? " preview_end_blur" : ""
+          }`}
           data-drawing-mode={drawingMode}
           style={{
             cursor:
