@@ -22,6 +22,7 @@ interface DrawingContextType {
   setPenOpacity: (opacity: number) => void;
   addStroke: (stroke: Stroke) => void;
   removeStroke: (strokeId: string) => void;
+  removeStrokes: (strokeIds: string[]) => void;
   hasStrokes: () => boolean;
   saveDrawings: () => Promise<void>;
 }
@@ -75,6 +76,7 @@ const DrawingProviderInner: React.FC<{ children: ReactNode }> = ({
         setPenOpacity,
         addStroke: annotation.addStroke,
         removeStroke: annotation.removeStroke,
+        removeStrokes: annotation.removeStrokes,
         hasStrokes,
         saveDrawings,
       }}

@@ -12,12 +12,17 @@ export type PageCanvasEntry = {
   liveCanvas: HTMLCanvasElement;
 };
 
+const isIPhone =
+  typeof navigator !== "undefined" && /iPhone/.test(navigator.userAgent);
+
 export const getCanvasMetrics = (
   pageEl: HTMLElement,
   getVisualScale: () => number
 ) => {
   const rect = pageEl.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
+  const rawDpr = window.devicePixelRatio || 1;
+  // iPhone은 dpr=3이라 캔버스 메모리가 9배 → 탭 크래시 방지를 위해 최대 2로 제한
+  const dpr = isIPhone ? Math.min(rawDpr, 2) : rawDpr;
   const visualScale = getVisualScale();
   const width = rect.width / visualScale;
   const height = rect.height / visualScale;

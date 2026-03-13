@@ -14,20 +14,25 @@ export const extractPdfText = async (
   pdfDoc: any,
   { isMobileSafari, setPdfTextPages, isCancelled, onComplete, onProgress }: PdfTextExtractOptions
 ) => {
-  if (isMobileSafari) {
-    onComplete?.();
-    return;
-  }
+  // if (isMobileSafari) {
+  //   onComplete?.();
+  //   return;
+  // }
   const pages: { page: number; text: string }[] = [];
   try {
     for (let i = 1; i <= pdfDoc.numPages; i++) {
       if (isCancelled()) break;
-      const page = await pdfDoc.getPage(i);
-      const textContent = await page.getTextContent();
-      const strings = textContent.items
-        .map((item: any) => ("str" in item ? item.str : ""))
-        .join(" ");
-      pages.push({ page: i, text: strings });
+      try {
+        const page = await pdfDoc.getPage(i);
+        const textContent = await page.getTextContent();
+        const strings = textContent.items
+          .map((item: any) => ("str" in item ? item.str : ""))
+          .join(" ");
+        pages.push({ page: i, text: strings });
+      } catch (pageErr) {
+        console.warn(`[extractPdfText] page ${i} failed, skipping`, pageErr);
+        pages.push({ page: i, text: "" });
+      }
 
       // Report progress
       onProgress?.(i, pdfDoc.numPages);
@@ -48,6 +53,9 @@ export const extractPdfText = async (
     }
   } catch (err) {
     console.error("[extractPdfText] FAILED", err);
+    if (!isCancelled()) {
+      setPdfTextPages(pages);
+    }
     onComplete?.();
   }
 };

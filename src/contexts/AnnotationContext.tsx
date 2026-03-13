@@ -73,6 +73,7 @@ interface AnnotationContextType {
   performAnnotationSearch: (query: string) => SearchResult[];
   addStroke: (stroke: Stroke) => void;
   removeStroke: (strokeId: string) => void;
+  removeStrokes: (strokeIds: string[]) => void;
   saveAnnotations: (source?: "manual" | "auto") => Promise<void>;
   getDataFingerprint: () => string;
   getLastSavedFingerprint: () => string | null;
@@ -549,6 +550,24 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       setStrokes((prev) =>
         prev.map((s) =>
           s.id === strokeId
+            ? { ...s, deleted: true, updated_at: now, syncStatus: "pending" }
+            : s
+        )
+      );
+    },
+    [markAsUnsaved]
+  );
+
+  // 여러 스트로크를 한 번의 setStrokes 호출로 삭제 (지우개 성능 최적화)
+  const removeStrokes = useCallback(
+    (strokeIds: string[]) => {
+      if (strokeIds.length === 0) return;
+      const now = Date.now();
+      const idSet = new Set(strokeIds);
+      markAsUnsaved();
+      setStrokes((prev) =>
+        prev.map((s) =>
+          idSet.has(s.id)
             ? { ...s, deleted: true, updated_at: now, syncStatus: "pending" }
             : s
         )
@@ -1100,6 +1119,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       performAnnotationSearch,
       addStroke,
       removeStroke,
+      removeStrokes,
       saveAnnotations,
       getDataFingerprint: buildDataFingerprint,
       getLastSavedFingerprint: () => lastSavedDataRef.current,
@@ -1132,6 +1152,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       performAnnotationSearch,
       addStroke,
       removeStroke,
+      removeStrokes,
       saveAnnotations,
       buildDataFingerprint,
     ]

@@ -36,6 +36,7 @@ interface PenLayerRuntimeDeps {
   ) => void;
   addStroke: (stroke: any) => void;
   removeStroke: (strokeId: string) => void;
+  removeStrokes: (strokeIds: string[]) => void;
 }
 
 export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
@@ -63,6 +64,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     drawStrokePath,
     addStroke,
     removeStroke,
+    removeStrokes,
   } = deps;
 
   let activePointerId: number | null = null;
@@ -102,6 +104,10 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   // 페이지별 렌더링된 스트로크 ID 추적 (incremental rendering용)
   const renderedStrokeIds = new Map<number, Set<string>>();
+
+  // 지우개 드래그 중 삭제 대기 스트로크 ID (pointerup 시 React 상태 일괄 커밋)
+  // 드래그 중에는 React 상태를 건드리지 않고 캔버스만 직접 갱신하여 딜레이 제거
+  const pendingEraseIds = new Set<string>();
 
   const isPinching = () => isPinchingRef?.current ?? false;
 
@@ -376,6 +382,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       } else if (drawingModeRef.current === "eraser") {
         const pageSize = getPageSize(pageEl);
         const strokes = getPageStrokes(pageNumber);
+        let anyHit = false;
         strokes.forEach((stroke: any) => {
           let hit: boolean;
           if (stroke.normalized) {
@@ -395,8 +402,10 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
                 PEN_LAYER.ERASER_HIT_RADIUS * scaleX
             );
           }
-          if (hit) removeStroke(stroke.id);
+          if (hit) { pendingEraseIds.add(stroke.id); anyHit = true; }
         });
+        // React 상태 대신 캔버스 직접 갱신 (드래그 중 React 렌더 없음)
+        if (anyHit) renderStaticCanvases(true);
       }
       return;
     }
@@ -449,6 +458,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     } else if (drawingModeRef.current === "eraser") {
       const pageSize = getPageSize(pageEl);
       const strokes = getPageStrokes(pageNumber);
+      let anyHit = false;
       strokes.forEach((stroke: any) => {
         let hit: boolean;
         if (stroke.normalized) {
@@ -468,8 +478,10 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
               PEN_LAYER.ERASER_HIT_RADIUS * scaleX
           );
         }
-        if (hit) removeStroke(stroke.id);
+        if (hit) { pendingEraseIds.add(stroke.id); anyHit = true; }
       });
+      // React 상태 대신 캔버스 직접 갱신 (드래그 중 React 렌더 없음)
+      if (anyHit) renderStaticCanvases(true);
     }
   };
 
@@ -539,6 +551,12 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
       };
       addStroke(newStroke);
     }
+    // 지우개 드래그 종료: pendingEraseIds를 React 상태에 일괄 커밋
+    if (pendingEraseIds.size > 0) {
+      const toDelete = [...pendingEraseIds];
+      pendingEraseIds.clear();
+      removeStrokes(toDelete);
+    }
     isDrawingRef.current = false;
     livePointsRef.current = [];
     currentPageRef.current = null;
@@ -605,6 +623,12 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
     const entry = pageCanvasMapRef.current.get(pageNumber);
     if (!entry) return;
     unbindPenHandlers(entry.liveCanvas);
+    // iOS Safari는 canvas를 DOM에서 제거해도 GPU 메모리를 지연 해제함
+    // width=0으로 강제 설정하여 즉시 메모리 반환
+    entry.staticCanvas.width = 0;
+    entry.staticCanvas.height = 0;
+    entry.liveCanvas.width = 0;
+    entry.liveCanvas.height = 0;
     entry.layer?.remove();
     pageCanvasMapRef.current.delete(pageNumber);
     renderedStrokeIds.delete(pageNumber);
@@ -683,7 +707,7 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   const getPageStrokes = (pageNumber: number) =>
     (chapterStrokesRef.current || []).filter(
-      (s) => strokeMatchesPage(s, pageNumber) && !s.deleted
+      (s) => strokeMatchesPage(s, pageNumber) && !s.deleted && !pendingEraseIds.has(s.id)
     );
 
   // 스트로크 하나를 ctx에 그리는 헬퍼

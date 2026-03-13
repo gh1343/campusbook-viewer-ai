@@ -122,6 +122,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     chapterStrokes,
     addStroke,
     removeStroke,
+    removeStrokes,
   } = useDrawing();
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isMobileSafari =
@@ -319,6 +320,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         if (!hit || !viewerContainerRef.current) return;
 
         const container = viewerContainerRef.current;
+        // 검색 hit 스크롤 직전에 남아 있는 페이지 네비게이션을 취소해
+        // 확대/축소와 비동기 스크롤이 서로 덮어쓰는 race를 방지한다.
+        cancelNavigationRef.current?.();
+        cancelNavigationRef.current = null;
         const containerRect = container.getBoundingClientRect();
         const hitRect = hit.getBoundingClientRect();
         const visualScale = getVisualScale();
@@ -335,7 +340,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         container.scrollTo({
           top: Math.max(0, nextTop),
           left: Math.max(0, nextLeft),
-          behavior: "smooth",
+          behavior: "auto",
         });
       },
     });
@@ -612,6 +617,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         drawStrokePath,
         addStroke,
         removeStroke,
+        removeStrokes,
       }),
     [
       viewerRef,
@@ -627,6 +633,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       showAnnotationsRef,
       livePointsRef,
       isDrawingRef,
+      addStroke,
+      removeStroke,
+      removeStrokes,
     ]
   );
 
@@ -664,6 +673,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     (nextScale: number) => {
       const viewer = pdfViewerRef.current;
       if (!viewer) return;
+
+      // 스케일 변경 시작 시 pending 페이지 스크롤 취소 (검색 결과 이동과 충돌 방지)
+      cancelNavigationRef.current?.();
+      cancelNavigationRef.current = null;
 
       const { minScale, maxScale } = getPdfZoomBounds();
       const clampedScale = Math.min(maxScale, Math.max(minScale, nextScale));
@@ -765,6 +778,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       const contentX = container.scrollLeft + viewportX;
       const contentY = container.scrollTop + viewportY;
       const scaleRatio = pdfZoom / currentScale;
+
+      // 외부 줌 반영 전에 pending 페이지 스크롤 취소
+      cancelNavigationRef.current?.();
+      cancelNavigationRef.current = null;
 
       // 외부에서 줌이 리셋되면 사용자 줌 상태도 초기화
       userHasZoomedRef.current = false;
@@ -1539,7 +1556,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const viewer = pdfViewerRef.current;
     if (!viewer) return;
 
-    const baseScale = pinchStartScaleRef.current ?? viewer.currentScale | 1;
+    const baseScale = pinchStartScaleRef.current ?? viewer.currentScale ?? 1;
     const ratio = dist / pinchStartDistRef.current;
     const nextScale = baseScale * ratio;
     const { minScale, maxScale } = getPdfZoomBounds();
