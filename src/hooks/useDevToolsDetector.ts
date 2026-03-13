@@ -8,9 +8,7 @@ function isDevEnvironment(): boolean {
 
   const params = new URLSearchParams(window.location.search);
   const apiBase =
-    params.get("rmsApiBase") ||
-    (window as any).__RMS_CONFIG__?.apiBase ||
-    "";
+    params.get("rmsApiBase") || (window as any).__RMS_CONFIG__?.apiBase || "";
   if (apiBase.includes(DEV_API_HOST)) return true;
 
   return false;
@@ -34,7 +32,8 @@ export function useDevToolsDetector() {
 
       const overlay = document.createElement("div");
       overlay.className = "copy-warning-overlay";
-      overlay.innerHTML = '<span class="copy-warning-text">뷰어 내 캡처 기능을 이용해 주세요.<br>마이노트 &gt; 캡처 이미지 첨부에서 사용할 수 있습니다.</span>';
+      overlay.innerHTML =
+        '<span class="copy-warning-text">뷰어 내 캡처 기능을 이용해 주세요.<br>마이노트 &gt; 캡처 이미지 첨부에서 사용할 수 있습니다.</span>';
       document.body.appendChild(overlay);
       screenshotOverlay = overlay;
 

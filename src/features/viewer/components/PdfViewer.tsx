@@ -315,7 +315,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           isPinchingRef.current ||
           isScaleTransitioningRef.current ||
           Date.now() - lastManualZoomTimeRef.current < 600
-        ) return;
+        )
+          return;
         const hit = pageEl.querySelector<HTMLElement>(".pdf_search_hit");
         if (!hit || !viewerContainerRef.current) return;
 
@@ -1301,7 +1302,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       // Fix B: scale(1)로 이중 스케일 방지
       const dLayer = transformLayerRef.current;
-      if (dLayer) dLayer.style.transform = 'scale(1)';
+      if (dLayer) dLayer.style.transform = "scale(1)";
 
       // 스크롤 1차 보정: getBoundingClientRect 기반 (실측값 사용)
       const dPageElPre = dViewerRoot.querySelector<HTMLElement>(
@@ -1312,15 +1313,25 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         const dPRectPre = dPageElPre.getBoundingClientRect();
         if (dPRectPre.width > 0 && dPRectPre.height > 0) {
           dContainer.scrollLeft +=
-            (dPRectPre.left - dCRectPre.left + capturedAnchor.relX * dPRectPre.width) -
+            dPRectPre.left -
+            dCRectPre.left +
+            capturedAnchor.relX * dPRectPre.width -
             capturedAnchor.viewportX;
           dContainer.scrollTop +=
-            (dPRectPre.top - dCRectPre.top + capturedAnchor.relY * dPRectPre.height) -
+            dPRectPre.top -
+            dCRectPre.top +
+            capturedAnchor.relY * dPRectPre.height -
             capturedAnchor.viewportY;
           // iOS/Android rubber-band 방지: scrollLeft를 유효 범위로 클램프
           // (축소 시 페이지가 컨테이너보다 좁으면 maxScrollLeft=0, 초과값이 오버스크롤 bounce를 유발)
-          const maxSL1 = Math.max(0, dContainer.scrollWidth - dContainer.clientWidth);
-          dContainer.scrollLeft = Math.max(0, Math.min(dContainer.scrollLeft, maxSL1));
+          const maxSL1 = Math.max(
+            0,
+            dContainer.scrollWidth - dContainer.clientWidth
+          );
+          dContainer.scrollLeft = Math.max(
+            0,
+            Math.min(dContainer.scrollLeft, maxSL1)
+          );
         }
       }
 
@@ -1333,15 +1344,16 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
         // scale(1) → none: 시각적으로 동일 (덜컹거림 없음)
         if (dLayer) {
-          dLayer.style.transformOrigin = '0 0';
-          dLayer.style.transform = 'none';
+          dLayer.style.transformOrigin = "0 0";
+          dLayer.style.transform = "none";
         }
 
         // 스케일 전환 완료: 억제 플래그 해제 후 올바른 페이지 번호 전파
         // capturedAnchor.pageNumber 사용: dViewer.currentPageNumber는 스크롤 이벤트가
         // 처리되기 전 stale 값일 수 있어 검색결과 페이지가 아닌 엉뚱한 페이지를 보고할 수 있음
         isScaleTransitioningRef.current = false;
-        if (capturedAnchor.pageNumber) onPageChange?.(capturedAnchor.pageNumber);
+        if (capturedAnchor.pageNumber)
+          onPageChange?.(capturedAnchor.pageNumber);
 
         // 스크롤 2차 보정: 드리프트 교정 (동기 실행 → 단일 프레임)
         const dPageElAfter = dViewerRoot.querySelector<HTMLElement>(
@@ -1352,14 +1364,24 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           const dPRectAfter = dPageElAfter.getBoundingClientRect();
           if (dPRectAfter.width > 0 && dPRectAfter.height > 0) {
             dContainer.scrollLeft +=
-              (dPRectAfter.left - dCRectAfter.left + capturedAnchor.relX * dPRectAfter.width) -
+              dPRectAfter.left -
+              dCRectAfter.left +
+              capturedAnchor.relX * dPRectAfter.width -
               capturedAnchor.viewportX;
             dContainer.scrollTop +=
-              (dPRectAfter.top - dCRectAfter.top + capturedAnchor.relY * dPRectAfter.height) -
+              dPRectAfter.top -
+              dCRectAfter.top +
+              capturedAnchor.relY * dPRectAfter.height -
               capturedAnchor.viewportY;
             // iOS/Android rubber-band 방지: 2차 보정 후에도 유효 범위로 클램프
-            const maxSL2 = Math.max(0, dContainer.scrollWidth - dContainer.clientWidth);
-            dContainer.scrollLeft = Math.max(0, Math.min(dContainer.scrollLeft, maxSL2));
+            const maxSL2 = Math.max(
+              0,
+              dContainer.scrollWidth - dContainer.clientWidth
+            );
+            dContainer.scrollLeft = Math.max(
+              0,
+              Math.min(dContainer.scrollLeft, maxSL2)
+            );
           }
         }
 
@@ -1370,10 +1392,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         });
       };
 
-      dViewer.eventBus?.on('pagerendered', onDebouncePageRendered, { once: true });
+      dViewer.eventBus?.on("pagerendered", onDebouncePageRendered, {
+        once: true,
+      });
       setTimeout(() => {
         if (!debounceRenderHandled) {
-          dViewer.eventBus?.off('pagerendered', onDebouncePageRendered);
+          dViewer.eventBus?.off("pagerendered", onDebouncePageRendered);
           onDebouncePageRendered();
         }
       }, DEBOUNCE_RENDER_TIMEOUT_MS);
@@ -1742,7 +1766,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     // Ctrl + A 전체 선택 차단
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && (e.key === "a" || e.key === "A")) {
+      if (
+        (e.ctrlKey && (e.key === "a" || e.key === "A")) ||
+        (e.ctrlKey && (e.key === "p" || e.key === "P"))
+      ) {
         e.preventDefault();
         e.stopPropagation();
       }
@@ -1891,7 +1918,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         errorMsg={errorMsg}
         progress={loadProgress}
       />
-
 
       {enable_debug_log && (
         <div

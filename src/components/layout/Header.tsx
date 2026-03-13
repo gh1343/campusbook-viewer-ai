@@ -48,9 +48,11 @@ export const Header: React.FC<{
   const {
     bookmarks,
     syncStatus: annotationSyncStatus,
+    unsavedChangeCount,
     lastSavedAt,
     lastSaveSource,
     saveAnnotations,
+    saveLocalOnly,
     addPdfBookmark,
     removePdfBookmark,
     getDataFingerprint,
@@ -110,11 +112,8 @@ export const Header: React.FC<{
 
       // 1. 먼저 progress 저장 (BookContext)
       await saveProgress();
-      // 2. 그 다음 annotations와 drawings 저장
-      await Promise.all([
-        saveAnnotations("manual"),
-        saveDrawings(),
-      ]);
+      // 2. annotations 저장 (strokes/drawings 포함 — saveDrawings는 saveAnnotations의 래퍼이므로 중복 호출 불필요)
+      await saveAnnotations("manual");
     } catch (err) {
       if (err instanceof MultiAccessError) {
         alert("다른 기기에서 로그인되었거나, 일정 시간이 지나 로그아웃되었어요.\n다시 로그인해 주세요.");
@@ -131,6 +130,7 @@ export const Header: React.FC<{
   const saveProgressRef = useRef(saveProgress);
   const saveAnnotationsRef = useRef(saveAnnotations);
   const saveDrawingsRef = useRef(saveDrawings);
+  const saveLocalOnlyRef = useRef(saveLocalOnly);
   const getDataFingerprintRef = useRef(getDataFingerprint);
   const getLastSavedFingerprintRef = useRef(getLastSavedFingerprint);
   const syncStatusRef = useRef(syncStatus);
@@ -138,9 +138,48 @@ export const Header: React.FC<{
   useEffect(() => { saveProgressRef.current = saveProgress; }, [saveProgress]);
   useEffect(() => { saveAnnotationsRef.current = saveAnnotations; }, [saveAnnotations]);
   useEffect(() => { saveDrawingsRef.current = saveDrawings; }, [saveDrawings]);
+  useEffect(() => { saveLocalOnlyRef.current = saveLocalOnly; }, [saveLocalOnly]);
   useEffect(() => { getDataFingerprintRef.current = getDataFingerprint; }, [getDataFingerprint]);
   useEffect(() => { getLastSavedFingerprintRef.current = getLastSavedFingerprint; }, [getLastSavedFingerprint]);
   useEffect(() => { syncStatusRef.current = syncStatus; }, [syncStatus]);
+
+  // 기기 전용 자동저장 (마지막 변경 후 5초 debounce)
+  // unsavedChangeCount는 필기·하이라이트·마이노트·북마크 등 저장 필요 행동이 일어날 때마다 증가
+  // syncStatus가 이미 UNSAVED여도(예: 연속 필기) 카운터가 바뀌므로 effect가 재실행돼 타이머가 정확히 리셋됨
+  const localAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localAutosaveInProgressRef = useRef(false);
+
+  useEffect(() => {
+    if (isPreview) return;
+    if (unsavedChangeCount === 0) return; // 초기 마운트 시 실행 방지
+
+    // 이전 타이머 취소 (연속 동작 시 카운트 리셋)
+    if (localAutosaveTimerRef.current) {
+      clearTimeout(localAutosaveTimerRef.current);
+    }
+
+    localAutosaveTimerRef.current = setTimeout(async () => {
+      if (localAutosaveInProgressRef.current) return;
+      // 3분 서버저장 진행 중이면 스킵 (서버저장이 기기저장도 포함하므로)
+      if (autosaveInProgressRef.current) return;
+      if (syncStatusRef.current !== "UNSAVED") return;
+
+      localAutosaveInProgressRef.current = true;
+      try {
+        await saveLocalOnlyRef.current();
+      } catch (err) {
+        console.error("Local autosave failed:", err);
+      } finally {
+        localAutosaveInProgressRef.current = false;
+      }
+    }, 5000);
+
+    return () => {
+      if (localAutosaveTimerRef.current) {
+        clearTimeout(localAutosaveTimerRef.current);
+      }
+    };
+  }, [unsavedChangeCount, isPreview]);
 
   // 중복 기기 체크 (30초 간격, 저장과 무관하게 독립 수행)
   useEffect(() => {
@@ -192,10 +231,8 @@ export const Header: React.FC<{
       autosaveInProgressRef.current = true;
       try {
         await saveProgressRef.current();
-        await Promise.all([
-          saveAnnotationsRef.current("auto"),
-          saveDrawingsRef.current(),
-        ]);
+        // saveAnnotations가 strokes(필기) 포함 모든 데이터를 처리 — saveDrawings는 중복이므로 제거
+        await saveAnnotationsRef.current("auto");
       } catch (err) {
         console.error("Autosave failed:", err);
       } finally {

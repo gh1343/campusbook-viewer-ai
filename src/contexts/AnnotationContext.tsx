@@ -74,7 +74,9 @@ interface AnnotationContextType {
   addStroke: (stroke: Stroke) => void;
   removeStroke: (strokeId: string) => void;
   removeStrokes: (strokeIds: string[]) => void;
+  unsavedChangeCount: number;
   saveAnnotations: (source?: "manual" | "auto") => Promise<void>;
+  saveLocalOnly: () => Promise<void>;
   getDataFingerprint: () => string;
   getLastSavedFingerprint: () => string | null;
 }
@@ -182,6 +184,9 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("SAVED");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [lastSaveSource, setLastSaveSource] = useState<"manual" | "auto" | null>(null);
+  // markAsUnsaved 호출 횟수 — syncStatus가 이미 UNSAVED여도 호출마다 증가해
+  // Header에서 이 값을 감시하면 연속 필기/하이라이트에서도 debounce 타이머가 정확히 리셋됨
+  const [unsavedChangeCount, setUnsavedChangeCount] = useState(0);
 
   const indexedDbLoadKeyRef = useRef<string | null>(null);
   const indexedDbSnapshotRef = useRef<IndexedDbSnapshot | null>(null);
@@ -352,6 +357,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
   const markAsUnsaved = useCallback(() => {
     setSyncStatus("UNSAVED");
+    setUnsavedChangeCount((c) => c + 1);
   }, []);
 
   const addPdfBookmark = useCallback(
@@ -827,6 +833,17 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [persistCurrentAnnotationToIndexedDb, highlights, bookmarks, generalNotes, strokes, saveSnapshot]);
 
+  // 기기(IndexedDB)에만 저장 — 서버 저장 없음, 5초 debounce 자동저장용
+  const saveLocalOnly = useCallback(async () => {
+    try {
+      await persistCurrentAnnotationToIndexedDb();
+      setSyncStatus("LOCAL_ONLY");
+      setLastSavedAt(formatSavedAt(new Date()));
+    } catch (err) {
+      console.error("saveLocalOnly failed", err);
+    }
+  }, [persistCurrentAnnotationToIndexedDb]);
+
   const loadAnnotationFromIndexedDb = useCallback(
     async (storageKey: string) => {
       try {
@@ -1120,7 +1137,9 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       addStroke,
       removeStroke,
       removeStrokes,
+      unsavedChangeCount,
       saveAnnotations,
+      saveLocalOnly,
       getDataFingerprint: buildDataFingerprint,
       getLastSavedFingerprint: () => lastSavedDataRef.current,
     }),
@@ -1153,7 +1172,9 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       addStroke,
       removeStroke,
       removeStrokes,
+      unsavedChangeCount,
       saveAnnotations,
+      saveLocalOnly,
       buildDataFingerprint,
     ]
   );
