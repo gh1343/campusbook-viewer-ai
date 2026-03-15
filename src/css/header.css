@@ -761,6 +761,20 @@
   margin-top: 2px;
 }
 
+.unsaved_group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.quota_exceeded_hint {
+  font-size: 8px;
+  color: rgb(234 179 8);
+  font-weight: bold;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
 .save_btn.blocked {
   background-color: rgb(220 38 38);
   color: rgb(255 255 255);

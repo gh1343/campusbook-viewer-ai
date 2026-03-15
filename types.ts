@@ -179,4 +179,5 @@ export interface BookContextType {
   updateReadingTime: () => void;
 
   saveProgress: () => Promise<void>;
+  saveProgressLocalOnly: () => Promise<void>;
 }

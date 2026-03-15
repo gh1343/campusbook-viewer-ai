@@ -1122,6 +1122,80 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [currentPdfPage, viewMode, pdfTotalPages, bookTitle]);
 
+  // 기기(IndexedDB)에만 progress 저장 — 서버 저장 없음, 페이지 이동 debounce 자동저장용
+  const saveProgressLocalOnly = useCallback(async () => {
+    try {
+      const worker = getSharedIndexedDbWorker();
+      if (!worker) return;
+      const storageKey = buildIndexedDbKey();
+
+      const existingSnapshot = await new Promise<IndexedDbSnapshot | null>(
+        (resolve, reject) => {
+          const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          const cleanup = () => {
+            worker.removeEventListener("message", handleMessage);
+            worker.removeEventListener("error", handleError);
+          };
+          const handleMessage = (event: MessageEvent) => {
+            const response = event.data;
+            if (!response || response.requestId !== requestId) return;
+            cleanup();
+            if (response.type === "load_complete") {
+              resolve((response.payload as IndexedDbSnapshot) || null);
+            } else {
+              reject(new Error(response.error || "IndexedDB load failed."));
+            }
+          };
+          const handleError = () => { cleanup(); reject(new Error("IndexedDB worker error.")); };
+          worker.addEventListener("message", handleMessage);
+          worker.addEventListener("error", handleError);
+          worker.postMessage({ type: "load_bundle", requestId, payload: { storageKey } });
+        }
+      );
+
+      const savedAt = Date.now();
+      const updatedPayload = {
+        storageKey,
+        savedAt,
+        schema_version: existingSnapshot?.schema_version || 1,
+        data: {
+          bookmarks: existingSnapshot?.data?.bookmarks || [],
+          highlights: existingSnapshot?.data?.highlights || [],
+          notes: existingSnapshot?.data?.notes || [],
+          strokes: existingSnapshot?.data?.strokes || [],
+          progress: { currentPdfPage, viewMode, pdfTotalPages, updatedAt: savedAt },
+        },
+        meta: { ...(existingSnapshot?.meta || {}), bookTitle },
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const cleanup = () => {
+          worker.removeEventListener("message", handleMessage);
+          worker.removeEventListener("error", handleError);
+        };
+        const handleMessage = (event: MessageEvent) => {
+          const response = event.data as { type?: string; requestId?: string; error?: string; quotaExceeded?: boolean };
+          if (!response || response.requestId !== requestId) return;
+          cleanup();
+          if (response.type === "save_complete") resolve();
+          else if (response.quotaExceeded) reject(new StorageQuotaExceededError());
+          else reject(new Error(response.error || "IndexedDB save failed."));
+        };
+        const handleError = () => { cleanup(); reject(new Error("IndexedDB worker error.")); };
+        worker.addEventListener("message", handleMessage);
+        worker.addEventListener("error", handleError);
+        worker.postMessage({ type: "save_bundle", requestId, payload: updatedPayload });
+      });
+    } catch (err) {
+      if (err instanceof StorageQuotaExceededError) {
+        console.warn("[Storage] Quota exceeded. Skipping local progress save.");
+      } else {
+        console.error("saveProgressLocalOnly failed", err);
+      }
+    }
+  }, [currentPdfPage, viewMode, pdfTotalPages, bookTitle, buildIndexedDbKey]);
+
   // saveProgressRef를 항상 최신 saveProgress로 유지 (handleOnline stale closure 방지)
   useEffect(() => {
     saveProgressRef.current = saveProgress;
@@ -1183,6 +1257,7 @@ export const BookProvider: React.FC<{ children: ReactNode }> = ({
         incrementAiCount,
         updateReadingTime,
         saveProgress,
+        saveProgressLocalOnly,
       }}
     >
       {children}

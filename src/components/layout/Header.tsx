@@ -44,6 +44,7 @@ export const Header: React.FC<{
     isToolsOpen,
     setToolsOpen,
     saveProgress,
+    saveProgressLocalOnly,
   } = useBook();
   const {
     bookmarks,
@@ -53,6 +54,7 @@ export const Header: React.FC<{
     lastSaveSource,
     saveAnnotations,
     saveLocalOnly,
+    storageQuotaExceeded,
     addPdfBookmark,
     removePdfBookmark,
     getDataFingerprint,
@@ -128,6 +130,7 @@ export const Header: React.FC<{
   // 자동저장 (3분 간격) - 변경 감지 후 저장
   const autosaveInProgressRef = useRef(false);
   const saveProgressRef = useRef(saveProgress);
+  const saveProgressLocalOnlyRef = useRef(saveProgressLocalOnly);
   const saveAnnotationsRef = useRef(saveAnnotations);
   const saveDrawingsRef = useRef(saveDrawings);
   const saveLocalOnlyRef = useRef(saveLocalOnly);
@@ -136,6 +139,7 @@ export const Header: React.FC<{
   const syncStatusRef = useRef(syncStatus);
 
   useEffect(() => { saveProgressRef.current = saveProgress; }, [saveProgress]);
+  useEffect(() => { saveProgressLocalOnlyRef.current = saveProgressLocalOnly; }, [saveProgressLocalOnly]);
   useEffect(() => { saveAnnotationsRef.current = saveAnnotations; }, [saveAnnotations]);
   useEffect(() => { saveDrawingsRef.current = saveDrawings; }, [saveDrawings]);
   useEffect(() => { saveLocalOnlyRef.current = saveLocalOnly; }, [saveLocalOnly]);
@@ -180,6 +184,43 @@ export const Header: React.FC<{
       }
     };
   }, [unsavedChangeCount, isPreview]);
+
+  // 페이지 이동 감지 → 기기(IndexedDB)에만 progress 저장 (5초 debounce)
+  const progressAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressAutosaveInProgressRef = useRef(false);
+  const isFirstPageRender = useRef(true); // 초기 마운트 시 실행 방지
+
+  useEffect(() => {
+    if (isPreview) return;
+    if (isFirstPageRender.current) {
+      isFirstPageRender.current = false;
+      return;
+    }
+
+    if (progressAutosaveTimerRef.current) {
+      clearTimeout(progressAutosaveTimerRef.current);
+    }
+
+    progressAutosaveTimerRef.current = setTimeout(async () => {
+      if (progressAutosaveInProgressRef.current) return;
+      if (autosaveInProgressRef.current) return; // 3분 서버저장 진행 중이면 스킵
+
+      progressAutosaveInProgressRef.current = true;
+      try {
+        await saveProgressLocalOnlyRef.current();
+      } catch (err) {
+        console.error("Progress local autosave failed:", err);
+      } finally {
+        progressAutosaveInProgressRef.current = false;
+      }
+    }, 5000);
+
+    return () => {
+      if (progressAutosaveTimerRef.current) {
+        clearTimeout(progressAutosaveTimerRef.current);
+      }
+    };
+  }, [currentPdfPage, isPreview]);
 
   // 중복 기기 체크 (30초 간격, 저장과 무관하게 독립 수행)
   useEffect(() => {
@@ -230,11 +271,15 @@ export const Header: React.FC<{
 
       autosaveInProgressRef.current = true;
       try {
-        await saveProgressRef.current();
-        // saveAnnotations가 strokes(필기) 포함 모든 데이터를 처리 — saveDrawings는 중복이므로 제거
+        // saveProgress 실패가 saveAnnotations를 막지 않도록 분리
+        try {
+          await saveProgressRef.current();
+        } catch (err) {
+          console.error("Autosave: saveProgress failed:", err);
+        }
         await saveAnnotationsRef.current("auto");
       } catch (err) {
-        console.error("Autosave failed:", err);
+        console.error("Autosave: saveAnnotations failed:", err);
       } finally {
         autosaveInProgressRef.current = false;
       }
@@ -518,13 +563,20 @@ export const Header: React.FC<{
               {/* 저장 상태 인터페이스 */}
               {!isPreview && <div className="save_status_wrap">
                 {syncStatus === "UNSAVED" && (
-                  <button
-                    onClick={handleSaveAll}
-                    className="save_btn unsaved"
-                  >
-                    <Save size={14} />
-                    <span>저장 필요</span>
-                  </button>
+                  <div className="save_btn_group unsaved_group">
+                    <button
+                      onClick={handleSaveAll}
+                      className="save_btn unsaved"
+                    >
+                      <Save size={14} />
+                      <span>저장 필요</span>
+                    </button>
+                    {storageQuotaExceeded && (
+                      <span className="quota_exceeded_hint">
+                        기기 저장 공간 부족 · 인터넷 연결 시 자동 서버 저장
+                      </span>
+                    )}
+                  </div>
                 )}
                 {syncStatus === "SYNCING" && (
                   <div className="save_btn syncing">

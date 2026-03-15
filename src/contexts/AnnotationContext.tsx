@@ -47,6 +47,7 @@ interface AnnotationContextType {
   syncStatus: SyncStatus;
   lastSavedAt: string | null;
   lastSaveSource: "manual" | "auto" | null;
+  storageQuotaExceeded: boolean;
   toggleAnnotations: () => void;
   addPdfBookmark: (page: number, label?: string) => void;
   removePdfBookmark: (id: string) => void;
@@ -184,6 +185,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("SAVED");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [lastSaveSource, setLastSaveSource] = useState<"manual" | "auto" | null>(null);
+  const [storageQuotaExceeded, setStorageQuotaExceeded] = useState(false);
   // markAsUnsaved 호출 횟수 — syncStatus가 이미 UNSAVED여도 호출마다 증가해
   // Header에서 이 값을 감시하면 연속 필기/하이라이트에서도 debounce 타이머가 정확히 리셋됨
   const [unsavedChangeCount, setUnsavedChangeCount] = useState(0);
@@ -716,10 +718,8 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
       if (!navigator.onLine) {
         if (indexedDbQuotaExceeded) {
-          // 오프라인 + 용량 초과: 어디에도 저장 안 된 상태
-          alert(
-            "기기 저장 공간이 부족하고 오프라인 상태입니다.\n인터넷에 연결되면 자동으로 서버에 저장됩니다."
-          );
+          // 오프라인 + 용량 초과: 어디에도 저장 안 된 상태 → UI 힌트로 표시
+          setStorageQuotaExceeded(true);
           setSyncStatus("UNSAVED");
         } else {
           setSyncStatus("LOCAL_ONLY");
@@ -825,6 +825,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
 
       // 로컬 저장 성공 여부에 따라 상태 분기
       setSyncStatus(indexedDbQuotaExceeded ? "SERVER_ONLY" : "SAVED");
+      setStorageQuotaExceeded(false); // 서버 저장 성공 → 공간 부족 경고 해제
       setLastSavedAt(formatSavedAt(new Date()));
     } catch (err) {
       console.error("saveAnnotations failed", err);
@@ -834,13 +835,19 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   }, [persistCurrentAnnotationToIndexedDb, highlights, bookmarks, generalNotes, strokes, saveSnapshot]);
 
   // 기기(IndexedDB)에만 저장 — 서버 저장 없음, 5초 debounce 자동저장용
+  // 성공해도 syncStatus는 UNSAVED 유지 (UI 변화 없음), 용량 초과 시에만 상태 표시
   const saveLocalOnly = useCallback(async () => {
     try {
       await persistCurrentAnnotationToIndexedDb();
-      setSyncStatus("LOCAL_ONLY");
-      setLastSavedAt(formatSavedAt(new Date()));
+      setStorageQuotaExceeded(false); // 이전에 공간 부족이었다면 해제
+      // syncStatus는 변경하지 않음 → "저장 필요" 표시 유지
     } catch (err) {
-      console.error("saveLocalOnly failed", err);
+      if (err instanceof StorageQuotaExceededError && !navigator.onLine) {
+        // 오프라인 + 공간 부족 → 어디에도 저장 안 됨, 사용자에게 알림
+        setStorageQuotaExceeded(true);
+      } else {
+        console.error("saveLocalOnly failed", err);
+      }
     }
   }, [persistCurrentAnnotationToIndexedDb]);
 
@@ -1118,6 +1125,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       syncStatus,
       lastSavedAt,
       lastSaveSource,
+      storageQuotaExceeded,
       toggleAnnotations: () => setShowAnnotations((prev) => !prev),
       addPdfBookmark,
       removePdfBookmark,
@@ -1154,6 +1162,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       syncStatus,
       lastSavedAt,
       lastSaveSource,
+      storageQuotaExceeded,
       addPdfBookmark,
       removePdfBookmark,
       addHighlight,
