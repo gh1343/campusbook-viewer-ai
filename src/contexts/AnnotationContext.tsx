@@ -1077,12 +1077,14 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     const { isPreview } = getPreviewConfig();
     if (isPreview) return;
+    // PDF 로드 완료 후 annotation 로드 — 동시 로드로 인한 OOM 방지
+    if (pdfTotalPages === 0) return;
     const storageKey = buildIndexedDbKey();
     if (!storageKey) return;
     if (indexedDbLoadKeyRef.current === storageKey) return;
     indexedDbLoadKeyRef.current = storageKey;
     loadAnnotationFromIndexedDb(storageKey);
-  }, [buildIndexedDbKey, loadAnnotationFromIndexedDb]);
+  }, [buildIndexedDbKey, loadAnnotationFromIndexedDb, pdfTotalPages]);
 
   // 현재 데이터의 fingerprint 생성 (변경 감지용)
   // text/content 같은 큰 필드는 제외하고 updated_at + length만 비교 (메모리 최적화)
