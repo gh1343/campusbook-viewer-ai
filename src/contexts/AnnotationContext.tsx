@@ -167,6 +167,12 @@ const parseServerStrokeDataList = (dataList: unknown[]) => {
   return Array.from(mergedById.values());
 };
 
+type MergeWorkerResult = {
+  data: IndexedDbSnapshot["data"];
+  schema_version?: number;
+  meta?: { bookTitle?: string };
+};
+
 export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
@@ -313,7 +319,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       const worker = getSharedIndexedDbWorker();
       if (!worker) return null;
 
-      return await new Promise<IndexedDbSnapshot | null>((resolve, reject) => {
+      return await new Promise<MergeWorkerResult | null>((resolve, reject) => {
         const requestId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
         const cleanup = () => {
           worker.removeEventListener("message", handleMessage);
@@ -329,7 +335,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           if (!response || response.requestId !== requestId) return;
           cleanup();
           if (response.type === "merge_complete") {
-            resolve((response.payload as IndexedDbSnapshot) || null);
+            resolve((response.payload as MergeWorkerResult) || null);
           } else {
             reject(new Error(response.error || "Worker merge failed."));
           }
@@ -733,6 +739,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       let updatedBookmarks = bookmarks;
       let updatedNotes = generalNotes;
       let updatedStrokes = strokes;
+      let anySyncFailed = false;
 
       if (config) {
         const changedHighlights = highlights.filter(
@@ -745,12 +752,41 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           (item) => item.syncStatus !== "synced"
         );
 
-        if (changedHighlights.length > 0) {
-          await saveHighlightsToServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-            highlights: changedHighlights,
-          });
+        // 4개 API 병렬 실행 — 부분 실패해도 성공한 항목은 개별 반영
+        const [highlightRes, bookmarkRes, noteRes, strokeRes] =
+          await Promise.allSettled([
+            changedHighlights.length > 0
+              ? saveHighlightsToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  highlights: changedHighlights,
+                })
+              : Promise.resolve(),
+            changedBookmarks.length > 0
+              ? saveBookmarksToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  bookmarks: changedBookmarks,
+                })
+              : Promise.resolve(),
+            generalNotes.length > 0
+              ? saveNotesToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  notes: generalNotes,
+                })
+              : Promise.resolve(),
+            changedStrokes.length > 0
+              ? saveDrawingsToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  drawings: changedStrokes,
+                })
+              : Promise.resolve(),
+          ]);
+
+        // 각 API 결과 개별 반영
+        if (highlightRes.status === "fulfilled" && changedHighlights.length > 0) {
           updatedHighlights = highlights
             .map((item) =>
               item.syncStatus === "pending"
@@ -761,12 +797,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           setHighlights(updatedHighlights);
         }
 
-        if (changedBookmarks.length > 0) {
-          await saveBookmarksToServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-            bookmarks: changedBookmarks,
-          });
+        if (bookmarkRes.status === "fulfilled" && changedBookmarks.length > 0) {
           updatedBookmarks = bookmarks
             .map((item) =>
               item.syncStatus === "pending"
@@ -777,22 +808,12 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           setBookmarks(updatedBookmarks);
         }
 
-        if (generalNotes.length > 0) {
-          await saveNotesToServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-            notes: generalNotes,
-          });
+        if (noteRes.status === "fulfilled" && generalNotes.length > 0) {
           updatedNotes = generalNotes.filter((item) => !item.deleted);
           setGeneralNotes(updatedNotes);
         }
 
-        if (changedStrokes.length > 0) {
-          await saveDrawingsToServer({
-            apiBase: config.apiBase,
-            bookCd: config.bookCd,
-            drawings: changedStrokes,
-          });
+        if (strokeRes.status === "fulfilled" && changedStrokes.length > 0) {
           updatedStrokes = strokes
             .map((item) =>
               item.syncStatus !== "synced"
@@ -802,6 +823,25 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
             .filter((item) => !item.deleted);
           setStrokes(updatedStrokes);
         }
+
+        // 부분 실패 감지 및 로깅
+        const syncNames = ["highlights", "bookmarks", "notes", "strokes"] as const;
+        const syncResults = [highlightRes, bookmarkRes, noteRes, strokeRes];
+        const syncChanged = [
+          changedHighlights.length > 0,
+          changedBookmarks.length > 0,
+          generalNotes.length > 0,
+          changedStrokes.length > 0,
+        ];
+        syncResults.forEach((result, i) => {
+          if (syncChanged[i] && result.status === "rejected") {
+            anySyncFailed = true;
+            console.error(
+              `saveAnnotations: ${syncNames[i]} sync failed`,
+              result.reason
+            );
+          }
+        });
       }
 
       // IndexedDB 2차 저장 (용량 초과 시 스킵)
@@ -823,8 +863,10 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         indexedDbSnapshotRef.current = postSyncSnapshot;
       }
 
-      // 로컬 저장 성공 여부에 따라 상태 분기
-      setSyncStatus(indexedDbQuotaExceeded ? "SERVER_ONLY" : "SAVED");
+      // 로컬 저장 성공 여부 + 부분 서버 실패 여부에 따라 상태 분기
+      setSyncStatus(
+        indexedDbQuotaExceeded ? "SERVER_ONLY" : anySyncFailed ? "UNSAVED" : "SAVED"
+      );
       setStorageQuotaExceeded(false); // 서버 저장 성공 → 공간 부족 경고 해제
       setLastSavedAt(formatSavedAt(new Date()));
     } catch (err) {
@@ -959,7 +1001,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
             : normalizeStrokeSyncFields(item, "pending")
         );
 
-        // 3. pending 항목이 있으면 서버 동기화
+        // 3. pending 항목 추출 (백그라운드 전송용)
         const hasPendingStrokes = finalStrokes.some(
           (item) => item.syncStatus !== "synced"
         );
@@ -968,77 +1010,11 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           finalBookmarks.some((item) => item.syncStatus === "pending") ||
           hasPendingStrokes;
 
-        let finalSyncStatus: SyncStatus = !hasPending
-          ? "SAVED"
-          : !navigator.onLine
-          ? "LOCAL_ONLY"  // 오프라인 + pending → 온라인 복귀 시 handleOnline이 트리거 가능
-          : "UNSAVED";    // 온라인 + pending → 직후 아래 블록에서 즉시 동기화 시도
+        const changedHighlights = finalHighlights.filter((item) => item.syncStatus === "pending");
+        const changedBookmarks = finalBookmarks.filter((item) => item.syncStatus === "pending");
+        const changedStrokes = finalStrokes.filter((item) => item.syncStatus !== "synced");
 
-        if (hasPending && navigator.onLine && config) {
-          try {
-            const changedHighlights = finalHighlights.filter(
-              (item) => item.syncStatus === "pending"
-            );
-            const changedBookmarks = finalBookmarks.filter(
-              (item) => item.syncStatus === "pending"
-            );
-            const changedStrokes = finalStrokes.filter(
-              (item) => item.syncStatus !== "synced"
-            );
-
-            if (changedHighlights.length > 0) {
-              await saveHighlightsToServer({
-                apiBase: config.apiBase,
-                bookCd: config.bookCd,
-                highlights: changedHighlights,
-              });
-              finalHighlights = finalHighlights
-                .map((item) =>
-                  item.syncStatus === "pending"
-                    ? { ...item, syncStatus: "synced" as const }
-                    : item
-                )
-                .filter((item) => !item.deleted);
-            }
-
-            if (changedBookmarks.length > 0) {
-              await saveBookmarksToServer({
-                apiBase: config.apiBase,
-                bookCd: config.bookCd,
-                bookmarks: changedBookmarks,
-              });
-              finalBookmarks = finalBookmarks
-                .map((item) =>
-                  item.syncStatus === "pending"
-                    ? { ...item, syncStatus: "synced" as const }
-                    : item
-                )
-                .filter((item) => !item.deleted);
-            }
-
-            if (changedStrokes.length > 0) {
-              await saveDrawingsToServer({
-                apiBase: config.apiBase,
-                bookCd: config.bookCd,
-                drawings: changedStrokes,
-              });
-              finalStrokes = finalStrokes
-                .map((item) =>
-                  item.syncStatus !== "synced"
-                    ? { ...item, syncStatus: "synced" as const }
-                    : item
-                )
-                .filter((item) => !item.deleted);
-            }
-
-            finalSyncStatus = "SAVED";
-          } catch (err) {
-            console.error("Auto-sync on initial load failed", err);
-            finalSyncStatus = "UNSAVED";
-          }
-        }
-
-        // 4. State 업데이트 (deleted 항목 최종 제거 - 병합 후 기기간 삭제 동기화 반영)
+        // 4. State 업데이트 먼저 (deleted 항목 최종 제거 - 병합 후 기기간 삭제 동기화 반영)
         finalHighlights = finalHighlights.filter((item) => !item.deleted);
         finalBookmarks = finalBookmarks.filter((item) => !item.deleted);
         finalNotes = finalNotes.filter((item) => !item.deleted);
@@ -1047,12 +1023,14 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         setBookmarks(finalBookmarks);
         setGeneralNotes(finalNotes);
         setStrokes(finalStrokes);
-        setSyncStatus(finalSyncStatus);
+        setSyncStatus(!hasPending ? "SAVED" : !navigator.onLine ? "LOCAL_ONLY" : "UNSAVED");
 
-        // deleted 항목이 제거된 clean snapshot을 IndexedDB에 재저장
+        // deleted 항목이 제거된 clean snapshot을 IndexedDB에 재저장 (fire-and-forget)
         const cleanSnapshot: IndexedDbSnapshot = {
-          ...mergedSnapshot,
+          key: storageKey,
           savedAt: Date.now(),
+          schema_version: mergedSnapshot.schema_version || 1,
+          meta: mergedSnapshot.meta,
           data: {
             ...mergedSnapshot.data,
             highlights: finalHighlights,
@@ -1061,12 +1039,61 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
             strokes: finalStrokes,
           },
         };
-        try {
-          await saveSnapshot(cleanSnapshot);
-        } catch {
+        saveSnapshot(cleanSnapshot).catch(() => {
           // clean snapshot 저장 실패해도 state는 이미 정상 반영됨
-        }
+        });
         indexedDbSnapshotRef.current = cleanSnapshot;
+
+        // 5. pending 자동 전송 (백그라운드 — setState를 블로킹하지 않음)
+        if (hasPending && navigator.onLine && config) {
+          (async () => {
+            try {
+              if (changedHighlights.length > 0) {
+                await saveHighlightsToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  highlights: changedHighlights,
+                });
+                setHighlights((prev) =>
+                  prev
+                    .map((item) => item.syncStatus === "pending" ? { ...item, syncStatus: "synced" as const } : item)
+                    .filter((item) => !item.deleted)
+                );
+              }
+
+              if (changedBookmarks.length > 0) {
+                await saveBookmarksToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  bookmarks: changedBookmarks,
+                });
+                setBookmarks((prev) =>
+                  prev
+                    .map((item) => item.syncStatus === "pending" ? { ...item, syncStatus: "synced" as const } : item)
+                    .filter((item) => !item.deleted)
+                );
+              }
+
+              if (changedStrokes.length > 0) {
+                await saveDrawingsToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  drawings: changedStrokes,
+                });
+                setStrokes((prev) =>
+                  prev
+                    .map((item) => item.syncStatus !== "synced" ? { ...item, syncStatus: "synced" as const } : item)
+                    .filter((item) => !item.deleted)
+                );
+              }
+
+              setSyncStatus("SAVED");
+            } catch (err) {
+              console.error("Auto-sync on initial load failed", err);
+              setSyncStatus("UNSAVED");
+            }
+          })();
+        }
       } catch (err) {
         console.error("annotation indexeddb load failed", err);
       }

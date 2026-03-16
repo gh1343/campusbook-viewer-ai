@@ -12,8 +12,10 @@ export type PageCanvasEntry = {
   liveCanvas: HTMLCanvasElement;
 };
 
-const isIPhone =
-  typeof navigator !== "undefined" && /iPhone/.test(navigator.userAgent);
+const isTouchTablet =
+  typeof navigator !== "undefined" &&
+  (/iPhone|iPad|Android/i.test(navigator.userAgent) ||
+    navigator.maxTouchPoints >= 2);
 
 export const getCanvasMetrics = (
   pageEl: HTMLElement,
@@ -21,8 +23,9 @@ export const getCanvasMetrics = (
 ) => {
   const rect = pageEl.getBoundingClientRect();
   const rawDpr = window.devicePixelRatio || 1;
-  // iPhone은 dpr=3이라 캔버스 메모리가 9배 → 탭 크래시 방지를 위해 최대 2로 제한
-  const dpr = isIPhone ? Math.min(rawDpr, 2) : rawDpr;
+  // 터치 태블릿/폰은 dpr이 2~3x → 캔버스 메모리 최대 4~9배 증가
+  // 펜 레이어 기준 2x로 캡핑하여 렌더 비용 절감 (PDF.js 캔버스는 별도 MAX_CANVAS_PIXELS로 제한)
+  const dpr = isTouchTablet ? Math.min(rawDpr, 2) : rawDpr;
   const visualScale = getVisualScale();
   const width = rect.width / visualScale;
   const height = rect.height / visualScale;

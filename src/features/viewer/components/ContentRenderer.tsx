@@ -44,6 +44,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const currentAnchorIndex = useRef<number>(0);
+  const drawingModeRef = useRef(drawingMode);
+  drawingModeRef.current = drawingMode;
 
   const [selection, setSelection] = useState<{
     text: string;
@@ -488,7 +490,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       }
       drawStroke(pts, s.color, w, s.opacity !== undefined ? s.opacity : 1);
     });
-    if (isDrawing && currentPoints.length > 1 && drawingMode === "pen")
+    if (isDrawing && currentPoints.length > 1 && drawingModeRef.current === "pen")
       drawStroke(currentPoints, penColor, penWidth, penOpacity);
   }, [
     chapterStrokes,
@@ -498,7 +500,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     penColor,
     penWidth,
     penOpacity,
-    drawingMode,
     showAnnotations,
   ]);
 

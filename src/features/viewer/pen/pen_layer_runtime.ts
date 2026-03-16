@@ -737,11 +737,13 @@ export const createPenLayerRuntime = (deps: PenLayerRuntimeDeps) => {
 
   // forceFullRedraw=true: 캔버스 초기화 후 전체 재그리기 (줌/리사이즈 시)
   // forceFullRedraw=false: 새로 추가된 스트로크만 위에 덧그리기 (일반 필기 시)
-  const renderStaticCanvases = (forceFullRedraw = false) => {
+  // currentPageOnly=true: 현재 페이지만 즉시 렌더, 나머지는 idle 시점에 별도 호출 (핀치 후 응답성 개선)
+  const renderStaticCanvases = (forceFullRedraw = false, currentPageOnly = false) => {
     // 드로잉 중 scroll/resize 등으로 호출되는 증분 재그리기 스킵
     // 스트로크가 많을 때 정적 캔버스 재그리기가 pointermove 처리를 블로킹하는 것 방지
     if (isDrawingRef.current && !forceFullRedraw) return;
     pageCanvasMapRef.current.forEach(({ staticCanvas }, pageNumber) => {
+      if (currentPageOnly && pageNumber !== currentPageRef.current) return;
       const ctx = staticCanvas.getContext("2d");
       if (!ctx) return;
 

@@ -298,7 +298,11 @@ self.addEventListener("message", async (event) => {
       self.postMessage({
         type: "merge_complete",
         requestId: message.requestId,
-        payload: result,
+        payload: {
+          data: result.data,
+          schema_version: result.schema_version,
+          meta: result.meta,
+        },
       });
     } catch (err) {
       const messageText = err instanceof Error ? err.message : String(err);

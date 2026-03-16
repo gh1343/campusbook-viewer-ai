@@ -102,7 +102,9 @@ export const Header: React.FC<{
   // 통합 저장 함수
   const handleSaveAll = async () => {
     if (isPreview) return;
+    if (manualSaveInProgressRef.current) return;
 
+    manualSaveInProgressRef.current = true;
     try {
       // 저장 전 뷰어 세션 유효성 확인 (온라인일 때만)
       if (navigator.onLine) {
@@ -124,8 +126,13 @@ export const Header: React.FC<{
         return;
       }
       console.error("Save failed:", err);
+    } finally {
+      manualSaveInProgressRef.current = false;
     }
   };
+
+  // 수동 저장 진행 중 플래그 (중복 실행 방지)
+  const manualSaveInProgressRef = useRef(false);
 
   // 자동저장 (3분 간격) - 변경 감지 후 저장
   const autosaveInProgressRef = useRef(false);
@@ -257,6 +264,7 @@ export const Header: React.FC<{
 
     const intervalId = setInterval(async () => {
       if (autosaveInProgressRef.current) return;
+      if (manualSaveInProgressRef.current) return; // 수동 저장 중이면 스킵
 
       // SYNCING 중이면 스킵
       if (syncStatusRef.current === "SYNCING") return;

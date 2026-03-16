@@ -671,7 +671,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   }, [penRuntime]);
 
   const setPdfScale = useCallback(
-    (nextScale: number) => {
+    (nextScale: number, skipPenRender = false) => {
       const viewer = pdfViewerRef.current;
       if (!viewer) return;
 
@@ -688,7 +688,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       userHasZoomedRef.current = true; // 사용자 줌 상태 기록
       viewer.currentScale = clampedScale;
       setPdfZoom(clampedScale); // 헤더와 연동
-      scheduleRenderRefresh();
+      // 핀치 종료 시에는 pagerendered 이벤트 후 단일 렌더로 처리 (이중 렌더 방지)
+      if (!skipPenRender) scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
     },
     [scheduleRenderRefresh, setLayoutTick, setPdfZoom]
@@ -1298,7 +1299,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       // 전환 중 잘못된 pagechanging 이벤트 억제 시작
       isScaleTransitioningRef.current = true;
       pdfZoomManualRef.current = true;
-      setPdfScale(nextScale);
+      // skipPenRender=true: 펜 레이어 렌더는 pagerendered 이벤트 후 1번만 실행 (이중 렌더 방지)
+      setPdfScale(nextScale, true);
 
       // Fix B: scale(1)로 이중 스케일 방지
       const dLayer = transformLayerRef.current;
@@ -1386,9 +1388,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         }
 
         // 스케일 변경 후 캔버스 정리 및 렌더링 갱신
+        // 현재 페이지 즉시 렌더 → 나머지 버퍼 페이지는 idle 시점에 처리 (핀치 후 응답성 개선)
         requestAnimationFrame(() => {
           penRuntime.forceCleanupOffscreenCanvases();
-          scheduleRenderRefresh();
+          penRuntime.syncPageCanvases();
+          penRuntime.syncCanvasPointers();
+          penRuntime.renderStaticCanvases(true, true); // 현재 페이지만 즉시
+          penRuntime.renderLiveCanvas();
+
+          // 나머지 버퍼 페이지 스트로크는 CPU 여유 시점에 처리
+          const renderRestPages = () => penRuntime.renderStaticCanvases(true, false);
+          if (typeof requestIdleCallback !== "undefined") {
+            requestIdleCallback(renderRestPages, { timeout: 500 });
+          } else {
+            setTimeout(renderRestPages, 200); // Safari 구버전 fallback
+          }
         });
       };
 
