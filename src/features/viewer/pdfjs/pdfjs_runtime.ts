@@ -152,6 +152,21 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
 
   eventBus.on("pagesinit", () => {
     pdfViewer.currentScale = INTERNAL_SCALE;
+
+    // 0페이지(빈 표지) 삽입: 첫 번째 page 크기 참조
+    const firstPage = viewer.querySelector<HTMLElement>(".page[data-page-number]");
+    if (firstPage && !viewer.querySelector('.page[data-page-number="0"]')) {
+      const firstRect = firstPage.getBoundingClientRect();
+      const w = firstPage.style.width || `${firstRect.width}px`;
+      const h = parseFloat(firstPage.style.height || `${firstRect.height}`) / 3;
+      const zeroPage = document.createElement("div");
+      zeroPage.className = "page";
+      zeroPage.dataset.pageNumber = "0";
+      zeroPage.setAttribute("role", "region");
+      zeroPage.style.cssText = `width:${w};height:${h}px;background:#fff;`;
+      viewer.insertBefore(zeroPage, firstPage);
+    }
+
     scheduleRenderRefresh();
   });
 

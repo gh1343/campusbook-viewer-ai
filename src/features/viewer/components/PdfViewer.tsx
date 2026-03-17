@@ -980,8 +980,49 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
   useEffect(() => {
     const viewer = pdfViewerRef.current;
     if (!viewer) return;
-    viewer.spreadMode =
-      viewMode === "double" ? SpreadMode.ODD : SpreadMode.NONE;
+    const viewerEl = viewer.viewer as HTMLDivElement | null;
+
+    if (viewMode === "double") {
+      // EVEN spread → [page1], [page2,page3], [page4,page5]...
+      viewer.spreadMode = SpreadMode.EVEN;
+
+      // spread 적용 후 0페이지를 첫 번째 .spread에 삽입 → [0,1], [2,3], [4,5]...
+      if (viewerEl) {
+        const firstSpread = viewerEl.querySelector(".spread");
+        const firstPage = firstSpread?.querySelector(".page");
+        if (firstSpread && firstPage) {
+          // 기존 0페이지 제거 후 재삽입
+          viewerEl.querySelector('.page[data-page-number="0"]')?.remove();
+          const zeroPage = document.createElement("div");
+          zeroPage.className = "page";
+          zeroPage.dataset.pageNumber = "0";
+          zeroPage.setAttribute("role", "region");
+          const w = firstPage.getAttribute("style")?.match(/width:\s*([^;]+)/)?.[1] || `${(firstPage as HTMLElement).offsetWidth}px`;
+          const h = parseFloat((firstPage as HTMLElement).style.height || `${(firstPage as HTMLElement).offsetHeight}`) / 3;
+          zeroPage.style.cssText = `width:${w};height:${h}px;background:#fff;`;
+          firstSpread.insertBefore(zeroPage, firstPage);
+        }
+      }
+    } else {
+      viewer.spreadMode = SpreadMode.NONE;
+
+      // single 모드: 0페이지를 첫 번째 .page 앞에 삽입
+      if (viewerEl) {
+        viewerEl.querySelector('.page[data-page-number="0"]')?.remove();
+        const firstPage = viewerEl.querySelector(".page[data-page-number]");
+        if (firstPage) {
+          const zeroPage = document.createElement("div");
+          zeroPage.className = "page";
+          zeroPage.dataset.pageNumber = "0";
+          zeroPage.setAttribute("role", "region");
+          const w = firstPage.getAttribute("style")?.match(/width:\s*([^;]+)/)?.[1] || `${(firstPage as HTMLElement).offsetWidth}px`;
+          const h = parseFloat((firstPage as HTMLElement).style.height || `${(firstPage as HTMLElement).offsetHeight}`) / 3;
+          zeroPage.style.cssText = `width:${w};height:${h}px;background:#fff;`;
+          viewerEl.insertBefore(zeroPage, firstPage);
+        }
+      }
+    }
+
     scheduleRenderRefresh();
     setLayoutTick((prev) => prev + 1);
   }, [viewMode, scheduleRenderRefresh]);
