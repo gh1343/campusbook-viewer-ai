@@ -727,7 +727,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     (direction: "in" | "out", mouseX?: number, mouseY?: number) => {
       const viewer = pdfViewerRef.current;
       const container = viewerContainerRef.current;
-      if (!viewer || !container) return;
+      const viewerRoot = viewerRef.current;
+      if (!viewer || !container || !viewerRoot) return;
 
       const currentScale = viewer.currentScale || 1;
       const nextScale =
@@ -743,38 +744,87 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       const containerRect = container.getBoundingClientRect();
 
       // 마우스 위치가 없으면 화면 중앙을 앵커로 사용
-      const viewportX =
-        mouseX !== undefined
-          ? mouseX - containerRect.left
-          : container.clientWidth / 2;
-      const viewportY =
-        mouseY !== undefined
-          ? mouseY - containerRect.top
-          : container.clientHeight / 2;
+      const anchorClientX = mouseX ?? containerRect.left + container.clientWidth / 2;
+      const anchorClientY = mouseY ?? containerRect.top + container.clientHeight / 2;
+      const viewportX = anchorClientX - containerRect.left;
+      const viewportY = anchorClientY - containerRect.top;
 
-      // 현재 스크롤 위치 + 뷰포트 내 앵커 위치 = 컨텐츠 상의 절대 위치
-      const contentX = container.scrollLeft + viewportX;
-      const contentY = container.scrollTop + viewportY;
+      // 마우스 커서가 위치한 페이지 요소를 찾아 상대 좌표(relX, relY) 계산
+      // (scaleRatio 방식은 패딩/여백이 비례하지 않아 부정확)
+      let anchorPageNum = 0;
+      let relX = 0;
+      let relY = 0;
+      const pages = viewerRoot.querySelectorAll<HTMLElement>(".page");
+      for (let i = 0; i < pages.length; i++) {
+        const r = pages[i].getBoundingClientRect();
+        if (
+          anchorClientX >= r.left &&
+          anchorClientX <= r.right &&
+          anchorClientY >= r.top &&
+          anchorClientY <= r.bottom &&
+          r.width > 0
+        ) {
+          anchorPageNum = Number(pages[i].dataset.pageNumber) || 0;
+          relX = (anchorClientX - r.left) / r.width;
+          relY = (anchorClientY - r.top) / r.height;
+          break;
+        }
+      }
 
-      // 스케일 비율 미리 계산
-      const scaleRatio = clampedScale / currentScale;
-      const newContentX = contentX * scaleRatio;
-      const newContentY = contentY * scaleRatio;
+      // 페이지 위에 커서가 없으면 scaleRatio 폴백
+      const usePageAnchor = anchorPageNum > 0;
+      let scaleRatio = clampedScale / currentScale;
+      let fallbackContentX = 0;
+      let fallbackContentY = 0;
+      if (!usePageAnchor) {
+        fallbackContentX = (container.scrollLeft + viewportX) * scaleRatio;
+        fallbackContentY = (container.scrollTop + viewportY) * scaleRatio;
+      }
 
-      // 스케일 변경 (이 과정에서 setLayoutTick이 호출됨)
-      // 버튼 줌 시작: pending 중인 페이지 스크롤 취소 (race condition 방지)
+      // 스케일 변경 — PDF.js의 scrollPageIntoView 일시 억제
       cancelNavigationRef.current?.();
       cancelNavigationRef.current = null;
 
       pdfZoomManualRef.current = true;
-      lastManualZoomTimeRef.current = Date.now(); // 수동 줌 시점 기록
-      userHasZoomedRef.current = true; // 사용자 줌 상태 기록
-      viewer.currentScale = clampedScale;
-      setPdfZoom(clampedScale); // 헤더와 연동
+      lastManualZoomTimeRef.current = Date.now();
+      userHasZoomedRef.current = true;
 
-      // 스크롤 조정을 즉시 수행 (하이라이트 튀는 현상 방지)
-      container.scrollLeft = newContentX - viewportX;
-      container.scrollTop = newContentY - viewportY;
+      const origScrollMethod = viewer.scrollPageIntoView;
+      viewer.scrollPageIntoView = () => {};
+      viewer.currentScale = clampedScale;
+      viewer.scrollPageIntoView = origScrollMethod;
+
+      setPdfZoom(clampedScale);
+
+      // 스크롤 보정: 페이지 요소의 새 rect 기반으로 정확한 위치 계산
+      if (usePageAnchor) {
+        const pageEl = viewerRoot.querySelector<HTMLElement>(
+          `.page[data-page-number="${anchorPageNum}"]`
+        );
+        if (pageEl) {
+          const newContainerRect = container.getBoundingClientRect();
+          const newPageRect = pageEl.getBoundingClientRect();
+          if (newPageRect.width > 0 && newPageRect.height > 0) {
+            container.scrollLeft +=
+              newPageRect.left - newContainerRect.left +
+              relX * newPageRect.width -
+              viewportX;
+            container.scrollTop +=
+              newPageRect.top - newContainerRect.top +
+              relY * newPageRect.height -
+              viewportY;
+          }
+        }
+      } else {
+        container.scrollLeft = fallbackContentX - viewportX;
+        container.scrollTop = fallbackContentY - viewportY;
+      }
+
+      // 스크롤 클램핑
+      const maxSL = Math.max(0, container.scrollWidth - container.clientWidth);
+      const maxST = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollLeft = Math.max(0, Math.min(container.scrollLeft, maxSL));
+      container.scrollTop = Math.max(0, Math.min(container.scrollTop, maxST));
 
       // 렌더링 및 레이아웃 업데이트
       scheduleRenderRefresh();
