@@ -3,6 +3,7 @@ import { useBook } from "../../../contexts/BookContext";
 import { getPreviewConfig } from "../../../utils/previewConfig";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import "../../../css/page_navigation.css";
+import { fetchBookName, getRmsConfig } from "../../../services/rmsService";
 interface ControlBarProps {
   pdfPageCount?: number;
   pdfCurrentPage?: number;
@@ -41,10 +42,19 @@ export const ControlBar: React.FC<ControlBarProps> = ({
     chapters[currentChapterIndex]?.title || (isPdfMode ? "PDF" : "Chapter");
 
   const [inputPage, setInputPage] = useState(currentPageNumber.toString());
+  const [bookName, setBookName] = useState("");
 
   useEffect(() => {
     setInputPage(currentPageNumber.toString());
   }, [currentPageNumber]);
+
+  useEffect(() => {
+    const config = getRmsConfig();
+    if (!config) return;
+    fetchBookName({ apiBase: config.apiBase, bookCd: config.bookCd })
+      .then((name) => setBookName(name))
+      .catch(() => {});
+  }, []);
 
   const handlePageSubmit = (e: React.FormEvent) => {
     e.preventDefault();

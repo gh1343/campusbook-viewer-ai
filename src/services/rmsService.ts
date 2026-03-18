@@ -1544,6 +1544,43 @@ export const fetchPdfUrl = async ({
   return pdfUrl;
 };
 
+export const fetchBookName = async ({
+  apiBase,
+  bookCd,
+}: {
+  apiBase: string;
+  bookCd: string;
+}): Promise<string> => {
+  if (!apiBase || !bookCd) {
+    throw new Error("Missing configuration (apiBase/bookCd).");
+  }
+
+  const response = await fetch(
+    `${apiBase}/v3/book/${encodeURIComponent(bookCd)}/name`,
+    {
+      method: "GET",
+      headers: buildRmsHeaders(),
+    }
+  );
+
+  let result: any = null;
+  try {
+    result = await response.json();
+  } catch {
+    result = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.message ||
+      result?.error ||
+      `Book name fetch failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return result?.bookName ?? "";
+};
+
 export class MultiAccessError extends Error {
   constructor(message?: string) {
     super(
