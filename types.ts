@@ -108,6 +108,7 @@ export interface GeneralNote {
   created_at: number;
   updated_at: number;
   deleted?: boolean;
+  syncStatus?: "pending" | "synced";
 }
 
 export type Theme = "light" | "dark";

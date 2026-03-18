@@ -510,6 +510,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         created_at: now,
         updated_at: now,
         deleted: false,
+        syncStatus: "pending",
       };
       setGeneralNotes((prev) => [newNote, ...prev]);
     },
@@ -522,7 +523,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
       markAsUnsaved();
       setGeneralNotes((prev) =>
         prev.map((note) =>
-          note.id === id ? { ...note, title, content, updated_at: now } : note
+          note.id === id ? { ...note, title, content, updated_at: now, syncStatus: "pending" as const } : note
         )
       );
     },
@@ -533,7 +534,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
     (id: string) => {
       markAsUnsaved();
       setGeneralNotes((prev) =>
-        prev.map((note) => (note.id === id ? { ...note, deleted: true } : note))
+        prev.map((note) => (note.id === id ? { ...note, deleted: true, syncStatus: "pending" as const } : note))
       );
     },
     [markAsUnsaved]
@@ -748,6 +749,9 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         const changedBookmarks = bookmarks.filter(
           (item) => item.syncStatus === "pending"
         );
+        const changedNotes = generalNotes.filter(
+          (item) => item.syncStatus === "pending"
+        );
         const changedStrokes = strokes.filter(
           (item) => item.syncStatus !== "synced"
         );
@@ -769,11 +773,11 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                   bookmarks: changedBookmarks,
                 })
               : Promise.resolve(),
-            generalNotes.length > 0
+            changedNotes.length > 0
               ? saveNotesToServer({
                   apiBase: config.apiBase,
                   bookCd: config.bookCd,
-                  notes: generalNotes,
+                  notes: changedNotes,
                 })
               : Promise.resolve(),
             changedStrokes.length > 0
@@ -808,8 +812,14 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
           setBookmarks(updatedBookmarks);
         }
 
-        if (noteRes.status === "fulfilled" && generalNotes.length > 0) {
-          updatedNotes = generalNotes.filter((item) => !item.deleted);
+        if (noteRes.status === "fulfilled" && changedNotes.length > 0) {
+          updatedNotes = generalNotes
+            .map((item) =>
+              item.syncStatus === "pending"
+                ? { ...item, syncStatus: "synced" as const }
+                : item
+            )
+            .filter((item) => !item.deleted);
           setGeneralNotes(updatedNotes);
         }
 
@@ -830,7 +840,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         const syncChanged = [
           changedHighlights.length > 0,
           changedBookmarks.length > 0,
-          generalNotes.length > 0,
+          changedNotes.length > 0,
           changedStrokes.length > 0,
         ];
         syncResults.forEach((result, i) => {
@@ -956,7 +966,7 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                 ? noteRes.result.dataList
                     .map((json: string) => {
                       const parsed = JSON.parse(json);
-                      return parsed as GeneralNote;
+                      return { ...parsed, syncStatus: "synced" as const } as GeneralNote;
                     })
                 : [];
 
@@ -1005,13 +1015,18 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
         const hasPendingStrokes = finalStrokes.some(
           (item) => item.syncStatus !== "synced"
         );
+        const hasPendingNotes = finalNotes.some(
+          (item) => item.syncStatus === "pending"
+        );
         const hasPending =
           finalHighlights.some((item) => item.syncStatus === "pending") ||
           finalBookmarks.some((item) => item.syncStatus === "pending") ||
+          hasPendingNotes ||
           hasPendingStrokes;
 
         const changedHighlights = finalHighlights.filter((item) => item.syncStatus === "pending");
         const changedBookmarks = finalBookmarks.filter((item) => item.syncStatus === "pending");
+        const changedNotes = finalNotes.filter((item) => item.syncStatus === "pending");
         const changedStrokes = finalStrokes.filter((item) => item.syncStatus !== "synced");
 
         // 4. State 업데이트 먼저 (deleted 항목 최종 제거 - 병합 후 기기간 삭제 동기화 반영)
@@ -1068,6 +1083,19 @@ export const AnnotationProvider: React.FC<{ children: ReactNode }> = ({
                   bookmarks: changedBookmarks,
                 });
                 setBookmarks((prev) =>
+                  prev
+                    .map((item) => item.syncStatus === "pending" ? { ...item, syncStatus: "synced" as const } : item)
+                    .filter((item) => !item.deleted)
+                );
+              }
+
+              if (changedNotes.length > 0) {
+                await saveNotesToServer({
+                  apiBase: config.apiBase,
+                  bookCd: config.bookCd,
+                  notes: changedNotes,
+                });
+                setGeneralNotes((prev) =>
                   prev
                     .map((item) => item.syncStatus === "pending" ? { ...item, syncStatus: "synced" as const } : item)
                     .filter((item) => !item.deleted)
