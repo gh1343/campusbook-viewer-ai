@@ -417,14 +417,23 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     pendingTransformRef.current = { scale, originX, originY };
     if (pinchTransformRafRef.current !== null) return;
 
-    const layer = transformLayerRef.current;
-    if (layer) {
-      layer.style.transformOrigin = `${originX}px ${originY}px`;
-      layer.style.transform = `scale(${scale})`;
-    }
+    pinchTransformRafRef.current = requestAnimationFrame(() => {
+      pinchTransformRafRef.current = null;
+      const pending = pendingTransformRef.current;
+      if (!pending) return;
+      const layer = transformLayerRef.current;
+      if (layer) {
+        layer.style.transformOrigin = `${pending.originX}px ${pending.originY}px`;
+        layer.style.transform = `scale(${pending.scale})`;
+      }
+    });
   };
 
   const resetPinchTransform = () => {
+    if (pinchTransformRafRef.current !== null) {
+      cancelAnimationFrame(pinchTransformRafRef.current);
+      pinchTransformRafRef.current = null;
+    }
     const layer = transformLayerRef.current;
     if (layer) {
       layer.style.transformOrigin = "0 0";
@@ -469,7 +478,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (pts.length < 2) return null;
     const centerClientX = (pts[0].x + pts[1].x) / 2;
     const centerClientY = (pts[0].y + pts[1].y) / 2;
-    const containerRect = container.getBoundingClientRect();
+    // 핀치 시작 시 캐시한 containerRect 재사용 (매 프레임 layout flush 방지)
+    const containerRect =
+      pinchContainerRectRef.current ?? container.getBoundingClientRect();
     const viewportX = centerClientX - containerRect.left;
     const viewportY = centerClientY - containerRect.top;
     const contentX = viewportX + container.scrollLeft - layer.offsetLeft;
@@ -495,38 +506,55 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     const viewportX = centerClientX - containerRect.left;
     const viewportY = centerClientY - containerRect.top;
 
+    // elementFromPoint 대신 이전 anchor 페이지를 먼저 체크하는 빠른 경로
+    // (elementFromPoint는 렌더 트리 순회로 비용이 크고, transform 상태에서 부정확)
+    const pages = viewerRoot.querySelectorAll<HTMLElement>(".page");
     let pageEl: HTMLElement | null = null;
-    const hit = document.elementFromPoint(centerClientX, centerClientY);
-    if (hit instanceof HTMLElement) {
-      const closestPage = hit.closest(".page");
-      if (
-        closestPage instanceof HTMLElement &&
-        viewerRoot.contains(closestPage)
-      ) {
-        pageEl = closestPage;
+    let pageRect: DOMRect | null = null;
+
+    // 이전 anchor의 페이지를 먼저 체크 (대부분 같은 페이지 — 빠른 경로)
+    const prevPageNum = pinchAnchorRef.current?.pageNumber;
+    if (prevPageNum) {
+      const prev = viewerRoot.querySelector<HTMLElement>(
+        `.page[data-page-number="${prevPageNum}"]`
+      );
+      if (prev) {
+        const r = prev.getBoundingClientRect();
+        if (
+          centerClientX >= r.left &&
+          centerClientX <= r.right &&
+          centerClientY >= r.top &&
+          centerClientY <= r.bottom &&
+          r.width > 0
+        ) {
+          pageEl = prev;
+          pageRect = r;
+        }
       }
     }
+
+    // 빠른 경로 실패 시 전체 페이지 순회 (드문 경우)
     if (!pageEl) {
-      const pages = Array.from(
-        viewerRoot.querySelectorAll(".page")
-      ) as HTMLElement[];
-      pageEl =
-        pages.find((page) => {
-          const rect = page.getBoundingClientRect();
-          return (
-            centerClientX >= rect.left &&
-            centerClientX <= rect.right &&
-            centerClientY >= rect.top &&
-            centerClientY <= rect.bottom
-          );
-        }) || null;
+      for (let i = 0; i < pages.length; i++) {
+        const r = pages[i].getBoundingClientRect();
+        if (
+          centerClientX >= r.left &&
+          centerClientX <= r.right &&
+          centerClientY >= r.top &&
+          centerClientY <= r.bottom &&
+          r.width > 0
+        ) {
+          pageEl = pages[i];
+          pageRect = r;
+          break;
+        }
+      }
     }
-    if (!pageEl) return;
+    if (!pageEl || !pageRect) return;
 
     const pageNumber = Number(pageEl.dataset.pageNumber);
     if (!pageNumber) return;
-    const rect = pageEl.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
+    const rect = pageRect;
 
     const relX = Math.min(
       1,
