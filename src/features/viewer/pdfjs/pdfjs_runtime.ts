@@ -184,17 +184,17 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
   });
 
   // 확대/축소 시 0페이지 크기 동기화
+  // 동기 실행 필수: RAF로 미루면 스크롤 보정 시 0페이지가 이전 크기라
+  // getBoundingClientRect()가 잘못된 위치를 반환하여 다른 페이지가 깜박임
   eventBus.on("scalechanging", () => {
-    requestAnimationFrame(() => {
-      const dims = getZeroPageDimensions();
-      const zeroPage = viewer.querySelector<HTMLElement>(
-        '.page[data-page-number="0"]'
-      );
-      if (dims && zeroPage) {
-        zeroPage.style.width = dims.w;
-        zeroPage.style.height = `${dims.h}px`;
-      }
-    });
+    const dims = getZeroPageDimensions();
+    const zeroPage = viewer.querySelector<HTMLElement>(
+      '.page[data-page-number="0"]'
+    );
+    if (dims && zeroPage) {
+      zeroPage.style.width = dims.w;
+      zeroPage.style.height = `${dims.h}px`;
+    }
   });
 
   eventBus.on("pagechanging", (evt: any) => {
