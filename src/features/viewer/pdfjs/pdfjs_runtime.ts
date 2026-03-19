@@ -147,27 +147,54 @@ export const initPdfJsRuntime = (opts: PdfJsRuntimeOptions) => {
         setPdfIsLoading?.(false);
       }
     }
+  };
 
+  // 0페이지 크기를 pdfViewer 내부 page view 기준으로 계산
+  const getZeroPageDimensions = (): { w: string; h: number } | null => {
+    const pages = (pdfViewer as any)._pages;
+    if (!pages || pages.length === 0) return null;
+    const firstPageView = pages[0];
+    const w = `${Math.floor(firstPageView.width)}px`;
+    const h = Math.floor(firstPageView.height / 3);
+    return { w, h };
   };
 
   eventBus.on("pagesinit", () => {
     pdfViewer.currentScale = INTERNAL_SCALE;
 
-    // 0페이지(빈 표지) 삽입: 첫 번째 page 크기 참조
-    const firstPage = viewer.querySelector<HTMLElement>(".page[data-page-number]");
-    if (firstPage && !viewer.querySelector('.page[data-page-number="0"]')) {
-      const firstRect = firstPage.getBoundingClientRect();
-      const w = firstPage.style.width || `${firstRect.width}px`;
-      const h = parseFloat(firstPage.style.height || `${firstRect.height}`) / 3;
+    // 0페이지(빈 표지) 삽입
+    const dims = getZeroPageDimensions();
+    const firstPageEl = (pdfViewer as any)._pages?.[0]?.div as
+      | HTMLElement
+      | undefined;
+    if (
+      dims &&
+      firstPageEl &&
+      !viewer.querySelector('.page[data-page-number="0"]')
+    ) {
       const zeroPage = document.createElement("div");
       zeroPage.className = "page";
       zeroPage.dataset.pageNumber = "0";
       zeroPage.setAttribute("role", "region");
-      zeroPage.style.cssText = `width:${w};height:${h}px;background:#fff;`;
-      viewer.insertBefore(zeroPage, firstPage);
+      zeroPage.style.cssText = `width:${dims.w};height:${dims.h}px;background:#fff;`;
+      viewer.insertBefore(zeroPage, firstPageEl);
     }
 
     scheduleRenderRefresh();
+  });
+
+  // 확대/축소 시 0페이지 크기 동기화
+  eventBus.on("scalechanging", () => {
+    requestAnimationFrame(() => {
+      const dims = getZeroPageDimensions();
+      const zeroPage = viewer.querySelector<HTMLElement>(
+        '.page[data-page-number="0"]'
+      );
+      if (dims && zeroPage) {
+        zeroPage.style.width = dims.w;
+        zeroPage.style.height = `${dims.h}px`;
+      }
+    });
   });
 
   eventBus.on("pagechanging", (evt: any) => {

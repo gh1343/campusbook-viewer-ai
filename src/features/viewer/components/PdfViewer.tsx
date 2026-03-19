@@ -744,8 +744,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       const containerRect = container.getBoundingClientRect();
 
       // 마우스 위치가 없으면 화면 중앙을 앵커로 사용
-      const anchorClientX = mouseX ?? containerRect.left + container.clientWidth / 2;
-      const anchorClientY = mouseY ?? containerRect.top + container.clientHeight / 2;
+      const anchorClientX =
+        mouseX ?? containerRect.left + container.clientWidth / 2;
+      const anchorClientY =
+        mouseY ?? containerRect.top + container.clientHeight / 2;
       const viewportX = anchorClientX - containerRect.left;
       const viewportY = anchorClientY - containerRect.top;
 
@@ -806,11 +808,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           const newPageRect = pageEl.getBoundingClientRect();
           if (newPageRect.width > 0 && newPageRect.height > 0) {
             container.scrollLeft +=
-              newPageRect.left - newContainerRect.left +
+              newPageRect.left -
+              newContainerRect.left +
               relX * newPageRect.width -
               viewportX;
             container.scrollTop +=
-              newPageRect.top - newContainerRect.top +
+              newPageRect.top -
+              newContainerRect.top +
               relY * newPageRect.height -
               viewportY;
           }
@@ -822,7 +826,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
       // 스크롤 클램핑
       const maxSL = Math.max(0, container.scrollWidth - container.clientWidth);
-      const maxST = Math.max(0, container.scrollHeight - container.clientHeight);
+      const maxST = Math.max(
+        0,
+        container.scrollHeight - container.clientHeight
+      );
       container.scrollLeft = Math.max(0, Math.min(container.scrollLeft, maxSL));
       container.scrollTop = Math.max(0, Math.min(container.scrollTop, maxST));
 
@@ -1060,6 +1067,27 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     if (!viewer) return;
     const viewerEl = viewer.viewer as HTMLDivElement | null;
 
+    // pdfViewer 내부 page view 기준으로 정확한 0페이지 크기 계산
+    const getZeroDims = () => {
+      const pages = (viewer as any)._pages;
+      if (!pages || pages.length === 0) return null;
+      const pv = pages[0];
+      return { w: `${Math.floor(pv.width)}px`, h: Math.floor(pv.height / 3) };
+    };
+
+    const insertZeroPage = (
+      container: Element,
+      beforeEl: Element,
+      dims: { w: string; h: number }
+    ) => {
+      const zeroPage = document.createElement("div");
+      zeroPage.className = "page";
+      zeroPage.dataset.pageNumber = "0";
+      zeroPage.setAttribute("role", "region");
+      zeroPage.style.cssText = `width:${dims.w};height:${dims.h}px;background:#fff;`;
+      container.insertBefore(zeroPage, beforeEl);
+    };
+
     if (viewMode === "double") {
       // EVEN spread → [page1], [page2,page3], [page4,page5]...
       viewer.spreadMode = SpreadMode.EVEN;
@@ -1068,17 +1096,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       if (viewerEl) {
         const firstSpread = viewerEl.querySelector(".spread");
         const firstPage = firstSpread?.querySelector(".page");
-        if (firstSpread && firstPage) {
-          // 기존 0페이지 제거 후 재삽입
-          viewerEl.querySelector('.page[data-page-number="0"]')?.remove();
-          const zeroPage = document.createElement("div");
-          zeroPage.className = "page";
-          zeroPage.dataset.pageNumber = "0";
-          zeroPage.setAttribute("role", "region");
-          const w = firstPage.getAttribute("style")?.match(/width:\s*([^;]+)/)?.[1] || `${(firstPage as HTMLElement).offsetWidth}px`;
-          const h = parseFloat((firstPage as HTMLElement).style.height || `${(firstPage as HTMLElement).offsetHeight}`) / 3;
-          zeroPage.style.cssText = `width:${w};height:${h}px;background:#fff;`;
-          firstSpread.insertBefore(zeroPage, firstPage);
+        const dims = getZeroDims();
+        if (firstSpread && firstPage && dims) {
+          insertZeroPage(firstSpread, firstPage, dims);
         }
       }
     } else {
@@ -1087,16 +1107,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       // single 모드: 0페이지를 첫 번째 .page 앞에 삽입
       if (viewerEl) {
         viewerEl.querySelector('.page[data-page-number="0"]')?.remove();
-        const firstPage = viewerEl.querySelector(".page[data-page-number]");
-        if (firstPage) {
-          const zeroPage = document.createElement("div");
-          zeroPage.className = "page";
-          zeroPage.dataset.pageNumber = "0";
-          zeroPage.setAttribute("role", "region");
-          const w = firstPage.getAttribute("style")?.match(/width:\s*([^;]+)/)?.[1] || `${(firstPage as HTMLElement).offsetWidth}px`;
-          const h = parseFloat((firstPage as HTMLElement).style.height || `${(firstPage as HTMLElement).offsetHeight}`) / 3;
-          zeroPage.style.cssText = `width:${w};height:${h}px;background:#fff;`;
-          viewerEl.insertBefore(zeroPage, firstPage);
+        const pages = (viewer as any)._pages;
+        const firstPageEl = pages?.[0]?.div as HTMLElement | undefined;
+        const dims = getZeroDims();
+        if (firstPageEl && dims) {
+          insertZeroPage(viewerEl, firstPageEl, dims);
         }
       }
     }
@@ -1516,7 +1531,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
           penRuntime.renderLiveCanvas();
 
           // 나머지 버퍼 페이지 스트로크는 CPU 여유 시점에 처리
-          const renderRestPages = () => penRuntime.renderStaticCanvases(true, false);
+          const renderRestPages = () =>
+            penRuntime.renderStaticCanvases(true, false);
           if (typeof requestIdleCallback !== "undefined") {
             requestIdleCallback(renderRestPages, { timeout: 500 });
           } else {
