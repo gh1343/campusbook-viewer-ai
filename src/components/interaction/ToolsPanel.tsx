@@ -212,6 +212,7 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
   const closeNoteEditor = () => {
     setEditingNote(null);
     setCapturedImage(null);
+    savedSelectionRef.current = null;
   };
 
   const handleTabChange = (
@@ -336,7 +337,6 @@ export const ToolsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
 
     if (!autoInsertNextCaptureRef.current) return;
     autoInsertNextCaptureRef.current = false;
-
     const timer = setTimeout(() => {
       const editor = contentEditableRef.current;
       if (!editor) return;
@@ -984,31 +984,6 @@ ${contextString}
                       }}
                     />
 
-                    {/* 캡처 이미지 미리보기 */}
-                    {capturedImage && (
-                      <div
-                        className="mynote_capture_preview"
-                        draggable
-                        onDragStart={(e) => {
-                          e.stopPropagation();
-                          e.dataTransfer.effectAllowed = "copy";
-                          e.dataTransfer.setData("text/plain", capturedImage);
-                        }}
-                      >
-                        <img
-                          src={capturedImage}
-                          className="mynote_capture_img"
-                          alt="캡처 이미지"
-                          draggable={false}
-                        />
-                        <button
-                          onClick={() => setCapturedImage(null)}
-                          className="mynote_capture_remove"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   {/* 하단 footer: 캡처 첨부 + 저장 버튼 */}
