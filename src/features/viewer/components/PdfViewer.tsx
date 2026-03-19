@@ -944,6 +944,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         container.scrollTop = contentY * scaleRatio - viewportY;
       }
 
+      // viewer.currentScale 설정 중 PDF.js가 pagechanging을 발생시키고,
+      // 미리보기 모드에서 attemptPageNavigation(maxPage) RAF가 예약될 수 있음.
+      // 스크롤 보정 완료 후 이 pending 네비게이션을 취소하여 마지막 페이지로 이동 방지.
+      cancelNavigationRef.current?.();
+      cancelNavigationRef.current = null;
+
       scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
     }
@@ -1551,6 +1557,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
         );
       }
     }
+
+    // setPdfScale() 중 PDF.js가 pagechanging 이벤트를 발생시키고,
+    // 미리보기 모드에서 previewMaxPage 초과로 판단하면 attemptPageNavigation(maxPage)가
+    // RAF로 예약됨. 스크롤 보정 후 이 pending 네비게이션을 취소하여 마지막 페이지로
+    // 강제 이동되는 것을 방지.
+    cancelNavigationRef.current?.();
+    cancelNavigationRef.current = null;
 
     // 스크롤 보정 완료 후 touchAction 복원
     setPinchInteractionState(false);
