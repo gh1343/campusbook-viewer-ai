@@ -859,12 +859,58 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
 
     const currentScale = viewer.currentScale || 1;
     if (Math.abs(currentScale - pdfZoom) > 0.001) {
-      // 스크롤 위치 보정: 현재 보고 있는 위치를 유지
+      // 앵커 기반 스크롤 보정: 뷰포트 중앙의 페이지 + 상대 위치를 기준으로 보정
+      // (contentY * scaleRatio 공식은 0페이지 등 비균일 요소가 있으면 오차 발생)
+      const viewerRoot = viewerRef.current;
       const viewportX = container.clientWidth / 2;
       const viewportY = container.clientHeight / 2;
-      const contentX = container.scrollLeft + viewportX;
-      const contentY = container.scrollTop + viewportY;
-      const scaleRatio = pdfZoom / currentScale;
+      const containerRect = container.getBoundingClientRect();
+      const centerClientX = containerRect.left + viewportX;
+      const centerClientY = containerRect.top + viewportY;
+
+      // 뷰포트 중앙에 있는 페이지 요소 찾기
+      let anchorPage: HTMLElement | null = null;
+      let anchorRect: DOMRect | null = null;
+      if (viewerRoot) {
+        const pages = viewerRoot.querySelectorAll<HTMLElement>(".page");
+        for (let i = 0; i < pages.length; i++) {
+          const r = pages[i].getBoundingClientRect();
+          if (
+            centerClientY >= r.top &&
+            centerClientY <= r.bottom &&
+            r.width > 0
+          ) {
+            anchorPage = pages[i];
+            anchorRect = r;
+            break;
+          }
+        }
+        // 페이지 사이 갭에 있으면 가장 가까운 페이지 사용
+        if (!anchorPage && pages.length > 0) {
+          let minDist = Infinity;
+          for (let i = 0; i < pages.length; i++) {
+            const r = pages[i].getBoundingClientRect();
+            const dist = Math.min(
+              Math.abs(centerClientY - r.top),
+              Math.abs(centerClientY - r.bottom)
+            );
+            if (dist < minDist && r.width > 0) {
+              minDist = dist;
+              anchorPage = pages[i];
+              anchorRect = r;
+            }
+          }
+        }
+      }
+
+      // 앵커의 페이지 내 상대 좌표 (0~1)
+      const relX = anchorRect
+        ? Math.min(1, Math.max(0, (centerClientX - anchorRect.left) / anchorRect.width))
+        : 0.5;
+      const relY = anchorRect
+        ? Math.min(1, Math.max(0, (centerClientY - anchorRect.top) / anchorRect.height))
+        : 0.5;
+      const anchorPageNumber = anchorPage?.dataset.pageNumber;
 
       // 외부 줌 반영 전에 pending 페이지 스크롤 취소
       cancelNavigationRef.current?.();
@@ -874,9 +920,29 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       userHasZoomedRef.current = false;
       viewer.currentScale = pdfZoom;
 
-      // 스크롤 위치 보정
-      container.scrollLeft = contentX * scaleRatio - viewportX;
-      container.scrollTop = contentY * scaleRatio - viewportY;
+      // 앵커 페이지를 기준으로 정확한 스크롤 위치 계산
+      if (anchorPageNumber != null && viewerRoot) {
+        const pageEl = viewerRoot.querySelector<HTMLElement>(
+          `.page[data-page-number="${anchorPageNumber}"]`
+        );
+        if (pageEl) {
+          const cRect = container.getBoundingClientRect();
+          const pRect = pageEl.getBoundingClientRect();
+          if (pRect.width > 0 && pRect.height > 0) {
+            container.scrollLeft +=
+              pRect.left - cRect.left + relX * pRect.width - viewportX;
+            container.scrollTop +=
+              pRect.top - cRect.top + relY * pRect.height - viewportY;
+          }
+        }
+      } else {
+        // 앵커를 찾지 못한 경우 기존 비례 공식으로 fallback
+        const contentX = container.scrollLeft + viewportX;
+        const contentY = container.scrollTop + viewportY;
+        const scaleRatio = pdfZoom / currentScale;
+        container.scrollLeft = contentX * scaleRatio - viewportX;
+        container.scrollTop = contentY * scaleRatio - viewportY;
+      }
 
       scheduleRenderRefresh();
       setLayoutTick((prev) => prev + 1);
